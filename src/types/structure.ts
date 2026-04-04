@@ -3,17 +3,7 @@
 // ============================================================
 
 /** Origin method for structure generation */
-export type OriginMethod =
-  | 'Seeds'
-  | 'Random'
-  | 'Heredity'
-  | 'LatMutate'
-  | 'softmutate'
-  | 'Permutate'
-  | 'Transmutate'
-  | 'spinMutate'
-  | 'UserAdded'
-  | 'Unknown';
+export type OriginMethod = string;
 
 /** System dimensionality */
 export type SystemType = 'unary' | 'binary' | 'ternary';

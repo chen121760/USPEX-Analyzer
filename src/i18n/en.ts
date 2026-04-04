@@ -150,9 +150,10 @@ const en = {
   'pareto.title': 'Pareto Front',
   'pareto.showFront': 'Show Front',
   'pareto.showAll': 'Show All',
-  'pareto.xAxis': 'X Axis',
+  'pareto.xAxis': 'Convex Hull Distance (eV/block)',
   'pareto.yAxis': 'Y Axis',
   'pareto.connectLine': 'Show front lines',
+  'pareto.selectFronts': 'Select fronts to display',
 
   // ---- Explorer ----
   'explorer.title': 'Data Explorer',

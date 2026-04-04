@@ -9,11 +9,6 @@
 
 import type { ParsedOrigin, OriginMethod } from '@/types/structure';
 
-const KNOWN_ORIGINS = new Set([
-  'Seeds', 'Random', 'Heredity', 'LatMutate', 'softmutate',
-  'Permutate', 'Transmutate', 'spinMutate',
-]);
-
 export function parseOrigin(content: string): ParsedOrigin[] {
   const lines = content.split('\n');
   const results: ParsedOrigin[] = [];
@@ -27,11 +22,8 @@ export function parseOrigin(content: string): ParsedOrigin[] {
     const id = parseInt(tokens[0], 10);
     if (isNaN(id)) continue;
 
-    // Origin method
-    const originRaw = tokens[1] || 'Unknown';
-    const origin: OriginMethod = KNOWN_ORIGINS.has(originRaw)
-      ? (originRaw as OriginMethod)
-      : 'Unknown';
+    // Origin method — use whatever value is in the file
+    const origin: OriginMethod = tokens[1] || 'Unknown';
 
     const enthalpy = parseFloat(tokens[2]) || 0;
     const parentEnthalpy = parseFloat(tokens[3]) || 0;

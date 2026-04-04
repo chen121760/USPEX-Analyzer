@@ -21,11 +21,6 @@ export interface IndividualsParseResult {
   maxGeneration: number;
 }
 
-const KNOWN_ORIGINS = new Set([
-  'Seeds', 'Random', 'Heredity', 'LatMutate', 'softmutate',
-  'Permutate', 'Transmutate', 'spinMutate',
-]);
-
 /**
  * Auto-detect the name of the second objective column from the header line.
  */
@@ -76,9 +71,7 @@ export function parseIndividuals(content: string): IndividualsParseResult {
 
     // Origin is the third token
     const originRaw = tokens[2] || 'Unknown';
-    const origin: OriginMethod = KNOWN_ORIGINS.has(originRaw)
-      ? (originRaw as OriginMethod)
-      : 'Unknown';
+    const origin: OriginMethod = originRaw as OriginMethod;
 
     // Extract composition from first [ ... ]
     const compMatch = trimmed.match(/\[\s*([\d\s]+)\s*\]/);

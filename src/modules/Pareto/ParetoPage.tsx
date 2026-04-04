@@ -72,48 +72,63 @@ export function ParetoPage() {
     });
   }
 
+  const axisStyle = {
+    titlefont: { size: 13, color: '#334155' },
+    tickfont: { size: 11, color: '#64748b' },
+    gridcolor: '#e2e8f0',
+    zerolinecolor: '#cbd5e1',
+    linecolor: '#94a3b8',
+  };
+
   const layout: Partial<Plotly.Layout> = {
-    title: `${systemInfo?.elements.join('-')} ${t('pareto.title')}`,
-    xaxis: { title: 'Convex Hull Distance (eV/block)' },
-    yaxis: { title: objName },
+    title: { text: `${systemInfo?.elements.join('-')} ${t('pareto.title')}`, font: { size: 15, color: '#0f172a' } },
+    xaxis: { title: t('pareto.xAxis'), ...axisStyle },
+    yaxis: { title: objName, ...axisStyle },
     hovermode: 'closest' as const,
     showlegend: true,
+    legend: { font: { size: 11, color: '#334155' } },
     margin: { t: 50 },
-    plot_bgcolor: 'rgba(0,0,0,0)',
-    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: '#ffffff',
+    paper_bgcolor: '#ffffff',
   };
 
   return (
     <div className="fade-in">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{t('pareto.title')}</h2>
+      <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>{t('pareto.title')}</h2>
 
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-          {frontNumbers.map((n) => (
-            <button
-              key={n}
-              className={`btn btn-sm ${selectedFronts.has(n) ? 'btn-primary' : 'btn-outline'}`}
-              onClick={() => toggleFront(n)}
-              style={selectedFronts.has(n) ? { background: FRONT_COLORS[(n - 1) % FRONT_COLORS.length] } : {}}
-            >
-              Front {n}
-            </button>
-          ))}
-        </div>
-
-        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-          <input type="checkbox" checked={showLines} onChange={(e) => setShowLines(e.target.checked)} />
-          {t('pareto.connectLine')}
-        </label>
-      </div>
-
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
         <Plot
           data={traces}
           layout={layout}
           config={{ responsive: true }}
           style={{ width: '100%', height: 550 }}
         />
+      </div>
+
+      <div className="card">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+            {t('pareto.selectFronts')}:
+          </span>
+
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {frontNumbers.map((n) => (
+              <button
+                key={n}
+                className={`btn btn-sm ${selectedFronts.has(n) ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => toggleFront(n)}
+                style={selectedFronts.has(n) ? { background: FRONT_COLORS[(n - 1) % FRONT_COLORS.length] } : {}}
+              >
+                Front {n}
+              </button>
+            ))}
+          </div>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--color-text-secondary)' }}>
+            <input type="checkbox" checked={showLines} onChange={(e) => setShowLines(e.target.checked)} />
+            {t('pareto.connectLine')}
+          </label>
+        </div>
       </div>
     </div>
   );

@@ -123,16 +123,24 @@ export function ConvexHullPage() {
       },
     ];
 
+    const axisStyle = {
+      titlefont: { size: 13, color: '#334155' },
+      tickfont: { size: 11, color: '#64748b' },
+      gridcolor: '#e2e8f0',
+      zerolinecolor: '#cbd5e1',
+      linecolor: '#94a3b8',
+    };
+
     const layout: Partial<Plotly.Layout> = {
-      title: `${elements.join('-')} ${t('hull.title')}`,
-      xaxis: { title: `${t('hull.composition')} (${elements[1] || 'B'} fraction)` },
-      yaxis: { title: t('hull.formationEnergy') },
+      title: { text: `${elements.join('-')} ${t('hull.title')}`, font: { size: 15, color: '#0f172a' } },
+      xaxis: { title: `x(${elements[1] || 'B'})`, ...axisStyle },
+      yaxis: { title: t('hull.formationEnergy'), ...axisStyle },
       hovermode: 'closest' as const,
       showlegend: true,
-      legend: { x: 0.02, y: 0.98 },
+      legend: { x: 0.02, y: 0.98, font: { size: 11, color: '#334155' } },
       margin: { t: 50, r: 80 },
-      plot_bgcolor: 'rgba(0,0,0,0)',
-      paper_bgcolor: 'rgba(0,0,0,0)',
+      plot_bgcolor: '#ffffff',
+      paper_bgcolor: '#ffffff',
     };
 
     return (

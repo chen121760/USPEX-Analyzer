@@ -150,9 +150,10 @@ const zh = {
   'pareto.title': 'Pareto 前沿',
   'pareto.showFront': '显示前沿',
   'pareto.showAll': '显示全部',
-  'pareto.xAxis': 'X 轴',
+  'pareto.xAxis': '距离凸包能量 (eV/block)',
   'pareto.yAxis': 'Y 轴',
   'pareto.connectLine': '显示前沿连线',
+  'pareto.selectFronts': '选择显示的前沿',
 
   // ---- Explorer ----
   'explorer.title': '数据探索器',
