@@ -82,7 +82,7 @@ export function ExplorerPage() {
         mode: 'markers' as const,
         type: 'scatter' as const,
         marker: {
-          color: colorField ? filteredData.map((s) => (colorField.accessor(s) as number) ?? 0) : 'var(--color-primary)',
+          color: colorField ? filteredData.map((s) => (colorField.accessor(s) as number) ?? 0) : '#6366f1',
           colorscale: 'Viridis',
           colorbar: colorField ? { title: colorField.label, thickness: 15 } : undefined,
           size: 6,

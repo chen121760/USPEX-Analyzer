@@ -49,6 +49,7 @@ const zh = {
   'upload.missing': '未上传',
   'upload.recognized': '已识别',
   'upload.systemDetected': '检测到体系',
+  'upload.requiredFilesHint': '需要上传 extended_convex_hull 或 Individuals 文件',
 
   // ---- File types ----
   'files.parameters': 'Parameters.txt',
@@ -145,6 +146,8 @@ const zh = {
   'hull.composition': '组成',
   'hull.includeUserData': '包含用户添加的数据',
   'hull.recalculate': '重新计算凸包',
+  'hull.ternaryComingSoon': '三元相图 — 3D 凸包可视化即将推出',
+  'hull.3dComingSoon': '3D 凸包视图即将推出',
 
   // ---- Pareto ----
   'pareto.title': 'Pareto 前沿',
@@ -154,6 +157,7 @@ const zh = {
   'pareto.yAxis': 'Y 轴',
   'pareto.connectLine': '显示前沿连线',
   'pareto.selectFronts': '选择显示的前沿',
+  'pareto.singleObjectiveHint': '暂无数据 — 单目标优化没有 Pareto 前沿。',
 
   // ---- Explorer ----
   'explorer.title': '数据探索器',

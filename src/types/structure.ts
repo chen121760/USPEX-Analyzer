@@ -88,12 +88,14 @@ export interface SystemInfo {
   stableCount: number;
   minEnthalpy: number;
   maxFitness: number;
+  /** Which file was used as the primary data source for totalStructures */
+  totalStructuresSource: string;
 }
 
 /** Tag definition */
 export interface TagDefinition {
   id: string;
-  name: string;
+  nameKey: string;
   color: string;
 }
 

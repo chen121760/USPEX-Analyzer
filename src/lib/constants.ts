@@ -62,14 +62,6 @@ export const ORIGIN_COLORS: Record<string, string> = {
   Unknown: '#9ca3af',
 };
 
-/** Default tag definitions */
-export const DEFAULT_TAGS = [
-  { id: 'candidate', nameKey: 'tag.candidate', color: '#f59e0b' },
-  { id: 'to-verify', nameKey: 'tag.toVerify', color: '#3b82f6' },
-  { id: 'excluded', nameKey: 'tag.excluded', color: '#ef4444' },
-  { id: 'bookmarked', nameKey: 'tag.bookmarked', color: '#8b5cf6' },
-];
-
 /** Colorscale options for charts */
 export const COLORSCALES = [
   'Viridis', 'Plasma', 'Inferno', 'Magma', 'Cividis',

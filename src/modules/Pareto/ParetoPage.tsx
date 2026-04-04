@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import Plot from 'react-plotly.js';
@@ -22,10 +22,13 @@ export function ParetoPage() {
     return Array.from(fronts).sort((a, b) => a - b);
   }, [structures]);
 
-  const [selectedFronts, setSelectedFronts] = useState<Set<number>>(
-    new Set(frontNumbers.slice(0, 3)),
-  );
+  const [selectedFronts, setSelectedFronts] = useState<Set<number>>(new Set());
   const [showLines, setShowLines] = useState(true);
+
+  // Sync selectedFronts when frontNumbers changes (e.g. data loads)
+  useEffect(() => {
+    setSelectedFronts(new Set(frontNumbers.slice(0, 3)));
+  }, [frontNumbers]);
 
   const toggleFront = (n: number) => {
     const next = new Set(selectedFronts);
@@ -37,7 +40,7 @@ export function ParetoPage() {
   if (!isMulti) {
     return (
       <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)' }}>
-        {t('noData')} — Single-objective optimization does not have Pareto fronts.
+        {t('pareto.singleObjectiveHint')}
       </div>
     );
   }

@@ -49,6 +49,7 @@ const en = {
   'upload.missing': 'Not uploaded',
   'upload.recognized': 'Recognized',
   'upload.systemDetected': 'System detected',
+  'upload.requiredFilesHint': 'Please upload extended_convex_hull or Individuals file',
 
   // ---- File types ----
   'files.parameters': 'Parameters.txt',
@@ -145,6 +146,8 @@ const en = {
   'hull.composition': 'Composition',
   'hull.includeUserData': 'Include user-added data',
   'hull.recalculate': 'Recalculate Hull',
+  'hull.ternaryComingSoon': 'Ternary phase diagram — 3D Convex Hull visualization coming soon',
+  'hull.3dComingSoon': '3D Convex Hull view coming soon',
 
   // ---- Pareto ----
   'pareto.title': 'Pareto Front',
@@ -154,6 +157,7 @@ const en = {
   'pareto.yAxis': 'Y Axis',
   'pareto.connectLine': 'Show front lines',
   'pareto.selectFronts': 'Select fronts to display',
+  'pareto.singleObjectiveHint': 'No data — Single-objective optimization does not have Pareto fronts.',
 
   // ---- Explorer ----
   'explorer.title': 'Data Explorer',

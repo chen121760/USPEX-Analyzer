@@ -108,7 +108,7 @@ export function DashboardPage() {
 
       {/* Stat cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
-        <StatCard label={t('system.totalStructures')} value={systemInfo.totalStructures} />
+        <StatCard label={t('system.totalStructures')} value={systemInfo.totalStructures} sub={`(${systemInfo.totalStructuresSource})`} />
         <StatCard label={t('system.stableStructures')} value={systemInfo.stableCount} sub="fitness = 0" />
         <StatCard label={t('system.minEnthalpy')} value={`${stats.minEnthalpy.toFixed(4)}`} sub="eV/atom" />
         {systemInfo.totalGenerations > 0 && (

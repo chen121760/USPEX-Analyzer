@@ -241,7 +241,7 @@ export function UploadPage() {
             </button>
             {!canStart && (
               <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 8 }}>
-                需要上传 extended_convex_hull 或 Individuals 文件
+                {t('upload.requiredFilesHint')}
               </p>
             )}
           </div>

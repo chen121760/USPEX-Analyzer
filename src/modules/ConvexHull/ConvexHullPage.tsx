@@ -45,7 +45,7 @@ export function ConvexHullPage() {
   const plotData = useMemo(() => {
     if (!structures.length) return null;
 
-    const stable = structures.filter((s) => s.fitness === 0);
+    const stable = structures.filter((s) => s.fitness === 0 && s.enthalpy < 900);
     const unstable = structures.filter((s) => s.fitness > 0 && s.enthalpy < 900);
 
     if (isBinary) {
@@ -204,8 +204,8 @@ export function ConvexHullPage() {
 
       <div className="card" style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)' }}>
         {isTernary
-          ? 'Ternary phase diagram — 3D Convex Hull visualization coming soon'
-          : '3D Convex Hull view coming soon'}
+          ? t('hull.ternaryComingSoon')
+          : t('hull.3dComingSoon')}
       </div>
     </div>
   );

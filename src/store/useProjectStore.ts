@@ -84,10 +84,10 @@ const EMPTY_PARSED: ParsedFileStatus = {
 };
 
 const DEFAULT_TAGS: TagDefinition[] = [
-  { id: 'candidate', name: 'Candidate', color: '#f59e0b' },
-  { id: 'to-verify', name: 'To Verify', color: '#3b82f6' },
-  { id: 'excluded', name: 'Excluded', color: '#ef4444' },
-  { id: 'bookmarked', name: 'Bookmarked', color: '#8b5cf6' },
+  { id: 'candidate', nameKey: 'tag.candidate', color: '#f59e0b' },
+  { id: 'to-verify', nameKey: 'tag.toVerify', color: '#3b82f6' },
+  { id: 'excluded', nameKey: 'tag.excluded', color: '#ef4444' },
+  { id: 'bookmarked', nameKey: 'tag.bookmarked', color: '#8b5cf6' },
 ];
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
@@ -156,11 +156,14 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   exportProjectFile: () => {
     const state = get();
+    if (!state.systemInfo) {
+      throw new Error('No project data to export');
+    }
     return {
       version: '1.0.0',
       created: new Date().toISOString(),
       lastModified: new Date().toISOString(),
-      systemInfo: state.systemInfo!,
+      systemInfo: state.systemInfo,
       structures: state.structures,
       userAddedStructures: state.userStructures,
       tags: state.tags,

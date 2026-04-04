@@ -182,7 +182,7 @@ export function DataTablePage() {
                   className="tag-badge"
                   style={{ background: `${tag.color}20`, color: tag.color }}
                 >
-                  {tag.name}
+                  {t(tag.nameKey)}
                 </span>
               );
             })}

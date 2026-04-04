@@ -123,7 +123,7 @@ export function Sidebar() {
           style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left' }}
         >
           {collapsed ? <ChevronRight size={iconSize} /> : <ChevronLeft size={iconSize} />}
-          {!collapsed && <span>收起</span>}
+          {!collapsed && <span>{t('dashboard.collapse')}</span>}
         </button>
       </div>
     </aside>

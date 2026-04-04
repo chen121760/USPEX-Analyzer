@@ -285,12 +285,15 @@ export function parseAllFiles(
   const fitnessValues = structures.map((s) => s.fitness).filter((f) => f >= 0);
   const enthalpyValues = structures.map((s) => s.enthalpy).filter((e) => !isNaN(e) && e < 900);
 
+  const primarySource = hullContent ? 'extended_convex_hull' : (indContent ? 'Individuals' : 'unknown');
+
   const systemInfo: SystemInfo = {
     elements,
     systemType,
     optimizationType,
     secondObjectiveName,
     totalStructures: structures.length,
+    totalStructuresSource: primarySource,
     totalGenerations: individualsResult?.maxGeneration ?? hullGenerations.length,
     stableCount: structures.filter((s) => s.fitness === 0).length,
     minEnthalpy: enthalpyValues.length > 0 ? Math.min(...enthalpyValues) : 0,
