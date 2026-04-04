@@ -2,18 +2,17 @@
 
 A browser-based analysis tool for USPEX crystal structure prediction outputs. Upload your USPEX output files and interactively explore, visualize, filter, and export your results — all without installing anything.
 
-🌐 **Live Demo**: [https://YOUR_USERNAME.github.io/uspex-analyzer/](https://YOUR_USERNAME.github.io/uspex-analyzer/)
+🌐 **Live Demo**: [https://chen121760.github.io/uspex-analyzer/](https://chen121760.github.io/uspex-analyzer/)
 
 ## Features
 
-- **📋 Data Table** — Sortable, searchable table with all structure properties merged from multiple files
-- **📐 Convex Hull** — Interactive 2D/3D convex hull visualization with hover details
-- **🎯 Pareto Front** — Multi-objective Pareto front visualization (auto-detected)
-- **🔍 Explorer** — Universal scatter plot: pick any two properties as axes with color mapping
-- **🏷️ Tags** — Label structures as Candidate / To Verify / Excluded / custom tags
-- **🔧 Filter & Export** — Query builder with AND conditions, export as .zip / seeds / .csv
-- **💾 Project Save/Load** — Save all data + annotations as .json, reload anytime
-- **🌍 Bilingual** — Full Chinese / English support
+- ** Data Table** — Sortable, searchable table with all structure properties merged from multiple files
+- ** Convex Hull** — Interactive 2D/3D convex hull visualization with hover details
+- ** Pareto Front** — Multi-objective Pareto front visualization (auto-detected)
+- ** Explorer** — Universal scatter plot: pick any two properties as axes with color mapping
+- ** Tags** — Label structures as Candidate / To Verify / Excluded / custom tags
+- ** Filter & Export** — Query builder with AND conditions, export as .zip / seeds / .csv
+- ** Project Save/Load** — Save all data + annotations as .json, reload anytime
 
 ## Supported USPEX Files
 
