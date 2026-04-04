@@ -10,6 +10,7 @@ import type {
   SystemInfo,
   SystemType,
   OptimizationType,
+  CompositionMode,
   USPEXFileType,
   DetectedFile,
   HullGeneration,
@@ -23,6 +24,7 @@ import type {
 } from '@/types/structure';
 
 import { parseParameters } from './parametersParser';
+import type { ParsedParameters } from '@/types/structure';
 import { parseExtendedConvexHull } from './extendedHullParser';
 import { parseIndividuals, type IndividualsParseResult } from './individualsParser';
 import { parseParetoRanking, type ParetoParseResult } from './paretoParser';
@@ -76,20 +78,21 @@ export function parseAllFiles(
 
   // ---- Step 1: Parse each file ----
 
-  // Elements
-  let elements: string[] = [];
+  // Parameters.txt
+  let paramsResult: ParsedParameters | null = null;
   const paramContent = fileContents.get('parameters');
   if (paramContent) {
-    elements = parseParameters(paramContent);
+    paramsResult = parseParameters(paramContent);
   }
 
-  // Extended convex hull (primary data source)
+  // Elements: primary from Parameters.txt
+  let elements = paramsResult?.elements ?? [];
+
+  // Extended convex hull (primary data source for varcomp)
   let hullData: ParsedExtendedHull[] = [];
   const hullContent = fileContents.get('extended_convex_hull');
   if (hullContent) {
     hullData = parseExtendedConvexHull(hullContent);
-  } else {
-    warnings.push('extended_convex_hull file not found — limited functionality');
   }
 
   // Individuals
@@ -142,19 +145,70 @@ export function parseAllFiles(
     hullGenerations = parseConvexHullGenerations(hullGenContent);
   }
 
-  // If no extended_convex_hull but have Individuals, build from Individuals
+  // ---- Step 1b: Determine system properties ----
+  // Priority: Parameters.txt → inference from file presence/content
+
+  let systemType: SystemType = 'binary';
+  let optimizationType: OptimizationType = 'single';
+  let compositionMode: CompositionMode = 'varcomp';
+  let secondObjectiveName = '';
+
+  if (paramsResult) {
+    // From Parameters.txt
+    const numComp = paramsResult.numComponents;
+    if (numComp >= 3) systemType = 'ternary';
+    else if (numComp === 2) systemType = 'binary';
+    else if (numComp === 1) systemType = 'unary';
+
+    compositionMode = paramsResult.isVarcomp ? 'varcomp' : 'fixed';
+    optimizationType = paramsResult.optType.length > 1 ? 'multi' : 'single';
+  }
+
+  // Fallback inference when Parameters.txt is missing or incomplete
+  if (!paramsResult || paramsResult.numComponents === 0) {
+    // systemType from composition length
+    const compLen = hullData.length > 0
+      ? hullData[0].composition.length
+      : individualsResult && individualsResult.data.length > 0
+        ? individualsResult.data[0].composition.length
+        : 0;
+    systemType = compLen <= 1 ? 'unary' : compLen === 2 ? 'binary' : 'ternary';
+  }
+
+  if (!paramsResult) {
+    // compositionMode from hull file presence
+    compositionMode = hullContent ? 'varcomp' : 'fixed';
+    // optimizationType from Pareto file presence
+    const hasPareto = paretoResult !== null && paretoResult.data.length > 0;
+    optimizationType = hasPareto ? 'multi' : 'single';
+  }
+
+  // Second objective name from Pareto or Individuals
+  secondObjectiveName =
+    paretoResult?.secondObjectiveName ??
+    individualsResult?.secondObjectiveName ??
+    '';
+
+  // ---- Step 1c: If no extended_convex_hull but have Individuals, build from Individuals ----
+
   if (hullData.length === 0 && individualsResult) {
-    warnings.push('Building structure list from Individuals file');
+    if (compositionMode === 'fixed') {
+      warnings.push('Fixed composition — no convex hull. Building structure list from Individuals file');
+    } else {
+      warnings.push('extended_convex_hull file not found — building from Individuals file');
+    }
     hullData = individualsResult.data.map((ind) => ({
       id: ind.id,
       composition: ind.composition,
       enthalpy: ind.enthalpy / Math.max(1, totalAtoms(ind.composition)),
       volume: ind.volume / Math.max(1, totalAtoms(ind.composition)),
-      fitness: -1, // unknown
+      fitness: -1, // unknown / not meaningful for fixed
       symm: ind.symm,
-      x: 0,
+      x: [0], // no meaningful composition coordinate
       y: 0,
     }));
+  } else if (hullData.length === 0 && !individualsResult) {
+    warnings.push('No extended_convex_hull or Individuals file found — very limited functionality');
   }
 
   // Infer elements from POSCAR if still unknown
@@ -162,6 +216,15 @@ export function parseAllFiles(
     const firstPoscar = poscarMap.values().next().value;
     if (firstPoscar && firstPoscar.elements.length > 0) {
       elements = firstPoscar.elements;
+    }
+  }
+
+  // Override systemType from actual composition data if Parameters.txt was wrong/missing
+  if (hullData.length > 0) {
+    const actualCompLen = hullData[0].composition.length;
+    const inferred: SystemType = actualCompLen <= 1 ? 'unary' : actualCompLen === 2 ? 'binary' : 'ternary';
+    if (!paramsResult || paramsResult.numComponents === 0) {
+      systemType = inferred;
     }
   }
 
@@ -268,19 +331,7 @@ export function parseAllFiles(
     return structure;
   });
 
-  // ---- Step 4: Determine system info ----
-
-  const compLen = hullData.length > 0 ? hullData[0].composition.length : 0;
-  const systemType: SystemType =
-    compLen <= 1 ? 'unary' : compLen === 2 ? 'binary' : 'ternary';
-
-  const hasPareto = paretoResult !== null && paretoResult.data.length > 0;
-  const optimizationType: OptimizationType = hasPareto ? 'multi' : 'single';
-
-  const secondObjectiveName =
-    paretoResult?.secondObjectiveName ??
-    individualsResult?.secondObjectiveName ??
-    '';
+  // ---- Step 4: Build system info ----
 
   const fitnessValues = structures.map((s) => s.fitness).filter((f) => f >= 0);
   const enthalpyValues = structures.map((s) => s.enthalpy).filter((e) => !isNaN(e) && e < 900);
@@ -291,6 +342,7 @@ export function parseAllFiles(
     elements,
     systemType,
     optimizationType,
+    compositionMode,
     secondObjectiveName,
     totalStructures: structures.length,
     totalStructuresSource: primarySource,

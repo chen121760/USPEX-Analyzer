@@ -11,6 +11,9 @@ export type SystemType = 'unary' | 'binary' | 'ternary';
 /** Optimization type */
 export type OptimizationType = 'single' | 'multi';
 
+/** Whether composition is variable or fixed */
+export type CompositionMode = 'varcomp' | 'fixed';
+
 /** Complete structure record — merges all file sources */
 export interface Structure {
   // --- Identity ---
@@ -26,7 +29,7 @@ export interface Structure {
   volumeTotal: number;         // Å³ (total, from Individuals)
   fitness: number;             // eV/block — distance to convex hull
   spaceGroup: number;
-  hullX: number;               // composition coordinate
+  hullX: number[];             // composition coordinate(s): [x] for binary, [x1,x2] for ternary
   hullY: number;               // formation energy (eV/atom)
 
   // --- Origin / Genealogy ---
@@ -82,6 +85,7 @@ export interface SystemInfo {
   elements: string[];
   systemType: SystemType;
   optimizationType: OptimizationType;
+  compositionMode: CompositionMode;
   secondObjectiveName: string;
   totalStructures: number;
   totalGenerations: number;
@@ -128,6 +132,14 @@ export interface HullGenerationEntry {
 //  File-specific parsed data types (intermediate)
 // ============================================================
 
+export interface ParsedParameters {
+  elements: string[];
+  calculationType: number;       // 3-digit: hundreds=dimension, tens=molecule, ones=varcomp
+  optType: number[];             // [1]=single-obj enthalpy, [1,1201]=multi-obj
+  isVarcomp: boolean;            // derived: calculationType % 10 === 1
+  numComponents: number;         // from atomType count: 2=binary, 3=ternary
+}
+
 export interface ParsedExtendedHull {
   id: number;
   composition: number[];
@@ -135,7 +147,7 @@ export interface ParsedExtendedHull {
   volume: number;
   fitness: number;
   symm: number;
-  x: number;
+  x: number[];              // [x] for binary, [x1, x2] for ternary
   y: number;
 }
 

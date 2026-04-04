@@ -8,6 +8,7 @@ const zh = {
   'nav.dashboard': '统计面板',
   'nav.table': '数据表格',
   'nav.hull': '凸包图',
+  'nav.energyRanking': '能量排序',
   'nav.pareto': 'Pareto 前沿',
   'nav.explorer': '数据探索',
   'nav.genealogy': '谱系追溯',
@@ -81,6 +82,8 @@ const zh = {
   'system.unary': '一元体系',
   'system.single': '单目标优化',
   'system.multi': '多目标优化',
+  'system.varcomp': '变组分',
+  'system.fixedComp': '定组分',
   'system.elements': '元素',
   'system.totalStructures': '结构总数',
   'system.stableStructures': '稳定结构（凸包上）',
@@ -148,6 +151,10 @@ const zh = {
   'hull.recalculate': '重新计算凸包',
   'hull.ternaryComingSoon': '三元相图 — 3D 凸包可视化即将推出',
   'hull.3dComingSoon': '3D 凸包视图即将推出',
+  'hull.ternaryTitle': '三元相图',
+  'hull.tieLines': '相平衡连线',
+  'hull.energyRanking': '能量排序',
+  'hull.energyRankingDesc': '定组分计算 — 按焓值排序展示所有结构',
 
   // ---- Pareto ----
   'pareto.title': 'Pareto 前沿',

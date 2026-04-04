@@ -46,6 +46,7 @@ export function Sidebar() {
   const systemInfo = useProjectStore((s) => s.systemInfo);
 
   const isMulti = systemInfo?.optimizationType === 'multi';
+  const isFixed = systemInfo?.compositionMode === 'fixed';
 
   const saveProject = () => {
     const projectFile = useProjectStore.getState().exportProjectFile();
@@ -95,7 +96,7 @@ export function Sidebar() {
         >
           <div style={{ fontWeight: 600 }}>{systemInfo.elements.join('-')}</div>
           <div>
-            {t(`system.${systemInfo.systemType}`)} · {t(`system.${systemInfo.optimizationType === 'multi' ? 'multi' : 'single'}`)}
+            {t(`system.${systemInfo.systemType}`)} · {t(`system.${systemInfo.compositionMode === 'varcomp' ? 'varcomp' : 'fixedComp'}`)} · {t(`system.${systemInfo.optimizationType === 'multi' ? 'multi' : 'single'}`)}
           </div>
         </div>
       )}
@@ -104,7 +105,7 @@ export function Sidebar() {
       <nav style={{ flex: 1, padding: '8px 0', overflowY: 'auto' }}>
         <NavItem to="/dashboard" icon={<LayoutDashboard size={iconSize} />} label={t('nav.dashboard')} />
         <NavItem to="/table" icon={<Table2 size={iconSize} />} label={t('nav.table')} />
-        <NavItem to="/convex-hull" icon={<TrendingDown size={iconSize} />} label={t('nav.hull')} />
+        <NavItem to="/convex-hull" icon={<TrendingDown size={iconSize} />} label={isFixed ? t('nav.energyRanking', 'Energy Ranking') : t('nav.hull')} />
         <NavItem to="/pareto" icon={<Target size={iconSize} />} label={t('nav.pareto')} hidden={!isMulti} />
         <NavItem to="/explorer" icon={<ScatterChart size={iconSize} />} label={t('nav.explorer')} />
         <NavItem to="/filter" icon={<Filter size={iconSize} />} label={t('nav.filter')} />

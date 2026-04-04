@@ -21,7 +21,7 @@ const FILENAME_MAP: Record<string, USPEXFileType> = {
 /** Display information for each file type */
 const FILE_INFO: Record<USPEXFileType, { displayKey: string; descKey: string; required: boolean }> = {
   parameters:                  { displayKey: 'files.parameters',        descKey: 'files.parametersDesc',        required: false },
-  extended_convex_hull:        { displayKey: 'files.extendedHull',      descKey: 'files.extendedHullDesc',      required: true },
+  extended_convex_hull:        { displayKey: 'files.extendedHull',      descKey: 'files.extendedHullDesc',      required: false },
   individuals:                 { displayKey: 'files.individuals',       descKey: 'files.individualsDesc',       required: false },
   pareto_ranking:              { displayKey: 'files.pareto',            descKey: 'files.paretoDesc',            required: false },
   ml_properties:               { displayKey: 'files.mlProperties',      descKey: 'files.mlPropertiesDesc',      required: false },

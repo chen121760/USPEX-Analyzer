@@ -16,7 +16,7 @@ const NUMERIC_FIELDS = [
 const OPERATORS = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte'] as const;
 
 function applyCondition(s: Structure, cond: FilterCondition): boolean {
-  const val = (s as Record<string, unknown>)[cond.field];
+  const val = (s as unknown as Record<string, unknown>)[cond.field];
   if (val == null) return false;
 
   const num = Number(val);
@@ -86,7 +86,7 @@ export function FilterPage() {
 
   const updateCondition = (idx: number, key: keyof FilterCondition, value: unknown) => {
     const updated = [...conditions];
-    (updated[idx] as Record<string, unknown>)[key] = value;
+    (updated[idx] as unknown as Record<string, unknown>)[key] = value;
     setConditions(updated);
   };
 
@@ -99,8 +99,8 @@ export function FilterPage() {
   // Sort
   const sortedStructures = useMemo(() => {
     const sorted = [...filteredStructures].sort((a, b) => {
-      const av = (a as Record<string, unknown>)[sortKey];
-      const bv = (b as Record<string, unknown>)[sortKey];
+      const av = (a as unknown as Record<string, unknown>)[sortKey];
+      const bv = (b as unknown as Record<string, unknown>)[sortKey];
       const na = Number(av) ?? 0;
       const nb = Number(bv) ?? 0;
       return na - nb;

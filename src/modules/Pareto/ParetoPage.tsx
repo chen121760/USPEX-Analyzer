@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import Plot from 'react-plotly.js';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PlotlyData = any;
 
 const FRONT_COLORS = ['#dc2626', '#f59e0b', '#16a34a', '#2563eb', '#8b5cf6', '#ec4899', '#06b6d4', '#6b7280'];
 
@@ -45,7 +47,8 @@ export function ParetoPage() {
     );
   }
 
-  const traces: Plotly.Data[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const traces: PlotlyData[] = [];
 
   for (const front of frontNumbers) {
     if (!selectedFronts.has(front)) continue;
@@ -83,7 +86,8 @@ export function ParetoPage() {
     linecolor: '#94a3b8',
   };
 
-  const layout: Partial<Plotly.Layout> = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const layout: any = {
     title: { text: `${systemInfo?.elements.join('-')} ${t('pareto.title')}`, font: { size: 15, color: '#0f172a' } },
     xaxis: { title: t('pareto.xAxis'), ...axisStyle },
     yaxis: { title: objName, ...axisStyle },

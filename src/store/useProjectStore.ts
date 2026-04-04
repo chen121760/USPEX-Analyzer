@@ -116,7 +116,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       const parsedFiles: ParsedFileStatus = { ...EMPTY_PARSED };
       for (const [type] of fileContents) {
         if (type in parsedFiles) {
-          (parsedFiles as Record<string, boolean>)[type] = true;
+          (parsedFiles as unknown as Record<string, boolean>)[type] = true;
         }
       }
 
@@ -140,9 +140,21 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   loadProjectFile: (project) => {
+    // Migrate old project files: hullX was number, now number[]
+    const migratedStructures = project.structures.map((s) => ({
+      ...s,
+      hullX: Array.isArray(s.hullX) ? s.hullX : [s.hullX as number],
+    }));
+
+    // Ensure compositionMode exists (backward compat)
+    const sysInfo = { ...project.systemInfo };
+    if (!sysInfo.compositionMode) {
+      sysInfo.compositionMode = 'varcomp';
+    }
+
     set({
-      systemInfo: project.systemInfo,
-      structures: project.structures,
+      systemInfo: sysInfo,
+      structures: migratedStructures,
       userStructures: project.userAddedStructures ?? [],
       hullGenerations: project.hullGenerations ?? [],
       tags: project.tags?.length ? project.tags : [...DEFAULT_TAGS],
@@ -191,7 +203,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       volumeTotal: 0,
       fitness: -1,
       spaceGroup: partial.spaceGroup ?? 0,
-      hullX: 0,
+      hullX: [],
       hullY: 0,
       origin: 'UserAdded',
       parentIds: [],

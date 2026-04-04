@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import Plot from 'react-plotly.js';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PlotlyData = any;
 import type { Structure } from '@/types/structure';
 
 interface FieldOption {
@@ -73,7 +75,8 @@ export function ExplorerPage() {
   }, [structures, xField, yField]);
 
   // Build traces
-  const traces: Plotly.Data[] = useMemo(() => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const traces: PlotlyData[] = useMemo(() => {
     if (!colorField || colorField.type === 'numeric') {
       // Single trace with color mapping
       return [{
@@ -135,7 +138,8 @@ export function ExplorerPage() {
     linecolor: '#94a3b8',
   };
 
-  const layout: Partial<Plotly.Layout> = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const layout: any = {
     title: { text: `${xField.label} vs ${yField.label}`, font: { size: 15, color: '#0f172a' } },
     xaxis: { title: xField.label, ...axisStyle },
     yaxis: { title: yField.label, ...axisStyle },

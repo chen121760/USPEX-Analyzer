@@ -8,6 +8,7 @@ const en = {
   'nav.dashboard': 'Dashboard',
   'nav.table': 'Data Table',
   'nav.hull': 'Convex Hull',
+  'nav.energyRanking': 'Energy Ranking',
   'nav.pareto': 'Pareto Front',
   'nav.explorer': 'Explorer',
   'nav.genealogy': 'Genealogy',
@@ -81,6 +82,8 @@ const en = {
   'system.unary': 'Unary System',
   'system.single': 'Single-objective',
   'system.multi': 'Multi-objective',
+  'system.varcomp': 'Variable Composition',
+  'system.fixedComp': 'Fixed Composition',
   'system.elements': 'Elements',
   'system.totalStructures': 'Total Structures',
   'system.stableStructures': 'Stable (on hull)',
@@ -148,6 +151,10 @@ const en = {
   'hull.recalculate': 'Recalculate Hull',
   'hull.ternaryComingSoon': 'Ternary phase diagram — 3D Convex Hull visualization coming soon',
   'hull.3dComingSoon': '3D Convex Hull view coming soon',
+  'hull.ternaryTitle': 'Ternary Phase Diagram',
+  'hull.tieLines': 'Tie Lines',
+  'hull.energyRanking': 'Energy Ranking',
+  'hull.energyRankingDesc': 'Fixed composition — showing enthalpy ranking of all structures',
 
   // ---- Pareto ----
   'pareto.title': 'Pareto Front',
