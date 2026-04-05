@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useUIStore } from '@/store/useUIStore';
@@ -12,7 +12,7 @@ import {
   type SortingState,
 } from '@tanstack/react-table';
 import {
-  ArrowUpDown, ArrowUp, ArrowDown, Search, Eye, GitBranch, ArrowLeftRight, Tag,
+  ArrowUpDown, ArrowUp, ArrowDown, Search, Eye, GitBranch, ArrowLeftRight, Tag, MessageSquare, X,
 } from 'lucide-react';
 import type { Structure } from '@/types/structure';
 
@@ -22,12 +22,189 @@ function SortIcon({ sorted }: { sorted: false | 'asc' | 'desc' }) {
   return <ArrowDown size={12} />;
 }
 
+function TagPicker({
+  structureId,
+  currentTags,
+  allTags,
+  onToggle,
+}: {
+  structureId: number;
+  currentTags: string[];
+  allTags: { id: string; nameKey: string; color: string }[];
+  onToggle: (id: number, tags: string[]) => void;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // 点击外部关闭
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const toggle = (tagId: string) => {
+    const next = currentTags.includes(tagId)
+      ? currentTags.filter((t) => t !== tagId)
+      : [...currentTags, tagId];
+    onToggle(structureId, next);
+  };
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      {/* 已选标签 + 点击区域 */}
+      <div
+        onClick={() => setOpen(!open)}
+        style={{
+          display: 'flex', gap: 4, flexWrap: 'wrap', cursor: 'pointer',
+          minHeight: 24, alignItems: 'center', padding: '2px 4px',
+          borderRadius: 4, border: '1px solid transparent',
+        }}
+        title="点击编辑标签"
+      >
+        {currentTags.length === 0 && (
+          <Tag size={12} style={{ opacity: 0.3 }} />
+        )}
+        {currentTags.map((tagId) => {
+          const tag = allTags.find((t) => t.id === tagId);
+          if (!tag) return null;
+          return (
+            <span
+              key={tagId}
+              className="tag-badge"
+              style={{ background: `${tag.color}20`, color: tag.color, fontSize: 11 }}
+            >
+              {t(tag.nameKey)}
+            </span>
+          );
+        })}
+      </div>
+
+      {/* 下拉框 */}
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, zIndex: 50,
+          background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+          borderRadius: 8, padding: 6, minWidth: 160,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+        }}>
+          {allTags.map((tag) => {
+            const checked = currentTags.includes(tag.id);
+            return (
+              <label
+                key={tag.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '5px 8px', borderRadius: 4, cursor: 'pointer',
+                  fontSize: 12, color: 'var(--color-text)',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(tag.id)}
+                  style={{ accentColor: tag.color }}
+                />
+                <span style={{
+                  width: 10, height: 10, borderRadius: '50%',
+                  background: tag.color, flexShrink: 0,
+                }} />
+                {t(tag.nameKey)}
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 备注编辑弹出框 */
+function NotesEditor({
+  structureId,
+  currentNotes,
+  onSave,
+}: {
+  structureId: number;
+  currentNotes: string;
+  onSave: (id: number, notes: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(currentNotes);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onSave(structureId, text);
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open, text, structureId, onSave]);
+
+  if (!open) {
+    return (
+      <button
+        className="btn btn-ghost btn-sm"
+        onClick={() => { setText(currentNotes); setOpen(true); }}
+        title={currentNotes || '添加备注'}
+        style={{
+          padding: '2px 6px',
+          color: currentNotes ? 'var(--color-primary)' : undefined,
+        }}
+      >
+        <MessageSquare size={14} />
+      </button>
+    );
+  }
+
+  return (
+    <div ref={ref} style={{
+      position: 'absolute', right: 0, top: '100%', zIndex: 50,
+      background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+      borderRadius: 8, padding: 10, width: 240,
+      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <span style={{ fontSize: 12, fontWeight: 600 }}>EA{structureId} 备注</span>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => { onSave(structureId, text); setOpen(false); }}
+          style={{ padding: 2 }}
+        >
+          <X size={14} />
+        </button>
+      </div>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="写点备注..."
+        rows={3}
+        style={{
+          width: '100%', padding: 8, borderRadius: 6, fontSize: 12,
+          border: '1px solid var(--color-border)', resize: 'vertical',
+          background: 'var(--color-bg)', color: 'var(--color-text)',
+          boxSizing: 'border-box', outline: 'none',
+        }}
+      />
+    </div>
+  );
+}
+
 export function DataTablePage() {
   const { t } = useTranslation();
   const structures = useProjectStore((s) => s.structures);
   const systemInfo = useProjectStore((s) => s.systemInfo);
   const tags = useProjectStore((s) => s.tags);
   const updateStructureTags = useProjectStore((s) => s.updateStructureTags);
+  const updateStructureNotes = useProjectStore((s) => s.updateStructureNotes);
   const openViewer = useUIStore((s) => s.openViewer);
   const toggleCompare = useUIStore((s) => s.toggleCompare);
   const compareIds = useUIStore((s) => s.compareIds);
@@ -172,21 +349,12 @@ export function DataTablePage() {
       cell: ({ row }) => {
         const s = row.original;
         return (
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            {s.tags.map((tagId) => {
-              const tag = tags.find((t) => t.id === tagId);
-              if (!tag) return null;
-              return (
-                <span
-                  key={tagId}
-                  className="tag-badge"
-                  style={{ background: `${tag.color}20`, color: tag.color }}
-                >
-                  {t(tag.nameKey)}
-                </span>
-              );
-            })}
-          </div>
+          <TagPicker
+            structureId={s.id}
+            currentTags={s.tags}
+            allTags={tags}
+            onToggle={updateStructureTags}
+          />
         );
       },
     });
@@ -224,6 +392,13 @@ export function DataTablePage() {
             >
               <ArrowLeftRight size={14} />
             </button>
+            <div style={{ position: 'relative' }}>
+              <NotesEditor
+                structureId={s.id}
+                currentNotes={s.notes}
+                onSave={updateStructureNotes}
+              />
+            </div>
           </div>
         );
       },
