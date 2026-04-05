@@ -77,7 +77,6 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
     },
     text: plotData.hoverTexts,
     hoverinfo: 'text' as const,
-    customdata: plotData.labels,
   };
 
 
