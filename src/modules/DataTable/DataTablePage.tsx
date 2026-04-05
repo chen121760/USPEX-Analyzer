@@ -213,6 +213,9 @@ export function DataTablePage() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [lineageId, setLineageId] = useState<number | null>(null);
+  const [selectedTag, setSelectedTag] = useState<string>('');  
+  const [pageIndex, setPageIndex] = useState(0);               
+  const pageSize = 50; 
 
   const hasPareto = systemInfo?.optimizationType === 'multi';
   const hasML = structures.some((s) => s.youngModulus != null && s.youngModulus > 0);
@@ -227,6 +230,52 @@ export function DataTablePage() {
         cell: ({ getValue }) => <span style={{ fontWeight: 600 }}>EA{getValue<number>()}</span>,
       },
       { accessorKey: 'formula', header: t('col.formula'), size: 100 },
+      {
+          accessorKey: 'tags',
+          header: t('col.tags'),
+          size: 120,
+          enableSorting: false,
+          cell: ({ row }) => {
+            const s = row.original;
+            return (
+              <TagPicker
+                structureId={s.id}
+                currentTags={s.tags}
+                allTags={tags}
+                onToggle={updateStructureTags}
+              />
+            );
+          },
+        },
+        // ★ Actions 第二个
+        {
+          id: 'actions',
+          header: t('col.actions'),
+          size: 100,
+          enableSorting: false,
+          cell: ({ row }) => {
+            const s = row.original;
+            const isInCompare = compareIds.includes(s.id);
+            return (
+              <div style={{ display: 'flex', gap: 4 }}>
+                {s.poscarData && (
+                  <button className="btn btn-ghost btn-sm" onClick={() => openViewer(s.id)} title={t('btn.viewStructure')} style={{ padding: '2px 6px' }}>
+                    <Eye size={14} />
+                  </button>
+                )}
+                <button className="btn btn-ghost btn-sm" onClick={() => toggleCompare(s.id)} title={isInCompare ? t('compare.removeFromCompare') : t('compare.addToCompare')} style={{ padding: '2px 6px', color: isInCompare ? 'var(--color-primary)' : undefined }}>
+                  <ArrowLeftRight size={14} />
+                </button>
+                <div style={{ position: 'relative' }}>
+                  <NotesEditor structureId={s.id} currentNotes={s.notes} onSave={updateStructureNotes} />
+                </div>
+                <button className="btn btn-ghost btn-sm" onClick={() => setLineageId(s.id)} title="查看谱系 / Lineage" style={{ padding: '2px 6px' }}>
+                  <GitBranch size={14} />
+                </button>
+              </div>
+            );
+          },
+        },
       { accessorKey: 'spaceGroup', header: t('col.spaceGroup'), size: 60 },
       { accessorKey: 'generation', header: t('col.generation'), size: 60 },
       {
@@ -342,84 +391,22 @@ export function DataTablePage() {
       });
     }
 
-    // Tags
-    cols.push({
-      accessorKey: 'tags',
-      header: t('col.tags'),
-      size: 120,
-      enableSorting: false,
-      cell: ({ row }) => {
-        const s = row.original;
-        return (
-          <TagPicker
-            structureId={s.id}
-            currentTags={s.tags}
-            allTags={tags}
-            onToggle={updateStructureTags}
-          />
-        );
-      },
-    });
-
-    // Actions
-    cols.push({
-      id: 'actions',
-      header: t('col.actions'),
-      size: 100,
-      enableSorting: false,
-      cell: ({ row }) => {
-        const s = row.original;
-        const isInCompare = compareIds.includes(s.id);
-
-        return (
-          <div style={{ display: 'flex', gap: 4 }}>
-            {s.poscarData && (
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={() => openViewer(s.id)}
-                title={t('btn.viewStructure')}
-                style={{ padding: '2px 6px' }}
-              >
-                <Eye size={14} />
-              </button>
-            )}
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => toggleCompare(s.id)}
-              title={isInCompare ? t('compare.removeFromCompare') : t('compare.addToCompare')}
-              style={{
-                padding: '2px 6px',
-                color: isInCompare ? 'var(--color-primary)' : undefined,
-              }}
-            >
-              <ArrowLeftRight size={14} />
-            </button>
-            <div style={{ position: 'relative' }}>
-              <NotesEditor
-                structureId={s.id}
-                currentNotes={s.notes}
-                onSave={updateStructureNotes}
-              />
-            </div>
-            {/* 谱系按钮 */}
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => setLineageId(s.id)}
-              title="查看谱系 / Lineage"
-              style={{ padding: '2px 6px' }}
-            >
-              <GitBranch size={14} />
-            </button> 
-          </div>
-        );
-      },
-    });
-
+  
     return cols;
   }, [t, hasPareto, hasML, hasFingerprint, systemInfo, tags, compareIds, openViewer, toggleCompare]);
 
+  // 按标签过滤
+  const tableData = useMemo(() => {
+    if (!selectedTag) return structures;
+    return structures.filter((s) => s.tags.includes(selectedTag));
+  }, [structures, selectedTag]);
+
+  // 当筛选条件变化时重置页码
+  const filteredCount = tableData.length;
+  const totalPages = Math.ceil(filteredCount / pageSize);
+
   const table = useReactTable({
-    data: structures,
+    data: tableData,
     columns,
     state: { sorting, globalFilter },
     onSortingChange: setSorting,
@@ -441,15 +428,18 @@ export function DataTablePage() {
 
   return (
     <div className="fade-in">
-      {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+
+    {/* Toolbar */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
+      {/* 搜索 + 计数 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ position: 'relative', flex: 1, maxWidth: 300 }}>
           <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)' }} />
           <input
             type="text"
             placeholder={t('search')}
             value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.target.value)}
+            onChange={(e) => { setGlobalFilter(e.target.value); setPageIndex(0); }}
             style={{
               width: '100%',
               padding: '6px 12px 6px 30px',
@@ -462,11 +452,44 @@ export function DataTablePage() {
             }}
           />
         </div>
-
         <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-          {table.getFilteredRowModel().rows.length} / {structures.length}
+          {table.getFilteredRowModel().rows.length} / {tableData.length}
         </span>
       </div>
+
+      {/* 标签筛选 */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>标签:</span>
+        <button
+          className={`btn btn-sm ${!selectedTag ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => { setSelectedTag(''); setPageIndex(0); }}
+          style={{ fontSize: 11, padding: '2px 8px' }}
+        >
+          全部
+        </button>
+        {tags.map((tag) => {
+          const count = structures.filter((s) => s.tags.includes(tag.id)).length;
+          if (count === 0) return null;
+          return (
+            <button
+              key={tag.id}
+              className={`btn btn-sm ${selectedTag === tag.id ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => { setSelectedTag(selectedTag === tag.id ? '' : tag.id); setPageIndex(0); }}
+              style={{
+                fontSize: 11,
+                padding: '2px 8px',
+                borderColor: tag.color,
+                color: selectedTag === tag.id ? '#fff' : tag.color,
+                background: selectedTag === tag.id ? tag.color : 'transparent',
+              }}
+            >
+              {t(tag.nameKey)} ({count})
+            </button>
+          );
+        })}
+      </div>
+    </div>
+
 
       {/* Table */}
       <div style={{ overflow: 'auto', maxHeight: 'calc(100vh - 180px)', border: '1px solid var(--color-border)', borderRadius: 8 }}>
@@ -492,7 +515,9 @@ export function DataTablePage() {
             ))}
           </thead>
           <tbody>
-            {table.getRowModel().rows.map((row) => (
+            {table.getFilteredRowModel().rows
+              .slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)
+              .map((row) => (
               <tr key={row.id}>
                 {row.getVisibleCells().map((cell) => (
                   <td key={cell.id}>
@@ -503,6 +528,44 @@ export function DataTablePage() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* 分页 */}
+      <div style={{
+        display: 'flex', justifyContent: 'center', alignItems: 'center',
+        gap: 12, marginTop: 12, fontSize: 13,
+      }}>
+        <button
+          className="btn btn-outline btn-sm"
+          onClick={() => setPageIndex(0)}
+          disabled={pageIndex === 0}
+        >
+          首页
+        </button>
+        <button
+          className="btn btn-outline btn-sm"
+          onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
+          disabled={pageIndex === 0}
+        >
+          上一页
+        </button>
+        <span style={{ color: 'var(--color-text-secondary)' }}>
+          第 {pageIndex + 1} / {Math.max(1, Math.ceil(table.getFilteredRowModel().rows.length / pageSize))} 页
+        </span>
+        <button
+          className="btn btn-outline btn-sm"
+          onClick={() => setPageIndex((p) => p + 1)}
+          disabled={(pageIndex + 1) * pageSize >= table.getFilteredRowModel().rows.length}
+        >
+          下一页
+        </button>
+        <button
+          className="btn btn-outline btn-sm"
+          onClick={() => setPageIndex(Math.ceil(table.getFilteredRowModel().rows.length / pageSize) - 1)}
+          disabled={(pageIndex + 1) * pageSize >= table.getFilteredRowModel().rows.length}
+        >
+          末页
+        </button>
       </div>
 
       {/* ↓ 谱系面板加在这里 ↓ */}

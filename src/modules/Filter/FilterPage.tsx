@@ -6,6 +6,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import type { Structure, FilterCondition, ExportOptions } from '@/types/structure';
 
+
 const NUMERIC_FIELDS = [
   'fitness', 'enthalpy', 'volume', 'density', 'spaceGroup', 'generation',
   'youngModulus', 'bulkModulus', 'shearModulus', 'poissonRatio',
@@ -65,10 +66,13 @@ export function FilterPage() {
   const { t } = useTranslation();
   const structures = useProjectStore((s) => s.structures);
   const systemInfo = useProjectStore((s) => s.systemInfo);
+  const tags = useProjectStore((s) => s.tags);
 
   const [conditions, setConditions] = useState<FilterCondition[]>([
     { field: 'fitness', operator: 'lte', value: 0.1 },
   ]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+
 
   const [exportFormat, setExportFormat] = useState<'zip' | 'seeds' | 'csv' | 'json'>('zip');
   const [nameParts, setNameParts] = useState<number[]>([1, 2, 6, 3]);
@@ -90,11 +94,24 @@ export function FilterPage() {
     setConditions(updated);
   };
 
-  // Apply filters
   const filteredStructures = useMemo(() => {
-    if (conditions.length === 0) return structures;
-    return structures.filter((s) => applyAllConditions(s, conditions));
-  }, [structures, conditions]);
+    let result = structures;
+
+    // 标签过滤：结构必须包含所有选中的标签
+    if (selectedTags.length > 0) {
+      result = result.filter((s) =>
+        selectedTags.every((tagId) => s.tags.includes(tagId))
+      );
+    }
+
+    // 数值条件过滤
+    if (conditions.length > 0) {
+      result = result.filter((s) => applyAllConditions(s, conditions));
+    }
+
+    return result;
+  }, [structures, conditions, selectedTags]);
+
 
   // Sort
   const sortedStructures = useMemo(() => {
@@ -181,6 +198,46 @@ export function FilterPage() {
           <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
             {t('filter.conditions')}
           </h3>
+
+    {/* 标签筛选 */}
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+        按标签筛选 / Filter by Tag
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {tags.map((tag) => {
+          const isSelected = selectedTags.includes(tag.id);
+          const count = structures.filter((s) => s.tags.includes(tag.id)).length;
+          return (
+            <button
+              key={tag.id}
+              className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => {
+                setSelectedTags((prev) =>
+                  isSelected ? prev.filter((t) => t !== tag.id) : [...prev, tag.id]
+                );
+              }}
+              style={{
+                borderColor: tag.color,
+                color: isSelected ? '#fff' : tag.color,
+                background: isSelected ? tag.color : 'transparent',
+              }}
+            >
+              {t(tag.nameKey)} ({count})
+            </button>
+          );
+        })}
+        {selectedTags.length > 0 && (
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => setSelectedTags([])}
+            style={{ fontSize: 11 }}
+          >
+            清除 / Clear
+          </button>
+        )}
+      </div>
+    </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {conditions.map((cond, idx) => (
