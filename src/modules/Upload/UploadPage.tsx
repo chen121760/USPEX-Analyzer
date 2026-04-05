@@ -10,7 +10,7 @@ import type { DetectedFile, USPEXFileType, ProjectFile } from '@/types/structure
 // useEffect：页面加载时执行一次（读取历史）
 // useState 已有，不用再加
 import { useEffect } from 'react';
-import { loadRecentProjects, deleteProject, type StoredProject } from '@/lib/projectStorage';
+import { loadRecentProjects, deleteProject, saveProject, type StoredProject } from '@/lib/projectStorage';
 import { Clock, Trash2 } from 'lucide-react'; // 图标
 
 export function UploadPage() {
@@ -39,6 +39,7 @@ export function UploadPage() {
   // 点击历史项目 → 恢复数据 → 跳转到 Dashboard
   const handleRestoreProject = (stored: StoredProject) => {
     loadProjectFile(stored.project); // 这个函数 store 里已有
+    setProjectName(stored.name);
     navigate('/dashboard');
   };
 
@@ -65,6 +66,9 @@ export function UploadPage() {
           try {
             const project: ProjectFile = JSON.parse(content);
             loadProjectFile(project);
+            const name = project.projectName || file.name.replace(/\.json$/i, '') || 'Imported Project';
+            setProjectName(name);
+            saveProject(project, name);
             navigate('/dashboard');
             return;
           } catch {
@@ -96,6 +100,7 @@ export function UploadPage() {
     setFileContents(newContents);
     setErrors(newErrors);
   }, [detectedFiles, fileContents, loadProjectFile, navigate]);
+
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {

@@ -16,6 +16,13 @@ import {
 } from 'lucide-react';
 import { LineagePanel } from './LineagePanel';
 import type { Structure } from '@/types/structure';
+interface FilterCondition {
+  column: string;
+  label: string;
+  operator: '>' | '<' | '>=' | '<=' | '=';
+  value: number;
+}
+
 
 function SortIcon({ sorted }: { sorted: false | 'asc' | 'desc' }) {
   if (!sorted) return <ArrowUpDown size={12} style={{ opacity: 0.3 }} />;
@@ -214,6 +221,23 @@ export function DataTablePage() {
   const [globalFilter, setGlobalFilter] = useState('');
   const [lineageId, setLineageId] = useState<number | null>(null);
   const [selectedTag, setSelectedTag] = useState<string>('');  
+    // 筛选条件列表
+  const [filters, setFilters] = useState<FilterCondition[]>([]);
+  // 正在编辑的筛选条件
+  const [filterCol, setFilterCol] = useState('enthalpy');
+  const [filterOp, setFilterOp] = useState<FilterCondition['operator']>('>');
+  const [filterVal, setFilterVal] = useState('');
+
+  // 可以筛选的数值列
+  const filterableColumns = useMemo(() => [
+    { key: 'enthalpy', label: t('col.enthalpy') },
+    { key: 'fitness', label: t('col.fitness') },
+    { key: 'volume', label: t('col.volume') },
+    { key: 'density', label: t('col.density') },
+    { key: 'spaceGroup', label: t('col.spaceGroup') },
+    { key: 'generation', label: t('col.generation') },
+  ], [t]);
+
   const [pageIndex, setPageIndex] = useState(0);               
   const pageSize = 50; 
 
@@ -396,10 +420,34 @@ export function DataTablePage() {
   }, [t, hasPareto, hasML, hasFingerprint, systemInfo, tags, compareIds, openViewer, toggleCompare]);
 
   // 按标签过滤
+  // 按标签 + 数值条件过滤
   const tableData = useMemo(() => {
-    if (!selectedTag) return structures;
-    return structures.filter((s) => s.tags.includes(selectedTag));
-  }, [structures, selectedTag]);
+    let data = structures;
+
+    // 标签筛选
+    if (selectedTag) {
+      data = data.filter((s) => s.tags.includes(selectedTag));
+    }
+
+    // 数值筛选
+    for (const f of filters) {
+      data = data.filter((s) => {
+        const val = (s as unknown as Record<string, number>)[f.column];
+        if (val == null) return false;
+        switch (f.operator) {
+          case '>': return val > f.value;
+          case '<': return val < f.value;
+          case '>=': return val >= f.value;
+          case '<=': return val <= f.value;
+          case '=': return Math.abs(val - f.value) < 0.0001;
+          default: return true;
+        }
+      });
+    }
+
+    return data;
+  }, [structures, selectedTag, filters]);
+
 
   // 当筛选条件变化时重置页码
   const filteredCount = tableData.length;
@@ -453,7 +501,7 @@ export function DataTablePage() {
           />
         </div>
         <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-          {table.getFilteredRowModel().rows.length} / {tableData.length}
+          {table.getRowModel().rows.length} / {tableData.length}
         </span>
       </div>
 
@@ -488,6 +536,114 @@ export function DataTablePage() {
           );
         })}
       </div>
+      {/* 数值筛选 */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>筛选 Filter:</span>
+
+        {/* 选列 */}
+        <select
+          value={filterCol}
+          onChange={(e) => setFilterCol(e.target.value)}
+          style={{
+            padding: '3px 6px', fontSize: 12, borderRadius: 4,
+            border: '1px solid var(--color-border)',
+            background: 'var(--color-bg)', color: 'var(--color-text)',
+          }}
+        >
+          {filterableColumns.map((c) => (
+            <option key={c.key} value={c.key}>{c.label}</option>
+          ))}
+        </select>
+
+        {/* 选运算符 */}
+        <select
+          value={filterOp}
+          onChange={(e) => setFilterOp(e.target.value as FilterCondition['operator'])}
+          style={{
+            padding: '3px 6px', fontSize: 12, borderRadius: 4,
+            border: '1px solid var(--color-border)',
+            background: 'var(--color-bg)', color: 'var(--color-text)',
+            width: 50,
+          }}
+        >
+          <option value=">">&gt;</option>
+          <option value="<">&lt;</option>
+          <option value=">=">&ge;</option>
+          <option value="<=">&le;</option>
+          <option value="=">=</option>
+        </select>
+
+        {/* 输入数值 */}
+        <input
+          type="number"
+          value={filterVal}
+          onChange={(e) => setFilterVal(e.target.value)}
+          placeholder="数值"
+          style={{
+            padding: '3px 6px', fontSize: 12, borderRadius: 4,
+            border: '1px solid var(--color-border)',
+            background: 'var(--color-bg)', color: 'var(--color-text)',
+            width: 80,
+          }}
+        />
+
+        {/* 添加按钮 */}
+        <button
+          className="btn btn-sm btn-primary"
+          style={{ fontSize: 11, padding: '3px 10px' }}
+          onClick={() => {
+            if (filterVal === '') return;
+            const col = filterableColumns.find((c) => c.key === filterCol);
+            setFilters((prev) => [...prev, {
+              column: filterCol,
+              label: col?.label || filterCol,
+              operator: filterOp,
+              value: Number(filterVal),
+            }]);
+            setFilterVal('');
+            setPageIndex(0);
+          }}
+        >
+          添加 Add
+        </button>
+
+        {/* 重置按钮 */}
+        {filters.length > 0 && (
+          <button
+            className="btn btn-sm btn-outline"
+            style={{ fontSize: 11, padding: '3px 10px' }}
+            onClick={() => { setFilters([]); setSelectedTag(''); setGlobalFilter(''); setPageIndex(0); }}
+          >
+            重置 Reset
+          </button>
+        )}
+      </div>
+
+      {/* 已激活的筛选条件（小标签） */}
+      {filters.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {filters.map((f, i) => (
+            <span
+              key={i}
+              style={{
+                fontSize: 11, padding: '2px 8px', borderRadius: 12,
+                background: 'var(--color-primary)', color: '#fff',
+                display: 'flex', alignItems: 'center', gap: 4,
+              }}
+            >
+              {f.label} {f.operator} {f.value}
+              <X
+                size={12}
+                style={{ cursor: 'pointer' }}
+                onClick={() => {
+                  setFilters((prev) => prev.filter((_, idx) => idx !== i));
+                  setPageIndex(0);
+                }}
+              />
+            </span>
+          ))}
+        </div>
+      )}  
     </div>
 
 
@@ -515,7 +671,7 @@ export function DataTablePage() {
             ))}
           </thead>
           <tbody>
-            {table.getFilteredRowModel().rows
+            {table.getRowModel().rows
               .slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)
               .map((row) => (
               <tr key={row.id}>
@@ -550,19 +706,19 @@ export function DataTablePage() {
           上一页
         </button>
         <span style={{ color: 'var(--color-text-secondary)' }}>
-          第 {pageIndex + 1} / {Math.max(1, Math.ceil(table.getFilteredRowModel().rows.length / pageSize))} 页
+          第 {pageIndex + 1} / {Math.max(1, Math.ceil(table.getRowModel().rows.length / pageSize))} 页
         </span>
         <button
           className="btn btn-outline btn-sm"
           onClick={() => setPageIndex((p) => p + 1)}
-          disabled={(pageIndex + 1) * pageSize >= table.getFilteredRowModel().rows.length}
+          disabled={(pageIndex + 1) * pageSize >= table.getRowModel().rows.length}
         >
           下一页
         </button>
         <button
           className="btn btn-outline btn-sm"
-          onClick={() => setPageIndex(Math.ceil(table.getFilteredRowModel().rows.length / pageSize) - 1)}
-          disabled={(pageIndex + 1) * pageSize >= table.getFilteredRowModel().rows.length}
+          onClick={() => setPageIndex(Math.ceil(table.getRowModel().rows.length / pageSize) - 1)}
+          disabled={(pageIndex + 1) * pageSize >= table.getRowModel().rows.length}
         >
           末页
         </button>

@@ -217,6 +217,7 @@ export interface ParsedPoscar {
 export interface ProjectFile {
   version: string;
   created: string;
+  projectName?: string;
   lastModified: string;
   systemInfo: SystemInfo;
   structures: Structure[];

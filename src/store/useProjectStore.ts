@@ -193,6 +193,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
     return {
       version: '1.0.0',
+      projectName: state.projectName, 
       created: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       systemInfo: state.systemInfo,

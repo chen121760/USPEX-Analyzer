@@ -28,8 +28,9 @@ export interface StoredProject {
 // 换成这个：
 export function makeProjectId(projectName: string): string {
   // 用用户起的名字 + 时间戳，保证永远不会相互覆盖
-  const time = new Date().toISOString().replace(/[:.]/g, '-');
-  return `${projectName}_${time}`;
+  //const time = new Date().toISOString().replace(/[:.]/g, '-');
+  //return `${projectName}_${time}`;
+  return `project_${projectName}`;
 }
 
 /** 保存或覆盖一个项目 */
