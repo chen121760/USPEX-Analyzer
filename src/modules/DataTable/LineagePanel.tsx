@@ -80,34 +80,6 @@ export function LineagePanel({ structure, allStructures, onClose, onSelect }: Pr
         )}
       </div>
     );
-
-    return (
-      <div
-        key={`${prefix}-${id}`}
-        onClick={() => onSelect(id)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '4px 8px',
-          paddingLeft: 8 + depth * 20,
-          borderRadius: 4,
-          cursor: 'pointer',
-          fontSize: 12,
-          color: 'var(--color-text)',
-          transition: 'background 0.1s',
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg)')}
-        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-      >
-        <span style={{ fontWeight: 600, minWidth: 50 }}>EA{id}</span>
-        <span style={{ color: 'var(--color-text-muted)', minWidth: 80 }}>{s.origin}</span>
-        <span style={{ color: 'var(--color-text-muted)', minWidth: 60 }}>SG{s.spaceGroup}</span>
-        <span style={{ color: s.enthalpy < 900 ? 'var(--color-text)' : 'var(--color-danger)' }}>
-          {s.enthalpy < 900 ? s.enthalpy.toFixed(4) : '—'}
-        </span>
-      </div>
-    );
   };
 
   return (
