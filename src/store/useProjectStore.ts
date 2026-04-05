@@ -16,6 +16,21 @@ import type {
   ProjectFile,
 } from '@/types/structure';
 import { parseAllFiles, type ParseResult } from '@/parsers';
+import { saveProject } from '@/lib/projectStorage';
+
+// 这个函数负责把当前 store 的数据导出并存入 IndexedDB
+// get 是 zustand 提供的，可以拿到 store 当前的所有数据
+// 改成：
+function autoSave(get: () => ProjectState) {
+  const state = get();
+  if (!state.isDataLoaded || !state.systemInfo) return;
+  if (!state.projectName) return;  // 没有项目名就不存
+  try {
+    saveProject(state.exportProjectFile(), state.projectName);
+  } catch (e) {
+    console.warn('Auto-save failed:', e);
+  }
+}
 
 interface ParsedFileStatus {
   parameters: boolean;
@@ -46,12 +61,14 @@ interface ProjectState {
   // ---- Loading state ----
   isLoading: boolean;
   isDataLoaded: boolean;
-
-  // ---- Actions ----
+ // ---- Actions ----
   setDetectedFiles: (files: DetectedFile[]) => void;
   processFiles: (detectedFiles: DetectedFile[], fileContents: Map<USPEXFileType, string>) => void;
   loadProjectFile: (project: ProjectFile) => void;
   exportProjectFile: () => ProjectFile;
+  projectName: string;  // 存用户起的项目名
+  setProjectName: (name: string) => void;  // 设置项目名的方法
+ 
 
   // Structure management
   addUserStructure: (structure: Partial<Structure>) => void;
@@ -93,6 +110,7 @@ const DEFAULT_TAGS: TagDefinition[] = [
 export const useProjectStore = create<ProjectState>((set, get) => ({
   // Initial state
   systemInfo: null,
+  projectName: '',
   structures: [],
   userStructures: [],
   hullGenerations: [],
@@ -105,6 +123,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   isDataLoaded: false,
 
   setDetectedFiles: (files) => set({ detectedFiles: files }),
+  setProjectName: (name) => set({ projectName: name }),
 
   processFiles: (detectedFiles, fileContents) => {
     set({ isLoading: true });
@@ -130,6 +149,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         isLoading: false,
         isDataLoaded: true,
       });
+      autoSave(get);
     } catch (error) {
       console.error('Parse error:', error);
       set({
@@ -234,6 +254,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         s.id === id ? { ...s, tags } : s
       ),
     });
+    autoSave(get);
   },
 
   updateStructureNotes: (id, notes) => {
@@ -247,6 +268,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         s.id === id ? { ...s, notes } : s
       ),
     });
+    autoSave(get);
   },
 
   addTag: (tag) => set({ tags: [...get().tags, tag] }),
@@ -260,6 +282,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({
       systemInfo: null,
       structures: [],
+      projectName: '',
       userStructures: [],
       hullGenerations: [],
       tags: [...DEFAULT_TAGS],

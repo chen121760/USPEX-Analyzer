@@ -7,19 +7,48 @@ import {
   UploadCloud, FileText, CheckCircle2, Circle, AlertCircle, Globe, Atom,
 } from 'lucide-react';
 import type { DetectedFile, USPEXFileType, ProjectFile } from '@/types/structure';
+// useEffect：页面加载时执行一次（读取历史）
+// useState 已有，不用再加
+import { useEffect } from 'react';
+import { loadRecentProjects, deleteProject, type StoredProject } from '@/lib/projectStorage';
+import { Clock, Trash2 } from 'lucide-react'; // 图标
 
 export function UploadPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const processFiles = useProjectStore((s) => s.processFiles);
+  const setProjectName = useProjectStore((s) => s.setProjectName);
   const loadProjectFile = useProjectStore((s) => s.loadProjectFile);
 
   const [detectedFiles, setDetectedFiles] = useState<DetectedFile[]>([]);
   const [fileContents, setFileContents] = useState<Map<USPEXFileType, string>>(new Map());
   const [isDragging, setIsDragging] = useState(false);
+  const [projectName, setProjectNameLocal] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
 
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // 存储历史项目列表
+  const [recentProjects, setRecentProjects] = useState<StoredProject[]>([]);
+
+  // 页面挂载时读取一次 IndexedDB
+  useEffect(() => {
+    loadRecentProjects().then(setRecentProjects);
+  }, []); // [] 表示只在组件第一次渲染时执行
+
+  // 点击历史项目 → 恢复数据 → 跳转到 Dashboard
+  const handleRestoreProject = (stored: StoredProject) => {
+    loadProjectFile(stored.project); // 这个函数 store 里已有
+    navigate('/dashboard');
+  };
+
+  // 点击删除按钮 → 从 IndexedDB 删除 → 从页面列表移除
+  const handleDeleteProject = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // 防止触发外层的恢复点击
+    await deleteProject(id);
+    setRecentProjects((prev) => prev.filter((p) => p.id !== id));
+  };
+
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
     const newDetected: DetectedFile[] = [...detectedFiles];
@@ -97,6 +126,8 @@ export function UploadPage() {
 
   const startAnalysis = () => {
     if (!canStart) return;
+    if (!projectName.trim()) return;  // 没起名字不让开始
+    setProjectName(projectName.trim()); // ← 加这一行，存入 store
     processFiles(detectedFiles, fileContents);
     navigate('/dashboard');
   };
@@ -170,6 +201,57 @@ export function UploadPage() {
           {t('upload.orLoadProject')}
         </p>
       </div>
+      {/* 只有有历史记录时才显示这个区块 */}
+      {recentProjects.length > 0 && (
+        <div style={{ maxWidth: 560, width: '100%', marginTop: 8 }}>
+
+          {/* 标题 */}
+          <h3 style={{
+            fontSize: 13, fontWeight: 600, marginBottom: 10,
+            color: 'var(--color-text-secondary)',
+            display: 'flex', alignItems: 'center', gap: 6
+          }}>
+            <Clock size={14} />
+            最近的项目
+          </h3>
+
+          {/* 列表 */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {recentProjects.map((stored) => (
+              <div
+                key={stored.id}
+                onClick={() => handleRestoreProject(stored)} // 点击整行恢复
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '10px 14px', borderRadius: 8, cursor: 'pointer',
+                  border: '1px solid var(--color-border)',
+                  background: 'var(--color-surface)',
+                }}
+              >
+                <FileText size={16} color="var(--color-primary)" />
+
+                {/* 项目名称 + 结构数量和时间 */}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{stored.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                    {stored.project.structures.length} 个结构 ·
+                    {new Date(stored.savedAt).toLocaleString()}
+                  </div>
+                </div>
+
+                {/* 删除按钮，阻止冒泡避免触发恢复 */}
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={(e) => handleDeleteProject(stored.id, e)}
+                  style={{ padding: 4 }}
+                >
+                  <Trash2 size={14} color="var(--color-text-muted)" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}      
 
       {/* Detected files list */}
       {(detectedFiles.length > 0 || errors.length > 0) && (
@@ -224,17 +306,41 @@ export function UploadPage() {
             </div>
           ))}
 
+          {/* 项目命名输入框 */}
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 6 }}>
+              给这个项目起个名字/Name Your Project 
+            </label>
+            <input
+              type="text"
+              value={projectName}
+              onChange={(e) => setProjectNameLocal(e.target.value)}
+              placeholder="such as：Ti-O_100GPa_1"
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                borderRadius: 6,
+                border: '1px solid var(--color-border)',
+                fontSize: 13,
+                background: 'var(--color-surface)',
+                color: 'var(--color-text)',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+
           {/* Start button */}
           <div style={{ marginTop: 24, textAlign: 'center' }}>
             <button
               className="btn btn-primary"
               onClick={startAnalysis}
-              disabled={!canStart}
+              disabled={!canStart || !projectName.trim()}
               style={{
                 padding: '10px 32px',
                 fontSize: 15,
-                opacity: canStart ? 1 : 0.4,
-                cursor: canStart ? 'pointer' : 'not-allowed',
+                opacity: canStart && projectName.trim() ? 1 : 0.4,
+                cursor: canStart && projectName.trim() ? 'pointer' : 'not-allowed',
               }}
             >
               {t('btn.startAnalysis')} →
@@ -242,6 +348,11 @@ export function UploadPage() {
             {!canStart && (
               <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 8 }}>
                 {t('upload.requiredFilesHint')}
+              </p>
+            )}
+            {canStart && !projectName.trim() && (
+              <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 8 }}>
+                请先给项目起个名字/Name first
               </p>
             )}
           </div>
