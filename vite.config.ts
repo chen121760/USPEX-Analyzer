@@ -5,7 +5,7 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: '/uspex-analyzer/',
+  base: '/USPEX-Analyzer/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),

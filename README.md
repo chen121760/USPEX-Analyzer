@@ -1,8 +1,9 @@
 # USPEX Analyzer
 
 A browser-based analysis tool for USPEX crystal structure prediction outputs. Upload your USPEX output files and interactively explore, visualize, filter, and export your results — all without installing anything.
+Co-Authored-By: Claude Opus 4.6
 
-**Live Demo**: [https://chen121760.github.io/uspex-analyzer/](https://chen121760.github.io/uspex-analyzer/)
+**Live Demo**: [https://chen121760.github.io/USPEX-Analyzer/](https://chen121760.github.io/USPEX-Analyzer/)
 
 ## Features
 
