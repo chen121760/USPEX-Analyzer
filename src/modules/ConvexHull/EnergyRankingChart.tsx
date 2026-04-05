@@ -40,74 +40,79 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
   const { t } = useTranslation();
 
   const plotData = useMemo(() => {
-    // Filter valid structures and sort by enthalpy
-    const sorted = structures
+    const all = structures
       .filter((s) => !isNaN(s.enthalpy) && s.enthalpy < 900)
       .sort((a, b) => a.enthalpy - b.enthalpy);
 
-    // Limit to top N for readability
-    const topN = sorted.slice(0, 100);
+    const top100 = all.slice(0, 100); // 只截一次，后面全用 top100
 
     return {
-      labels: topN.map((s) => `EA${s.id} SG${s.spaceGroup}`),
-      enthalpies: topN.map((s) => s.enthalpy),
-      colors: topN.map((s) => getOriginColor(s.origin)),
-      hoverTexts: topN.map((s) =>
+      ranks: top100.map((_, i) => i + 1),
+      fitness: top100.map((s) => s.fitness ?? 0),
+      colors: top100.map((s) => getOriginColor(s.origin)),
+      hoverTexts: top100.map((s) =>
         `EA${s.id}: ${s.formula}<br>` +
+        `ΔH: ${(s.fitness ?? 0).toFixed(4)} eV/atom<br>` +
         `Enthalpy: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
         `SG: ${s.spaceGroup}<br>` +
         `Origin: ${s.origin}<br>` +
         `Gen: ${s.generation}`,
       ),
-      total: sorted.length,
+      totalAll: all.length,
+      total: top100.length,
     };
   }, [structures]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const trace: PlotlyData = {
-    y: plotData.labels,
-    x: plotData.enthalpies,
-    type: 'bar' as const,
-    orientation: 'h' as const,
-    marker: { color: plotData.colors },
-    text: plotData.enthalpies.map((e) => e.toFixed(4)),
-    textposition: 'outside' as const,
-    textfont: { size: 9 },
-    hovertext: plotData.hoverTexts,
+    x: plotData.ranks,           // 排名序号 1, 2, 3...
+    y: plotData.fitness,         // eV/atom above ground state
+    mode: 'markers' as const,
+    type: 'scatter' as const,
+    marker: {
+      color: plotData.colors,
+      size: 8,
+      opacity: 0.85,
+      line: { width: 0.5, color: '#ffffff' },
+    },
+    text: plotData.hoverTexts,
     hoverinfo: 'text' as const,
+    customdata: plotData.labels,
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   const layout: PlotlyLayout = {
     title: {
       text: `${systemInfo.elements.join('-')} ${t('hull.energyRanking', 'Energy Ranking')}`,
       font: { size: 15, color: '#0f172a' },
     },
-    yaxis: {
-      title: '',
-      automargin: true,
-      tickfont: { size: 10 },
-      dtick: 1,
-    },
     xaxis: {
-      title: 'Enthalpy (eV/atom)',
+      title: 'Rank',
+      tickfont: { size: 11, color: '#64748b' },
+      gridcolor: '#e2e8f0',
+    },
+    yaxis: {
+      title: 'ΔH (eV/atom above ground state)',
       titlefont: { size: 13, color: '#334155' },
       tickfont: { size: 11, color: '#64748b' },
       gridcolor: '#e2e8f0',
+      rangemode: 'tozero' as const,
       zerolinecolor: '#cbd5e1',
+      automargin: true,
     },
-    margin: { t: 50, r: 100, l: 120 },
-    height: Math.max(400, Math.min(plotData.labels.length * 22, 1200)),
+    margin: { t: 50, r: 40, l: 80 },
+    height: 500,  // 散点图固定高度就够了
     plot_bgcolor: '#ffffff',
     paper_bgcolor: '#ffffff',
     showlegend: false,
   };
 
+
   return (
     <>
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 12 }}>
         {t('hull.energyRankingDesc', 'Fixed composition — showing enthalpy ranking')}
-        {plotData.total > 100 && ` (showing top 100 of ${plotData.total})`}
+        {plotData.totalAll > 100 && ` (showing top 100 of ${plotData.totalAll})`}
       </p>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>

@@ -78,27 +78,37 @@ export function parseIndividuals(content: string): IndividualsParseResult {
     if (!compMatch) continue;
     const composition = compMatch[1].trim().split(/\s+/).map(Number);
 
-    // Split at first ']' to get the section after composition
+
+
+    // 修复后：split(']') 会把括号对切开，parts 结构是：
+    //   parts[0]: "...Gen ID Origin [ comp_numbers "
+    //   parts[1]: " enthalpy volume density [secondObj?] [ kp_numbers "
+    //   parts[2]: " symm q_entr a_order s_order"
     const parts = trimmed.split(']');
-    // After composition bracket, we have: enthalpy, volume, density, secondObj
-    // Then a second bracket [kpoints], then symm, q_entr, a_order, s_order
-    if (parts.length < 2) continue;
+    if (parts.length < 3) continue; // 必须有两对括号（composition + kpoints）
 
     const afterComp = parts[1].trim();
+    // afterComp 末尾是 KPOINTS 的左半（没有右括号），用 lastIndexOf 找 [
+    const kpBracketIdx = afterComp.lastIndexOf('[');
 
-    // Find second bracket (KPOINTS)
-    const kpMatch = afterComp.match(/\[\s*([\d\s]+)\s*\]/);
     let kpoints: number[] = [];
     let beforeKP = afterComp;
-    let afterKP = '';
 
-    if (kpMatch) {
-      kpoints = kpMatch[1].trim().split(/\s+/).map(Number);
-      const kpIdx = afterComp.indexOf('[');
-      beforeKP = afterComp.substring(0, kpIdx).trim();
-      const kpEnd = afterComp.indexOf(']', kpIdx);
-      afterKP = afterComp.substring(kpEnd + 1).trim();
+    if (kpBracketIdx >= 0) {
+      // [ 之前：enthalpy volume density [secondObj?]
+      beforeKP = afterComp.substring(0, kpBracketIdx).trim();
+      // [ 之后（到行尾）：kpoints 数字
+      kpoints = afterComp
+        .substring(kpBracketIdx + 1)
+        .trim()
+        .split(/\s+/)
+        .map(Number)
+        .filter((n) => !isNaN(n));
     }
+
+    // ✅ 关键修复：afterKP 从 parts[2] 取，不是从 parts[1] 内部找 ]
+    const afterKP = parts[2].trim();
+
 
     // beforeKP: enthalpy volume density secondObj
     const preNums = beforeKP.split(/\s+/).map(Number);

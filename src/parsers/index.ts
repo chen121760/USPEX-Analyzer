@@ -197,12 +197,17 @@ export function parseAllFiles(
     } else {
       warnings.push('extended_convex_hull file not found — building from Individuals file');
     }
+    const minEnthalpy = Math.min(
+      ...individualsResult.data.map(
+        (ind) => ind.enthalpy / Math.max(1, totalAtoms(ind.composition))
+      )
+    );
     hullData = individualsResult.data.map((ind) => ({
       id: ind.id,
       composition: ind.composition,
       enthalpy: ind.enthalpy / Math.max(1, totalAtoms(ind.composition)),
       volume: ind.volume / Math.max(1, totalAtoms(ind.composition)),
-      fitness: -1, // unknown / not meaningful for fixed
+      fitness: ind.enthalpy / Math.max(1, totalAtoms(ind.composition)) - minEnthalpy, // unknown / not meaningful for fixed
       symm: ind.symm,
       x: [0], // no meaningful composition coordinate
       y: 0,
