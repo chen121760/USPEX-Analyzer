@@ -8,8 +8,11 @@ const MAX_RECENT = 10;
 function getDB() {
   return openDB(DB_NAME, 2, {
     upgrade(db) {
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('projects')) {
+        db.createObjectStore('projects', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('project-data')) {
+        db.createObjectStore('project-data');
       }
     },
   });

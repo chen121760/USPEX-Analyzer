@@ -14,6 +14,7 @@ import {
 import {
   ArrowUpDown, ArrowUp, ArrowDown, Search, Eye, GitBranch, ArrowLeftRight, Tag, MessageSquare, X,
 } from 'lucide-react';
+import { LineagePanel } from './LineagePanel';
 import type { Structure } from '@/types/structure';
 
 function SortIcon({ sorted }: { sorted: false | 'asc' | 'desc' }) {
@@ -211,6 +212,7 @@ export function DataTablePage() {
 
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
+  const [lineageId, setLineageId] = useState<number | null>(null);
 
   const hasPareto = systemInfo?.optimizationType === 'multi';
   const hasML = structures.some((s) => s.youngModulus != null && s.youngModulus > 0);
@@ -399,6 +401,15 @@ export function DataTablePage() {
                 onSave={updateStructureNotes}
               />
             </div>
+            {/* 谱系按钮 */}
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setLineageId(s.id)}
+              title="查看谱系 / Lineage"
+              style={{ padding: '2px 6px' }}
+            >
+              <GitBranch size={14} />
+            </button> 
           </div>
         );
       },
@@ -493,6 +504,21 @@ export function DataTablePage() {
           </tbody>
         </table>
       </div>
-    </div>
+
+      {/* ↓ 谱系面板加在这里 ↓ */}
+      {lineageId !== null && (() => {
+        const target = structures.find((s) => s.id === lineageId);
+        if (!target) return null;
+        return (
+          <LineagePanel
+            structure={target}
+            allStructures={structures}
+            onClose={() => setLineageId(null)}
+            onSelect={(id) => setLineageId(id)}
+          />
+        );
+      })()}
+
+    </div>   // ← 最外层的 </div>，不要动它
   );
 }

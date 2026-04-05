@@ -14,10 +14,13 @@ const KEY = 'current-session';
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 async function getDB(): Promise<IDBPDatabase> {
-  return openDB(DB_NAME, 1, {
+  return openDB(DB_NAME, 2, {
     upgrade(db) {
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME);
+      }
+      if (!db.objectStoreNames.contains('projects')) {
+        db.createObjectStore('projects', { keyPath: 'id' });
       }
     },
   });
