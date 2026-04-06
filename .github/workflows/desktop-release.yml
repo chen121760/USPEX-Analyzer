@@ -1,0 +1,51 @@
+name: Build and Release Desktop App
+
+on:
+  push:
+    tags:
+      - 'v*' 
+
+permissions:
+  contents: write 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build-desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24 
+          cache: npm
+
+      - name: build Frontend Web Assets
+        run: |
+          npm ci
+          npx vite build --base=./
+
+      - name: Move Web Assets to Desktop Resources
+        run: |
+          mkdir -p desktop/resources
+          cp -r dist/* desktop/resources/
+
+      - name: Setup neu CLI and Download neutralino.js
+        run: |
+          npm install -g @neutralinojs/neu
+          cd desktop
+          neu update
+
+      - name: build Desktop App
+        run: |
+          cd desktop
+          neu build --release
+
+      - name: release to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          files: desktop/dist/uspex-analyzer-release.zip
+          body_path: desktop/release-notes.md
