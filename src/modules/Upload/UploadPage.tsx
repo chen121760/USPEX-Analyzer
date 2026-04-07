@@ -12,6 +12,7 @@ import type { DetectedFile, USPEXFileType, ProjectFile } from '@/types/structure
 import { useEffect } from 'react';
 import { loadRecentProjects, deleteProject, saveProject, type StoredProject } from '@/lib/projectStorage';
 import { Clock, Trash2 } from 'lucide-react'; // 图标
+import logoImg from '@/assets/logo.jpg';
 
 export function UploadPage() {
   const { t, i18n } = useTranslation();
@@ -166,17 +167,13 @@ export function UploadPage() {
         <span>{i18n.language === 'zh' ? 'EN' : '中'}</span>
       </button>
 
-      {/* Title */}
-      <div style={{ textAlign: 'center', marginBottom: 32 }} className="fade-in">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 8 }}>
-          <Atom size={32} color="var(--color-primary)" />
-          <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0, color: 'var(--color-text)' }}>
-            {t('app.title')}
-          </h1>
-        </div>
-        <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: 14 }}>
-          {t('app.subtitle')}
-        </p>
+      {/* Logo only */}
+      <div style={{ textAlign: 'center', marginBottom: 1 }} className="fade-in">
+        <img
+          src={logoImg}
+          alt="USPEX Analyzer"
+          style={{ width: 300, height: 300, borderRadius: 6, margin: '0 auto' }}
+        />
       </div>
 
       {/* Drop zone */}
@@ -186,7 +183,7 @@ export function UploadPage() {
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onClick={handleClick}
-        style={{ maxWidth: 560, width: '100%', marginBottom: 24 }}
+        style={{ maxWidth: 560, width: '100%', marginBottom: 24, padding: '36px 24px' }}
       >
         <input
           ref={inputRef}
@@ -195,17 +192,45 @@ export function UploadPage() {
           style={{ display: 'none' }}
           onChange={handleInputChange}
         />
-        <UploadCloud size={40} color="var(--color-primary)" style={{ marginBottom: 12 }} />
-        <p style={{ fontSize: 15, fontWeight: 500, margin: '0 0 6px', color: 'var(--color-text)' }}>
+        <UploadCloud size={36} color="var(--color-primary)" style={{ marginBottom: 1 }} />
+        <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 4px', color: 'var(--color-text)' }}>
           {t('upload.dragHint')}
         </p>
-        <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: 0 }}>
-          {t('upload.supportedFiles')}
-        </p>
-        <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '8px 0 0' }}>
+        <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '0 0 12px' }}>
           {t('upload.orLoadProject')}
         </p>
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          gap: '4px 6px',
+        }}>
+          {[
+            'Parameters.txt',
+            'extended_convex_hull',
+            'Individuals',
+            'gatheredPOSCARS',
+            'origin',
+            'Pareto_ranking',
+            'MLProperties',
+            'convex_hull',
+          ].map((name) => (
+            <span
+              key={name}
+              style={{
+                fontSize: 11,
+                padding: '2px 8px',
+                borderRadius: 10,
+                background: 'var(--color-border)',
+                color: 'var(--color-text-secondary)',
+              }}
+            >
+              {name}
+            </span>
+          ))}
+        </div>
       </div>
+
       {/* 只有有历史记录时才显示这个区块 */}
       {recentProjects.length > 0 && (
         <div style={{ maxWidth: 560, width: '100%', marginTop: 8 }}>
