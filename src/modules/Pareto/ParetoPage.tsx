@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import Plot from 'react-plotly.js';
+import { useUIStore } from '@/store/useUIStore';
+import { StructureViewerModal } from '@/components/StructureViewer/StructureViewerModal';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyData = any;
 
@@ -9,6 +11,7 @@ const FRONT_COLORS = ['#dc2626', '#f59e0b', '#16a34a', '#2563eb', '#8b5cf6', '#e
 
 export function ParetoPage() {
   const { t } = useTranslation();
+  const openViewer = useUIStore((s) => s.openViewer);
   const structures = useProjectStore((s) => s.structures);
   const systemInfo = useProjectStore((s) => s.systemInfo);
 
@@ -75,6 +78,7 @@ export function ParetoPage() {
           `SG: ${s.spaceGroup} | Origin: ${s.origin}`,
       ),
       hoverinfo: 'text' as const,
+      customdata: pts.map((s) => s.id),
     });
   }
 
@@ -109,6 +113,12 @@ export function ParetoPage() {
           layout={layout}
           config={{ responsive: true }}
           style={{ width: '100%', height: 550 }}
+          onClick={(event: any) => {
+            const point = event.points?.[0];
+            if (point?.customdata) {
+              openViewer(Number(point.customdata));
+            }
+          }}
         />
       </div>
 

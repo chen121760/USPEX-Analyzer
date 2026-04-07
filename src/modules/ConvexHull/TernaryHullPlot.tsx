@@ -16,7 +16,9 @@ import { useTranslation } from 'react-i18next';
 import Plot from 'react-plotly.js';
 import type { Structure, SystemInfo } from '@/types/structure';
 import { ternaryToCartesian } from '@/parsers/compositionUtils';
+import { useUIStore } from '@/store/useUIStore';
 import { computeTernaryHullEdges, uniqueHullPoints, type TernaryHullInput } from '@/lib/ternaryHull';
+import { StructureViewerModal } from '@/components/StructureViewer/StructureViewerModal';
 
 /** Structure with computed cartesian coordinates */
 interface StructureWithCoords extends Structure {
@@ -31,6 +33,8 @@ interface Props {
 
 export function TernaryHullPlot({ structures, systemInfo }: Props) {
   const { t } = useTranslation();
+  const openViewer = useUIStore((s) => s.openViewer);
+
 
   const plotData = useMemo(() => {
     const elements = systemInfo.elements;
@@ -113,6 +117,7 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
           `SG: ${s.spaceGroup} | Origin: ${s.origin}`,
       ),
       hoverinfo: 'text' as const,
+      customdata: unstableWithCoords.map((s) => s.id),
     },
 
     // Tie-lines (concatenated with null separators)
@@ -151,6 +156,7 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
         `Composition: [${p.composition.join(', ')}]`,
       ),
       hoverinfo: 'text' as const,
+      customdata: uniqueStable.map((p) => p.id),
     },
   ];
 
@@ -200,6 +206,12 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
           layout={layout}
           config={{ responsive: true, displayModeBar: true }}
           style={{ width: '100%', maxWidth: 700, height: 550 }}
+          onClick={(event: any) => {
+            const point = event.points?.[0];
+            if (point?.customdata) {
+              openViewer(Number(point.customdata));
+            }
+          }}
         />
       </div>
 

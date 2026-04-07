@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useUIStore } from '@/store/useUIStore';
 import { useProjectStore } from '@/store/useProjectStore';
 import { JSmolViewer } from './JSmolViewer';
+import type { JSmolViewerHandle } from './JSmolViewer';
 import { X } from 'lucide-react';
 
 /** Jmol script snippets for toolbar buttons */
@@ -20,6 +21,13 @@ const SCRIPTS = {
   labelsOff: 'label off;',
   spin: 'spin on;',
   spinOff: 'spin off;',
+  measureDistOn: 'set picking measure distance;',
+  measureAngOn: 'set picking measure angle;',
+  measureOff: 'set picking identify; measures off;',
+  bgWhite: 'background white;',
+  bgBlack: 'background black;',
+  symmetryOn: 'draw symop all;',
+  symmetryOff: 'draw symop off;',
 };
 
 /** Build a supercell load command */
@@ -46,7 +54,11 @@ export function StructureViewerModal() {
   const [spinning, setSpinning] = useState(false);
   const [displayMode, setDisplayMode] = useState<'ballAndStick' | 'spacefill' | 'wireframe' | 'sticks'>('ballAndStick');
   const [supercell, setSupercell] = useState<[number, number, number]>([1, 1, 1]);
+  const jsmolRef = useRef<JSmolViewerHandle>(null);
   const [scInput, setScInput] = useState('1 1 1');
+  const [measureMode, setMeasureMode] = useState<'off' | 'distance' | 'angle'>('off');
+  const [bgColor, setBgColor] = useState<'white' | 'black'>('white');
+
 
   // Don't render if no structure selected
   if (viewerStructureId === null) return null;
@@ -132,6 +144,7 @@ export function StructureViewerModal() {
             />
           ) : (
             <JSmolViewer
+              ref={jsmolRef}
               key={viewerKey}
               poscarText={poscarForViewer}
               script={initScript}
@@ -211,6 +224,109 @@ export function StructureViewerModal() {
             <div style={{ fontSize: 11, color: '#999', marginTop: 4 }}>
               输入 3 个数字，如 2 2 1，最大 5
             </div>
+          </Section>
+
+          {/* 测量工具 */}
+          <Section title="测量工具 Measure">
+            {(['off', 'distance', 'angle'] as const).map((mode) => (
+              <label key={mode} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="measureMode"
+                  checked={measureMode === mode}
+                  onChange={() => {
+                    setMeasureMode(mode);
+                    
+                    if (mode === 'distance') {
+                    jsmolRef.current?.runScript(SCRIPTS.measureDistOn);
+                    } else if (mode === 'angle') {
+                    jsmolRef.current?.runScript(SCRIPTS.measureAngOn);
+                    } else {
+                    jsmolRef.current?.runScript(SCRIPTS.measureOff);
+                    }
+                    
+                  }}
+                />
+                <span>{{
+                  off: '关闭 Off',
+                  distance: '键长 Distance',
+                  angle: '键角 Angle',
+                }[mode]}</span>
+              </label>
+            ))}
+            <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
+              选择后点击原子即可测量
+            </div>
+          </Section>
+
+          {/* 背景色 */}
+          <Section title="背景 Background">
+            <div style={{ display: 'flex', gap: 4 }}>
+              {(['white', 'black'] as const).map((c) => (
+                <button
+                  key={c}
+                  onClick={() => {
+                    setBgColor(c);
+                    
+                    jsmolRef.current?.runScript( c === 'white' ? SCRIPTS.bgWhite : SCRIPTS.bgBlack);
+                    
+                  }}
+                  style={{
+                    padding: '3px 12px', fontSize: 12, borderRadius: 4,
+                    border: '1px solid var(--color-border, #d1d5db)',
+                    background: bgColor === c ? 'var(--color-primary, #3b82f6)' : 'transparent',
+                    color: bgColor === c ? '#fff' : 'var(--color-text, #333)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {c === 'white' ? '白 White' : '黑 Black'}
+                </button>
+              ))}
+            </div>
+          </Section>
+
+          {/* 截图 */}
+          <Section title="导出 Export">
+            <button
+              onClick={() => {
+                const base64 = jsmolRef.current?.evalVar('write("PNG")');
+                if (base64) {
+                    const link = document.createElement('a');
+                    link.href = 'data:image/png;base64,' + base64;
+                    link.download = `EA${structure.id}_${structure.formula}.png`;
+                    link.click();
+                }
+                }}
+
+              style={{
+                padding: '4px 12px', fontSize: 12, borderRadius: 4,
+                border: '1px solid var(--color-primary, #3b82f6)',
+                background: 'var(--color-primary, #3b82f6)',
+                color: '#fff', cursor: 'pointer', width: '100%',
+              }}
+            >
+              保存截图 PNG
+            </button>
+            <button
+              onClick={() => {
+                const blob = new Blob([structure.poscarData!], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `EA${structure.id}-SG${structure.spaceGroup}.vasp`;
+                link.click();
+                URL.revokeObjectURL(url);
+              }}
+              style={{
+                padding: '4px 12px', fontSize: 12, borderRadius: 4,
+                border: '1px solid #16a34a',
+                background: '#16a34a',
+                color: '#fff', cursor: 'pointer', width: '100%',
+                marginTop: 4,
+              }}
+            >
+              导出 POSCAR (.vasp)
+            </button>
           </Section>
 
           {/* Quick supercell buttons */}

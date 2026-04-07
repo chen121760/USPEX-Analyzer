@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
 import { loadJSmol, J2S_PATH } from './jsmol-loader';
 
 interface Props {
@@ -8,19 +8,39 @@ interface Props {
   height?: number | string;
 }
 
+export interface JSmolViewerHandle {
+  /** Run a Jmol script on the current applet */
+  runScript: (script: string) => void;
+  /** Evaluate a Jmol expression and return the result */
+  evalVar: (expr: string) => any;
+}
+
 let appletCounter = 0;
 
-export function JSmolViewer({
-  poscarText,
-  script = '',
-  width = '100%',
-  height = 500,
-}: Props) {
+export const JSmolViewer = forwardRef<JSmolViewerHandle, Props>(function JSmolViewer(
+  { poscarText, script = '', width = '100%', height = 500 },
+  ref,
+) {
   const containerRef = useRef<HTMLDivElement>(null);
   const appletRef = useRef<any>(null);
   const idRef = useRef(`jmolApp${appletCounter++}`);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+
+  // 暴露方法给父组件
+  useImperativeHandle(ref, () => ({
+    runScript(s: string) {
+      if (ready && appletRef.current && window.Jmol) {
+        window.Jmol.script(appletRef.current, s);
+      }
+    },
+    evalVar(expr: string) {
+      if (ready && appletRef.current && window.Jmol) {
+        return window.Jmol.evaluateVar(appletRef.current, expr);
+      }
+      return null;
+    },
+  }), [ready]);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,4 +109,4 @@ export function JSmolViewer({
       <div ref={containerRef} style={{ width, height }} />
     </div>
   );
-}
+});
