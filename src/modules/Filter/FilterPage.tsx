@@ -4,6 +4,7 @@ import { useProjectStore } from '@/store/useProjectStore';
 import { X, Plus, Download } from 'lucide-react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { buildSeedsFile } from '@/lib/poscarWriter';
 import type { Structure, FilterCondition, ExportOptions } from '@/types/structure';
 
 
@@ -141,10 +142,7 @@ export function FilterPage() {
       const blob = await zip.generateAsync({ type: 'blob' });
       saveAs(blob, `uspex-structures-${sortedStructures.length}.zip`);
     } else if (exportFormat === 'seeds') {
-      const content = sortedStructures
-        .filter((s) => s.poscarData)
-        .map((s) => s.poscarData!.replace(/\n*$/, '') + '\n')
-        .join('\n');
+      const content = buildSeedsFile(sortedStructures);
       const blob = new Blob([content], { type: 'text/plain' });
       saveAs(blob, 'seeds.txt');
     } else if (exportFormat === 'csv') {

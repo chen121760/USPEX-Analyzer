@@ -336,12 +336,84 @@ export function parseAllFiles(
     return structure;
   });
 
+  // ---- Step 3b: Add Individuals-only structures (not in hull) ----
+
+  if (individualsResult && hullData.length > 0) {
+    const hullIdSet = new Set(hullData.map((h) => h.id));
+
+    for (const [id, ind] of individualsMap) {
+      if (hullIdSet.has(id)) continue;
+
+      const nAtoms = totalAtoms(ind.composition);
+      const enthalpyPerAtom = nAtoms > 0 ? ind.enthalpy / nAtoms : ind.enthalpy;
+      const volumePerAtom = nAtoms > 0 ? ind.volume / nAtoms : ind.volume;
+
+      let hullX: number[];
+      if (systemType === 'binary' && ind.composition.length === 2) {
+        hullX = [ind.composition[1] / Math.max(1, nAtoms)];
+      } else if (systemType === 'ternary' && ind.composition.length >= 3) {
+        hullX = ind.composition.slice(1).map((c) => c / Math.max(1, nAtoms));
+      } else {
+        hullX = [0];
+      }
+
+      const pareto = paretoMap.get(id);
+      const ml = mlMap.get(id);
+      const orig = originMap.get(id);
+      const poscar = poscarMap.get(id);
+      const formula =
+        poscar?.formula ??
+        (elements.length > 0 ? buildFormula(ind.composition, elements) : `ID${id}`);
+
+      structures.push({
+        id,
+        formula,
+        composition: ind.composition,
+        generation: ind.generation,
+        enthalpy: enthalpyPerAtom,
+        enthalpyTotal: ind.enthalpy,
+        volume: volumePerAtom,
+        volumeTotal: ind.volume,
+        fitness: -1,
+        spaceGroup: ind.symm,
+        hullX,
+        hullY: enthalpyPerAtom,
+        origin: (orig?.origin ?? ind.origin ?? 'Unknown') as OriginMethod,
+        parentIds: orig?.parentIds ?? [],
+        parentEnthalpy: orig?.parentEnthalpy ?? 0,
+        density: ind.density ?? pareto?.density ?? 0,
+        paretoFront: pareto?.paretoFront,
+        secondObjective: pareto?.secondObjective ?? ind.secondObjective,
+        bulkModulus: ml?.bulkModulus,
+        shearModulus: ml?.shearModulus,
+        youngModulus: ml?.youngModulus,
+        poissonRatio: ml?.poissonRatio,
+        pughRatio: ml?.pughRatio,
+        vickersHardness: ml?.vickersHardness,
+        fractureToughness: ml?.fractureToughness,
+        qEntropy: ind.qEntropy,
+        aOrder: ind.aOrder,
+        sOrder: ind.sOrder,
+        kpoints: ind.kpoints,
+        poscarData: poscar?.poscarText,
+        latticeParams: poscar?.latticeParams,
+        tags: [],
+        isUserAdded: false,
+        notes: '',
+      });
+    }
+  }
+
   // ---- Step 4: Build system info ----
 
   const fitnessValues = structures.map((s) => s.fitness).filter((f) => f >= 0);
   const enthalpyValues = structures.map((s) => s.enthalpy).filter((e) => !isNaN(e) && e < 900);
 
-  const primarySource = hullContent ? 'extended_convex_hull' : (indContent ? 'Individuals' : 'unknown');
+  const primarySource = hullContent && indContent
+    ? 'extended_convex_hull + Individuals'
+    : hullContent ? 'extended_convex_hull'
+    : indContent ? 'Individuals'
+    : 'unknown';
 
   const systemInfo: SystemInfo = {
     elements,
