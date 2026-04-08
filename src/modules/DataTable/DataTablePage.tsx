@@ -217,6 +217,12 @@ export function DataTablePage() {
   const toggleCompare = useUIStore((s) => s.toggleCompare);
   const compareIds = useUIStore((s) => s.compareIds);
 
+  // Stable refs so columns useMemo doesn't re-run when viewer opens from other pages
+  const openViewerRef = useRef(openViewer);
+  openViewerRef.current = openViewer;
+  const toggleCompareRef = useRef(toggleCompare);
+  toggleCompareRef.current = toggleCompare;
+
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [lineageId, setLineageId] = useState<number | null>(null);
@@ -283,11 +289,11 @@ export function DataTablePage() {
             return (
               <div style={{ display: 'flex', gap: 4 }}>
                 {s.poscarData && (
-                  <button className="btn btn-ghost btn-sm" onClick={() => openViewer(s.id)} title={t('btn.viewStructure')} style={{ padding: '2px 6px' }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => openViewerRef.current(s.id)} title={t('btn.viewStructure')} style={{ padding: '2px 6px' }}>
                     <Eye size={14} />
                   </button>
                 )}
-                <button className="btn btn-ghost btn-sm" onClick={() => toggleCompare(s.id)} title={isInCompare ? t('compare.removeFromCompare') : t('compare.addToCompare')} style={{ padding: '2px 6px', color: isInCompare ? 'var(--color-primary)' : undefined }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => toggleCompareRef.current(s.id)} title={isInCompare ? t('compare.removeFromCompare') : t('compare.addToCompare')} style={{ padding: '2px 6px', color: isInCompare ? 'var(--color-primary)' : undefined }}>
                   <ArrowLeftRight size={14} />
                 </button>
                 <div style={{ position: 'relative' }}>
@@ -417,7 +423,7 @@ export function DataTablePage() {
 
   
     return cols;
-  }, [t, hasPareto, hasML, hasFingerprint, systemInfo, tags, compareIds, openViewer, toggleCompare]);
+  }, [t, hasPareto, hasML, hasFingerprint, systemInfo, tags, compareIds]);
 
   // 按标签过滤
   // 按标签 + 数值条件过滤
@@ -459,6 +465,7 @@ export function DataTablePage() {
     state: { sorting, globalFilter },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
+    getRowId: (row) => String(row.id),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),

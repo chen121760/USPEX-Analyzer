@@ -36,6 +36,27 @@ export function loadJSmol(): Promise<typeof window.Jmol> {
     script.async = true;
     script.onload = () => {
       if (window.Jmol) {
+        // JSmol's corejmol.js overwrites String.prototype.replaceAll with a
+        // regex-based version (treats the search string as a RegExp pattern).
+        // This breaks tanstack/react-table's column ID generation:
+        //   accessorKey.replaceAll('.', '_') → replaces EVERY char with '_'
+        //   because '.' is a regex wildcard, turning e.g. 'spaceGroup' → '__________'
+        // Restore a correct implementation immediately after JSmol loads.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        Object.defineProperty(String.prototype, 'replaceAll', {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          value: function(this: string, search: any, replacement: string) {
+            if (search instanceof RegExp) {
+              if (!search.global) throw new TypeError('replaceAll must be called with a global RegExp');
+              return this.replace(search, replacement);
+            }
+            // Literal string — escape regex special chars so '.' is not a wildcard
+            const escaped = String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return this.replace(new RegExp(escaped, 'g'), replacement);
+          },
+          writable: true,
+          configurable: true,
+        });
         resolve(window.Jmol);
       } else {
         reject(new Error('JSmol.min.js loaded but window.Jmol is undefined'));

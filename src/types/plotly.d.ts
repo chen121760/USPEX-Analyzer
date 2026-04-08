@@ -13,6 +13,7 @@ declare module 'react-plotly.js' {
     onUpdate?: (figure: Plotly.Figure, graphDiv: HTMLElement) => void;
     onPurge?: (figure: Plotly.Figure, graphDiv: HTMLElement) => void;
     onSelected?: (event: Plotly.PlotSelectionEvent) => void;
+    onClick?: (event: Plotly.PlotMouseEvent) => void;
     revision?: number;
     useResizeHandler?: boolean;
   }
