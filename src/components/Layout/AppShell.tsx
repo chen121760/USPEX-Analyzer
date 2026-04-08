@@ -2,6 +2,7 @@ import { Outlet, Navigate } from 'react-router-dom';
 import { useProjectStore } from '@/store/useProjectStore';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { StructureViewerModal } from '@/components/StructureViewer/StructureViewerModal';
 
 export function AppShell() {
   const isDataLoaded = useProjectStore((s) => s.isDataLoaded);
@@ -20,6 +21,7 @@ export function AppShell() {
           <Outlet />
         </div>
       </div>
+      <StructureViewerModal />
     </div>
   );
 }

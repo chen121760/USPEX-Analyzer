@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useUIStore } from '@/store/useUIStore';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import type { Structure } from '@/types/structure';
 
 /** Count occurrences of a field value */
 function countBy<T>(items: T[], accessor: (item: T) => string): Record<string, number> {

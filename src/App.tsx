@@ -1,6 +1,6 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useUIStore } from '@/store/useUIStore';
-import { useAutoSave } from '@/hooks/usePersistence';
+import { useAutoSave, useRestoreSession } from '@/hooks/usePersistence';
 import { AppShell } from '@/components/Layout/AppShell';
 import { UploadPage } from '@/modules/Upload/UploadPage';
 import { DashboardPage } from '@/modules/Dashboard/DashboardPage';
@@ -13,9 +13,29 @@ import { ComparePage } from '@/modules/Compare/ComparePage';
 
 function App() {
   const theme = useUIStore((s) => s.theme);
+  const { loading: restoringSession } = useRestoreSession();
 
   // Auto-save project to IndexedDB
   useAutoSave();
+
+  if (restoringSession) {
+    return (
+      <div className={theme === 'dark' ? 'dark' : ''}>
+        <div style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'var(--color-text-secondary)',
+          background: 'var(--color-bg)',
+          fontSize: 14,
+        }}
+        >
+          正在恢复会话...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={theme === 'dark' ? 'dark' : ''}>

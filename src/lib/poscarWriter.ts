@@ -106,6 +106,6 @@ export function structuresToCSV(structures: Structure[]): string {
 export function buildSeedsFile(structures: Structure[]): string {
   return structures
     .filter((s) => s.poscarData)
-    .map((s) => s.poscarData!)
+    .map((s) => s.poscarData!.trimEnd())
     .join('\n');
 }
