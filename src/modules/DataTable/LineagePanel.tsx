@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { X, ChevronRight, ChevronDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { X, ArrowUp, ArrowDown } from 'lucide-react';
 import type { Structure } from '@/types/structure';
 import { getAncestors, getDescendants, buildChildrenMap } from '@/lib/lineageUtils';
 
@@ -12,7 +11,6 @@ interface Props {
 }
 
 export function LineagePanel({ structure, allStructures, onClose, onSelect }: Props) {
-  const { t } = useTranslation();
   const [showAllDescendants, setShowAllDescendants] = useState(false);
 
   // 构建查找表
@@ -44,10 +42,34 @@ export function LineagePanel({ structure, allStructures, onClose, onSelect }: Pr
 
   const renderNode = (id: number, depth: number, prefix: string) => {
     const s = structureMap.get(id);
+    if (!s) {
+      return (
+        <div
+          key={`${prefix}-${id}`}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '4px 8px',
+            paddingLeft: 8 + depth * 20,
+            borderRadius: 4,
+            fontSize: 12,
+            color: 'var(--color-text)',
+            opacity: 0.5,
+          }}
+        >
+          <span style={{ fontWeight: 600, minWidth: 50 }}>EA{id}</span>
+          <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+            Not in extended_convex_hull
+          </span>
+        </div>
+      );
+    }
+
     return (
       <div
         key={`${prefix}-${id}`}
-        onClick={() => s && onSelect(id)}
+        onClick={() => onSelect(id)}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -55,29 +77,20 @@ export function LineagePanel({ structure, allStructures, onClose, onSelect }: Pr
           padding: '4px 8px',
           paddingLeft: 8 + depth * 20,
           borderRadius: 4,
-          cursor: s ? 'pointer' : 'default',
+          cursor: 'pointer',
           fontSize: 12,
           color: 'var(--color-text)',
-          opacity: s ? 1 : 0.5,
           transition: 'background 0.1s',
         }}
-        onMouseEnter={(e) => s && (e.currentTarget.style.background = 'var(--color-bg)')}
+        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg)')}
         onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
       >
-        <span style={{ fontWeight: 600, minWidth: 50 }}>EA{id}</span>
-        {s ? (
-          <>
-            <span style={{ color: 'var(--color-text-muted)', minWidth: 80 }}>{s.origin}</span>
-            <span style={{ color: 'var(--color-text-muted)', minWidth: 60 }}>SG{s.spaceGroup}</span>
-            <span style={{ color: s.enthalpy < 900 ? 'var(--color-text)' : 'var(--color-danger)' }}>
-              {s.enthalpy < 900 ? s.enthalpy.toFixed(4) : '—'}
-            </span>
-          </>
-        ) : (
-          <span style={{ color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
-            Not in extended_convex_hull 
-          </span>
-        )}
+        <span style={{ fontWeight: 600, minWidth: 50 }}>EA{s.id}</span>
+        <span style={{ color: 'var(--color-text-muted)', minWidth: 80 }}>{s.origin}</span>
+        <span style={{ color: 'var(--color-text-muted)', minWidth: 60 }}>SG{s.spaceGroup}</span>
+        <span style={{ color: s.enthalpy < 900 ? 'var(--color-text)' : 'var(--color-danger)' }}>
+          {s.enthalpy < 900 ? s.enthalpy.toFixed(4) : '—'}
+        </span>
       </div>
     );
   };

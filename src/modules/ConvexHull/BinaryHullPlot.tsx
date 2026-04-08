@@ -9,8 +9,9 @@ type PlotlyLayout = any;
 
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import Plot from 'react-plotly.js';
+import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import type { Structure, SystemInfo } from '@/types/structure';
+import { useUIStore } from '@/store/useUIStore';
 
 /**
  * Compute 2D lower convex hull (Andrew's monotone chain).
@@ -41,6 +42,7 @@ interface Props {
 
 export function BinaryHullPlot({ structures, systemInfo }: Props) {
   const { t } = useTranslation();
+  const openViewer = useUIStore((s) => s.openViewer);
 
   const plotData = useMemo(() => {
     const stable = structures.filter((s) => s.fitness === 0 && s.enthalpy < 900);
@@ -53,7 +55,6 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
   const { stable, unstable, hullLine } = plotData;
   const elements = systemInfo.elements;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const traces: PlotlyData[] = [
     {
       x: unstable.map((s) => s.hullX[0] ?? 0),
@@ -75,6 +76,7 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
           `Fitness: ${s.fitness.toFixed(4)}<br>` +
           `SG: ${s.spaceGroup} | Origin: ${s.origin}`,
       ),
+      customdata: unstable.map((s) => s.id),
       hoverinfo: 'text' as const,
     },
     {
@@ -102,6 +104,7 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
           `Enthalpy: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
           `SG: ${s.spaceGroup}`,
       ),
+      customdata: stable.map((s) => s.id),
       hoverinfo: 'text' as const,
     },
   ];
@@ -114,7 +117,6 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
     linecolor: '#94a3b8',
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const layout: PlotlyLayout = {
     title: { text: `${elements.join('-')} ${t('hull.title')}`, font: { size: 15, color: '#0f172a' } },
     xaxis: { title: `x(${elements[1] || 'B'})`, ...axisStyle },
@@ -135,6 +137,12 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
           layout={layout}
           config={{ responsive: true, displayModeBar: true }}
           style={{ width: '100%', height: 550 }}
+          onClick={(event: PlotMouseEvent) => {
+            const point = event.points?.[0];
+            if (point?.customdata) {
+              openViewer(Number(point.customdata));
+            }
+          }}
         />
       </div>
 

@@ -11,8 +11,10 @@ type PlotlyLayout = any;
 
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import Plot from 'react-plotly.js';
+import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import type { Structure, SystemInfo } from '@/types/structure';
+import { useUIStore } from '@/store/useUIStore';
+
 
 /** Distinct colors for origin methods */
 const ORIGIN_COLORS: Record<string, string> = {
@@ -38,6 +40,7 @@ interface Props {
 
 export function EnergyRankingChart({ structures, systemInfo }: Props) {
   const { t } = useTranslation();
+  const openViewer = useUIStore((s) => s.openViewer);
 
   const plotData = useMemo(() => {
     const all = structures
@@ -59,6 +62,7 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
         `Gen: ${s.generation}`,
       ),
       totalAll: all.length,
+      ids: top100.map((s) => s.id),
       total: top100.length,
     };
   }, [structures]);
@@ -77,6 +81,7 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
     },
     text: plotData.hoverTexts,
     hoverinfo: 'text' as const,
+    customdata: plotData.ids,
   };
 
 
@@ -120,6 +125,12 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
           layout={layout}
           config={{ responsive: true, displayModeBar: true }}
           style={{ width: '100%', height: layout.height }}
+          onClick={(event: PlotMouseEvent) => {
+            const point = event.points?.[0];
+            if (point?.customdata) {
+              openViewer(Number(point.customdata));
+            }
+          }}
         />
       </div>
 

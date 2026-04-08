@@ -3,7 +3,7 @@
  * Restores on page load if data exists and is < 7 days old.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { openDB, type IDBPDatabase } from 'idb';
 import { useProjectStore } from '@/store/useProjectStore';
 import type { ProjectFile } from '@/types/structure';
@@ -114,17 +114,36 @@ export function useAutoSave(): void {
 export function useRestoreSession(): { restored: boolean; loading: boolean } {
   const isDataLoaded = useProjectStore((s) => s.isDataLoaded);
   const loadProjectFile = useProjectStore((s) => s.loadProjectFile);
+  const [loading, setLoading] = useState(!isDataLoaded);
 
   useEffect(() => {
-    if (isDataLoaded) return;
+    let cancelled = false;
 
-    restoreFromDB().then((project) => {
-      if (project && !useProjectStore.getState().isDataLoaded) {
-        loadProjectFile(project);
-        console.log('[usePersistence] Session restored from IndexedDB');
-      }
-    });
-  }, []); // run once on mount
+    if (isDataLoaded) {
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
 
-  return { restored: isDataLoaded, loading: false };
+    setLoading(true);
+    restoreFromDB()
+      .then((project) => {
+        if (cancelled) return;
+        if (project && !useProjectStore.getState().isDataLoaded) {
+          loadProjectFile(project);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isDataLoaded, loadProjectFile]);
+
+  return { restored: isDataLoaded, loading };
 }

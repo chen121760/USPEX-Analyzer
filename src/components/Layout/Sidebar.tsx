@@ -2,20 +2,17 @@ import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useUIStore } from '@/store/useUIStore';
+import logoImg from '@/assets/logo.jpg';
 import {
   LayoutDashboard,
   Table2,
   TrendingDown,
   Target,
   ScatterChart,
-  GitBranch,
-  ArrowLeftRight,
   Filter,
   ChevronLeft,
   ChevronRight,
   Save,
-  FolderOpen,
-  Atom,
 } from 'lucide-react';
 
 interface NavItemProps {
@@ -76,13 +73,10 @@ export function Sidebar() {
           minHeight: 48,
         }}
       >
-        <Atom size={22} color="var(--color-primary)" />
-        {!collapsed && (
-          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-primary)' }}>
-            USPEX Analyzer
-          </span>
-        )}
+        <img src={logoImg} alt="USPEX Analyzer" style={{ width: 200, height: 200, borderRadius: 1 }} />
+
       </div>
+
 
       {/* System info badge */}
       {!collapsed && systemInfo && (

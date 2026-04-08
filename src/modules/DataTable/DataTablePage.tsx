@@ -16,8 +16,11 @@ import {
 } from 'lucide-react';
 import { LineagePanel } from './LineagePanel';
 import type { Structure } from '@/types/structure';
+
+type NumericFilterColumn = 'enthalpy' | 'fitness' | 'volume' | 'density' | 'spaceGroup' | 'generation';
+
 interface FilterCondition {
-  column: string;
+  column: NumericFilterColumn;
   label: string;
   operator: '>' | '<' | '>=' | '<=' | '=';
   value: number;
@@ -220,26 +223,23 @@ export function DataTablePage() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [lineageId, setLineageId] = useState<number | null>(null);
-  const [selectedTag, setSelectedTag] = useState<string>('');  
-    // 筛选条件列表
+  const [selectedTag, setSelectedTag] = useState<string>('');
   const [filters, setFilters] = useState<FilterCondition[]>([]);
-  // 正在编辑的筛选条件
-  const [filterCol, setFilterCol] = useState('enthalpy');
+  const [filterCol, setFilterCol] = useState<NumericFilterColumn>('enthalpy');
   const [filterOp, setFilterOp] = useState<FilterCondition['operator']>('>');
   const [filterVal, setFilterVal] = useState('');
 
-  // 可以筛选的数值列
   const filterableColumns = useMemo(() => [
-    { key: 'enthalpy', label: t('col.enthalpy') },
-    { key: 'fitness', label: t('col.fitness') },
-    { key: 'volume', label: t('col.volume') },
-    { key: 'density', label: t('col.density') },
-    { key: 'spaceGroup', label: t('col.spaceGroup') },
-    { key: 'generation', label: t('col.generation') },
+    { key: 'enthalpy' as const, label: t('col.enthalpy') },
+    { key: 'fitness' as const, label: t('col.fitness') },
+    { key: 'volume' as const, label: t('col.volume') },
+    { key: 'density' as const, label: t('col.density') },
+    { key: 'spaceGroup' as const, label: t('col.spaceGroup') },
+    { key: 'generation' as const, label: t('col.generation') },
   ], [t]);
 
-  const [pageIndex, setPageIndex] = useState(0);               
-  const pageSize = 50; 
+  const [pageIndex, setPageIndex] = useState(0);
+  const pageSize = 50;
 
   const hasPareto = systemInfo?.optimizationType === 'multi';
   const hasML = structures.some((s) => s.youngModulus != null && s.youngModulus > 0);
@@ -248,61 +248,78 @@ export function DataTablePage() {
   const columns = useMemo<ColumnDef<Structure, unknown>[]>(() => {
     const cols: ColumnDef<Structure, unknown>[] = [
       {
+        id: 'id',
         accessorKey: 'id',
         header: t('col.id'),
         size: 70,
         cell: ({ getValue }) => <span style={{ fontWeight: 600 }}>EA{getValue<number>()}</span>,
       },
-      { accessorKey: 'formula', header: t('col.formula'), size: 100 },
       {
-          accessorKey: 'tags',
-          header: t('col.tags'),
-          size: 120,
-          enableSorting: false,
-          cell: ({ row }) => {
-            const s = row.original;
-            return (
-              <TagPicker
-                structureId={s.id}
-                currentTags={s.tags}
-                allTags={tags}
-                onToggle={updateStructureTags}
-              />
-            );
-          },
+        id: 'formula',
+        accessorKey: 'formula',
+        header: t('col.formula'),
+        size: 100,
+      },
+      {
+        id: 'tags',
+        accessorFn: (s) => s.tags,
+        header: t('col.tags'),
+        size: 120,
+        enableSorting: false,
+        cell: ({ row }) => {
+          const s = row.original;
+          return (
+            <TagPicker
+              structureId={s.id}
+              currentTags={s.tags}
+              allTags={tags}
+              onToggle={updateStructureTags}
+            />
+          );
         },
-        // ★ Actions 第二个
-        {
-          id: 'actions',
-          header: t('col.actions'),
-          size: 100,
-          enableSorting: false,
-          cell: ({ row }) => {
-            const s = row.original;
-            const isInCompare = compareIds.includes(s.id);
-            return (
-              <div style={{ display: 'flex', gap: 4 }}>
-                {s.poscarData && (
-                  <button className="btn btn-ghost btn-sm" onClick={() => openViewer(s.id)} title={t('btn.viewStructure')} style={{ padding: '2px 6px' }}>
-                    <Eye size={14} />
-                  </button>
-                )}
-                <button className="btn btn-ghost btn-sm" onClick={() => toggleCompare(s.id)} title={isInCompare ? t('compare.removeFromCompare') : t('compare.addToCompare')} style={{ padding: '2px 6px', color: isInCompare ? 'var(--color-primary)' : undefined }}>
-                  <ArrowLeftRight size={14} />
+      },
+      {
+        id: 'actions',
+        header: t('col.actions'),
+        size: 100,
+        enableSorting: false,
+        cell: ({ row }) => {
+          const s = row.original;
+          const isInCompare = compareIds.includes(s.id);
+          return (
+            <div style={{ display: 'flex', gap: 4 }}>
+              {s.poscarData && (
+                <button className="btn btn-ghost btn-sm" onClick={() => openViewer(s.id)} title={t('btn.viewStructure')} style={{ padding: '2px 6px' }}>
+                  <Eye size={14} />
                 </button>
-                <div style={{ position: 'relative' }}>
-                  <NotesEditor structureId={s.id} currentNotes={s.notes} onSave={updateStructureNotes} />
-                </div>
-                <button className="btn btn-ghost btn-sm" onClick={() => setLineageId(s.id)} title="查看谱系 / Lineage" style={{ padding: '2px 6px' }}>
-                  <GitBranch size={14} />
-                </button>
+              )}
+              <button className="btn btn-ghost btn-sm" onClick={() => toggleCompare(s.id)} title={isInCompare ? t('compare.removeFromCompare') : t('compare.addToCompare')} style={{ padding: '2px 6px', color: isInCompare ? 'var(--color-primary)' : undefined }}>
+                <ArrowLeftRight size={14} />
+              </button>
+              <div style={{ position: 'relative' }}>
+                <NotesEditor structureId={s.id} currentNotes={s.notes} onSave={updateStructureNotes} />
               </div>
-            );
-          },
+              <button className="btn btn-ghost btn-sm" onClick={() => setLineageId(s.id)} title="查看谱系 / Lineage" style={{ padding: '2px 6px' }}>
+                <GitBranch size={14} />
+              </button>
+            </div>
+          );
         },
-      { accessorKey: 'spaceGroup', header: t('col.spaceGroup'), size: 60 },
-      { accessorKey: 'generation', header: t('col.generation'), size: 60 },
+      },
       {
+        id: 'spaceGroup',
+        accessorKey: 'spaceGroup',
+        header: t('col.spaceGroup'),
+        size: 60,
+      },
+      {
+        id: 'generation',
+        accessorKey: 'generation',
+        header: t('col.generation'),
+        size: 60,
+      },
+      {
+        id: 'enthalpy',
         accessorKey: 'enthalpy',
         header: t('col.enthalpy'),
         size: 120,
@@ -312,6 +329,7 @@ export function DataTablePage() {
         },
       },
       {
+        id: 'fitness',
         accessorKey: 'fitness',
         header: t('col.fitness'),
         size: 110,
@@ -326,12 +344,14 @@ export function DataTablePage() {
         },
       },
       {
+        id: 'volume',
         accessorKey: 'volume',
         header: t('col.volume'),
         size: 100,
         cell: ({ getValue }) => getValue<number>().toFixed(3),
       },
       {
+        id: 'density',
         accessorKey: 'density',
         header: t('col.density'),
         size: 90,
@@ -340,18 +360,25 @@ export function DataTablePage() {
           return v > 0 ? v.toFixed(3) : '—';
         },
       },
-      { accessorKey: 'origin', header: t('col.origin'), size: 100 },
+      {
+        id: 'origin',
+        accessorKey: 'origin',
+        header: t('col.origin'),
+        size: 100,
+      },
     ];
 
     // Pareto columns (conditional)
     if (hasPareto) {
       cols.push({
+        id: 'paretoFront',
         accessorKey: 'paretoFront',
         header: t('col.paretoFront'),
         size: 80,
         cell: ({ getValue }) => getValue<number | undefined>() ?? '—',
       });
       cols.push({
+        id: 'secondObjective',
         accessorKey: 'secondObjective',
         header: systemInfo?.secondObjectiveName || t('col.secondObj'),
         size: 120,
@@ -365,6 +392,7 @@ export function DataTablePage() {
     // ML columns (conditional)
     if (hasML) {
       cols.push({
+        id: 'youngModulus',
         accessorKey: 'youngModulus',
         header: t('col.young'),
         size: 110,
@@ -374,6 +402,7 @@ export function DataTablePage() {
         },
       });
       cols.push({
+        id: 'bulkModulus',
         accessorKey: 'bulkModulus',
         header: t('col.bulk'),
         size: 100,
@@ -387,6 +416,7 @@ export function DataTablePage() {
     // Fingerprint columns (conditional)
     if (hasFingerprint) {
       cols.push({
+        id: 'qEntropy',
         accessorKey: 'qEntropy',
         header: t('col.qEntropy'),
         size: 80,
@@ -396,6 +426,7 @@ export function DataTablePage() {
         },
       });
       cols.push({
+        id: 'aOrder',
         accessorKey: 'aOrder',
         header: t('col.aOrder'),
         size: 80,
@@ -405,6 +436,7 @@ export function DataTablePage() {
         },
       });
       cols.push({
+        id: 'sOrder',
         accessorKey: 'sOrder',
         header: t('col.sOrder'),
         size: 80,
@@ -414,13 +446,9 @@ export function DataTablePage() {
         },
       });
     }
-
-  
     return cols;
   }, [t, hasPareto, hasML, hasFingerprint, systemInfo, tags, compareIds, openViewer, toggleCompare]);
 
-  // 按标签过滤
-  // 按标签 + 数值条件过滤
   const tableData = useMemo(() => {
     let data = structures;
 
@@ -448,14 +476,10 @@ export function DataTablePage() {
     return data;
   }, [structures, selectedTag, filters]);
 
-
-  // 当筛选条件变化时重置页码
-  const filteredCount = tableData.length;
-  const totalPages = Math.ceil(filteredCount / pageSize);
-
   const table = useReactTable({
     data: tableData,
     columns,
+    getRowId: (row) => String(row.id),
     state: { sorting, globalFilter },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
@@ -473,6 +497,16 @@ export function DataTablePage() {
       );
     },
   });
+
+  const rowCount = table.getRowModel().rows.length;
+  const totalPages = Math.max(1, Math.ceil(rowCount / pageSize));
+  const currentPageIndex = Math.min(pageIndex, totalPages - 1);
+
+  useEffect(() => {
+    if (pageIndex !== currentPageIndex) {
+      setPageIndex(currentPageIndex);
+    }
+  }, [pageIndex, currentPageIndex]);
 
   return (
     <div className="fade-in">
@@ -501,7 +535,7 @@ export function DataTablePage() {
           />
         </div>
         <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-          {table.getRowModel().rows.length} / {tableData.length}
+          {rowCount} / {tableData.length}
         </span>
       </div>
 
@@ -543,16 +577,16 @@ export function DataTablePage() {
         {/* 选列 */}
         <select
           value={filterCol}
-          onChange={(e) => setFilterCol(e.target.value)}
+          onChange={(e) => setFilterCol(e.target.value as NumericFilterColumn)}
           style={{
             padding: '3px 6px', fontSize: 12, borderRadius: 4,
             border: '1px solid var(--color-border)',
             background: 'var(--color-bg)', color: 'var(--color-text)',
           }}
         >
-          {filterableColumns.map((c) => (
-            <option key={c.key} value={c.key}>{c.label}</option>
-          ))}
+            {filterableColumns.map((c) => (
+              <option key={c.key} value={c.key}>{c.label}</option>
+            ))}
         </select>
 
         {/* 选运算符 */}
@@ -672,9 +706,9 @@ export function DataTablePage() {
           </thead>
           <tbody>
             {table.getRowModel().rows
-              .slice(pageIndex * pageSize, (pageIndex + 1) * pageSize)
+              .slice(currentPageIndex * pageSize, (currentPageIndex + 1) * pageSize)
               .map((row) => (
-              <tr key={row.id}>
+              <tr key={row.original.id}>
                 {row.getVisibleCells().map((cell) => (
                   <td key={cell.id}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -694,31 +728,31 @@ export function DataTablePage() {
         <button
           className="btn btn-outline btn-sm"
           onClick={() => setPageIndex(0)}
-          disabled={pageIndex === 0}
+          disabled={currentPageIndex === 0}
         >
           首页
         </button>
         <button
           className="btn btn-outline btn-sm"
           onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
-          disabled={pageIndex === 0}
+          disabled={currentPageIndex === 0}
         >
           上一页
         </button>
         <span style={{ color: 'var(--color-text-secondary)' }}>
-          第 {pageIndex + 1} / {Math.max(1, Math.ceil(table.getRowModel().rows.length / pageSize))} 页
+          第 {currentPageIndex + 1} / {totalPages} 页
         </span>
         <button
           className="btn btn-outline btn-sm"
-          onClick={() => setPageIndex((p) => p + 1)}
-          disabled={(pageIndex + 1) * pageSize >= table.getRowModel().rows.length}
+          onClick={() => setPageIndex((p) => Math.min(totalPages - 1, p + 1))}
+          disabled={currentPageIndex >= totalPages - 1}
         >
           下一页
         </button>
         <button
           className="btn btn-outline btn-sm"
-          onClick={() => setPageIndex(Math.ceil(table.getRowModel().rows.length / pageSize) - 1)}
-          disabled={(pageIndex + 1) * pageSize >= table.getRowModel().rows.length}
+          onClick={() => setPageIndex(totalPages - 1)}
+          disabled={currentPageIndex >= totalPages - 1}
         >
           末页
         </button>
@@ -738,6 +772,6 @@ export function DataTablePage() {
         );
       })()}
 
-    </div>   // ← 最外层的 </div>，不要动它
+    </div>
   );
 }

@@ -5,3 +5,9 @@ dist
 .env
 .env.*
 image.png
+desktop/dist/
+desktop/bin/
+desktop/resources/
+desktop/neutralinojs.log
+tsconfig.tsbuildinfo
+*.tsbuildinfo

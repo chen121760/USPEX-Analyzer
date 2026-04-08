@@ -4,7 +4,8 @@ import { useProjectStore } from '@/store/useProjectStore';
 import { X, Plus, Download } from 'lucide-react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import type { Structure, FilterCondition, ExportOptions } from '@/types/structure';
+import { buildSeedsFile } from '@/lib/poscarWriter';
+import type { Structure, FilterCondition } from '@/types/structure';
 
 
 const NUMERIC_FIELDS = [
@@ -15,6 +16,12 @@ const NUMERIC_FIELDS = [
 ];
 
 const OPERATORS = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte'] as const;
+
+function toSortableNumber(value: unknown): number {
+  if (value == null) return Number.POSITIVE_INFINITY;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+}
 
 function applyCondition(s: Structure, cond: FilterCondition): boolean {
   const val = (s as unknown as Record<string, unknown>)[cond.field];
@@ -78,7 +85,7 @@ export function FilterPage() {
   const [nameParts, setNameParts] = useState<number[]>([1, 2, 6, 3]);
   const [sortKey, setSortKey] = useState('fitness');
   const [sortReverse, setSortReverse] = useState(false);
-  const [secondObjPrefix, setSecondObjPrefix] = useState('Obj');
+  const [secondObjPrefix] = useState('Obj');
 
   const addCondition = () => {
     setConditions([...conditions, { field: 'spaceGroup', operator: 'gte', value: 1 }]);
@@ -118,8 +125,8 @@ export function FilterPage() {
     const sorted = [...filteredStructures].sort((a, b) => {
       const av = (a as unknown as Record<string, unknown>)[sortKey];
       const bv = (b as unknown as Record<string, unknown>)[sortKey];
-      const na = Number(av) ?? 0;
-      const nb = Number(bv) ?? 0;
+      const na = toSortableNumber(av);
+      const nb = toSortableNumber(bv);
       return na - nb;
     });
     return sortReverse ? sorted.reverse() : sorted;
@@ -141,10 +148,7 @@ export function FilterPage() {
       const blob = await zip.generateAsync({ type: 'blob' });
       saveAs(blob, `uspex-structures-${sortedStructures.length}.zip`);
     } else if (exportFormat === 'seeds') {
-      const content = sortedStructures
-        .filter((s) => s.poscarData)
-        .map((s) => s.poscarData!.replace(/\n*$/, '') + '\n')
-        .join('\n');
+      const content = buildSeedsFile(sortedStructures);
       const blob = new Blob([content], { type: 'text/plain' });
       saveAs(blob, 'seeds.txt');
     } else if (exportFormat === 'csv') {

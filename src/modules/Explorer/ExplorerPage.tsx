@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
-import Plot from 'react-plotly.js';
+import { useUIStore } from '@/store/useUIStore';
+import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyData = any;
 import type { Structure } from '@/types/structure';
@@ -50,6 +51,7 @@ function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: bo
 
 export function ExplorerPage() {
   const { t } = useTranslation();
+  const openViewer = useUIStore((s) => s.openViewer);
   const structures = useProjectStore((s) => s.structures);
   const systemInfo = useProjectStore((s) => s.systemInfo);
 
@@ -75,7 +77,6 @@ export function ExplorerPage() {
   }, [structures, xField, yField]);
 
   // Build traces
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const traces: PlotlyData[] = useMemo(() => {
     if (!colorField || colorField.type === 'numeric') {
       // Single trace with color mapping
@@ -99,6 +100,7 @@ export function ExplorerPage() {
             `SG: ${s.spaceGroup} | Origin: ${s.origin}`,
         ),
         hoverinfo: 'text' as const,
+        customdata: filteredData.map((s) => s.id)
       }];
     }
 
@@ -127,6 +129,7 @@ export function ExplorerPage() {
           `SG: ${s.spaceGroup} | Origin: ${s.origin}`,
       ),
       hoverinfo: 'text' as const,
+      customdata: pts.map((s) => s.id),
     }));
   }, [filteredData, xField, yField, colorField]);
 
@@ -200,6 +203,12 @@ export function ExplorerPage() {
           layout={layout}
           config={{ responsive: true, displayModeBar: true }}
           style={{ width: '100%', height: 550 }}
+          onClick={(event: PlotMouseEvent) => {
+            const point = event.points?.[0];
+            if (point?.customdata) {
+              openViewer(Number(point.customdata));
+            }
+          }}
         />
       </div>
     </div>
