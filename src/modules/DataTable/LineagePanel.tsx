@@ -2,18 +2,138 @@ import { useMemo, useState } from 'react';
 import { X, ArrowUp, ArrowDown } from 'lucide-react';
 import type { Structure } from '@/types/structure';
 import { getAncestors, getDescendants, buildChildrenMap } from '@/lib/lineageUtils';
+import { useUIStore } from '@/store/useUIStore';
 
 interface Props {
   structure: Structure;
   allStructures: Structure[];
   onClose: () => void;
-  onSelect: (id: number) => void; // 点击某个节点时，可以切换查看对象
+  onSelect: (id: number) => void;
+}
+
+interface TooltipState {
+  id: number;
+  x: number;
+  y: number;
+}
+
+function NodeTooltip({ id, structureMap }: { id: number; structureMap: Map<number, Structure> }) {
+  const s = structureMap.get(id);
+  if (!s) return <div style={{ padding: '6px 10px', fontSize: 12 }}>EA{id} — not in dataset</div>;
+  return (
+    <div style={{ padding: '8px 12px', fontSize: 12, lineHeight: 1.6 }}>
+      <div style={{ fontWeight: 700, marginBottom: 4 }}>EA{s.id} · {s.formula}</div>
+      <div>Origin: <span style={{ color: 'var(--color-primary)' }}>{s.origin}</span></div>
+      <div>Gen: {s.generation}</div>
+      <div>SG: {s.spaceGroup}</div>
+      <div>H: {s.enthalpy < 900 ? `${s.enthalpy.toFixed(4)} eV/atom` : '—'}</div>
+      {s.fitness >= 0 && <div>Fitness: {s.fitness.toFixed(4)}</div>}
+      {!s.poscarData && <div style={{ color: 'var(--color-text-muted)', fontStyle: 'italic', marginTop: 4 }}>No POSCAR data</div>}
+    </div>
+  );
+}
+
+function TreeNode({
+  id,
+  depth,
+  isCurrent,
+  structureMap,
+  onSelect,
+  onHover,
+  onLeave,
+}: {
+  id: number;
+  depth: number;
+  isCurrent: boolean;
+  structureMap: Map<number, Structure>;
+  onSelect: (id: number) => void;
+  onHover: (id: number, el: HTMLElement) => void;
+  onLeave: () => void;
+}) {
+  const openViewer = useUIStore((s) => s.openViewer);
+  const s = structureMap.get(id);
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        paddingLeft: 8 + depth * 18,
+        paddingTop: 3,
+        paddingBottom: 3,
+        paddingRight: 8,
+        borderRadius: 4,
+        border: isCurrent ? '2px solid var(--color-primary)' : '2px solid transparent',
+        background: isCurrent ? 'rgba(99,102,241,0.08)' : 'transparent',
+        cursor: 'pointer',
+        transition: 'background 0.1s',
+        position: 'relative',
+      }}
+      onClick={() => !isCurrent && onSelect(id)}
+      onMouseEnter={(e) => onHover(id, e.currentTarget)}
+      onMouseLeave={onLeave}
+    >
+      {/* connector line */}
+      {depth > 0 && (
+        <span style={{
+          position: 'absolute',
+          left: 8 + (depth - 1) * 18 + 7,
+          top: 0,
+          bottom: '50%',
+          width: 1,
+          background: 'var(--color-border)',
+          pointerEvents: 'none',
+        }} />
+      )}
+      {depth > 0 && (
+        <span style={{
+          position: 'absolute',
+          left: 8 + (depth - 1) * 18 + 7,
+          top: '50%',
+          width: 11,
+          height: 1,
+          background: 'var(--color-border)',
+          pointerEvents: 'none',
+        }} />
+      )}
+
+      <span style={{
+        fontWeight: isCurrent ? 700 : 500,
+        fontSize: 12,
+        color: s ? 'var(--color-text)' : 'var(--color-text-muted)',
+        minWidth: 44,
+      }}>
+        {isCurrent ? '★ ' : ''}EA{id}
+      </span>
+
+      {s ? (
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {s.origin} · SG{s.spaceGroup}
+        </span>
+      ) : (
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)', fontStyle: 'italic' }}>not in dataset</span>
+      )}
+
+      {s?.poscarData && (
+        <button
+          className="btn btn-ghost btn-sm"
+          style={{ padding: '1px 4px', flexShrink: 0 }}
+          title="View structure"
+          onClick={(e) => { e.stopPropagation(); openViewer(id); }}
+        >
+          <Eye size={12} />
+        </button>
+      )}
+    </div>
+  );
 }
 
 export function LineagePanel({ structure, allStructures, onClose, onSelect }: Props) {
   const [showAllDescendants, setShowAllDescendants] = useState(false);
+  const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
-  // 构建查找表
   const structureMap = useMemo(() => {
     const m = new Map<number, Structure>();
     for (const s of allStructures) m.set(s.id, s);
@@ -22,22 +142,16 @@ export function LineagePanel({ structure, allStructures, onClose, onSelect }: Pr
 
   const childrenMap = useMemo(() => buildChildrenMap(allStructures), [allStructures]);
 
-  // 祖先链
   const ancestors = useMemo(
-    () => getAncestors(structure.id, structureMap),
+    () => getAncestors(structure.id, structureMap, 5),
     [structure.id, structureMap],
   );
 
-  // 后代
   const descendants = useMemo(
-    () => getDescendants(structure.id, childrenMap, showAllDescendants ? 10 : 2),
+    () => getDescendants(structure.id, childrenMap, showAllDescendants ? 10 : 3),
     [structure.id, childrenMap, showAllDescendants],
   );
 
-  // 直接父代
-  const directParents = structure.parentIds.filter((pid) => pid > 0);
-
-  // 直接子代数量
   const directChildCount = (childrenMap.get(structure.id) ?? []).length;
 
   const renderNode = (id: number, depth: number, prefix: string) => {
@@ -96,111 +210,110 @@ export function LineagePanel({ structure, allStructures, onClose, onSelect }: Pr
   };
 
   return (
-    <div style={{
-      position: 'fixed', top: 0, right: 0, bottom: 0,
-      width: 420, maxWidth: '90vw',
-      background: 'var(--color-surface)',
-      borderLeft: '1px solid var(--color-border)',
-      boxShadow: '-4px 0 16px rgba(0,0,0,0.1)',
-      zIndex: 100,
-      display: 'flex', flexDirection: 'column',
-      overflow: 'hidden',
-    }}>
-      {/* 头部 */}
+    <div
+      ref={panelRef}
+      style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0,
+        width: 380, maxWidth: '90vw',
+        background: 'var(--color-surface)',
+        borderLeft: '1px solid var(--color-border)',
+        boxShadow: '-4px 0 16px rgba(0,0,0,0.12)',
+        zIndex: 100,
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '12px 16px',
+        padding: '10px 14px',
         borderBottom: '1px solid var(--color-border)',
+        flexShrink: 0,
       }}>
         <div>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>
-            EA{structure.id} 谱系 / Lineage
-          </h3>
-          <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--color-text-muted)' }}>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>EA{structure.id} Lineage</div>
+          <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
             {structure.formula} · {structure.origin} · SG{structure.spaceGroup}
-          </p>
+          </div>
         </div>
         <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ padding: 4 }}>
-          <X size={18} />
+          <X size={16} />
         </button>
       </div>
 
-      {/* 内容区 */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '12px 0' }}>
-        {/* 祖先区 */}
-        <div style={{ padding: '0 16px', marginBottom: 16 }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            fontSize: 13, fontWeight: 600, marginBottom: 8,
-            color: 'var(--color-text-secondary)',
-          }}>
-            <ArrowUp size={14} />
-            祖先 / Ancestors ({ancestors.length})
+      {/* Tree */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '10px 0', position: 'relative' }}>
+
+        {/* Ancestors section */}
+        {ancestorChain.length > 0 && (
+          <div style={{ marginBottom: 4 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', padding: '0 14px 4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Ancestors ({ancestors.length})
+            </div>
+            {ancestorChain.map((a) => (
+              <TreeNode key={`anc-${a.id}`} id={a.id} depth={0} isCurrent={false} {...nodeProps} />
+            ))}
           </div>
+        )}
 
-          {directParents.length === 0 ? (
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', padding: '4px 8px' }}>
-              无父代（{structure.origin}）
-            </p>
-          ) : (
-            <>
-              {/* 按深度排序，深度大的在上面（最远的祖先在最上面） */}
-              {[...ancestors].reverse().map((a) => renderNode(a.id, 0, 'anc'))}
-              {ancestors.length === 0 && directParents.map((pid) => renderNode(pid, 0, 'par'))}
-            </>
-          )}
-        </div>
+        {/* Divider before current */}
+        {ancestorChain.length > 0 && (
+          <div style={{ height: 1, background: 'var(--color-border)', margin: '4px 14px' }} />
+        )}
 
-        {/* 当前结构（高亮） */}
-        <div style={{
-          margin: '0 16px 16px',
-          padding: '8px 12px',
-          borderRadius: 6,
-          border: '2px solid var(--color-primary)',
-          background: 'rgba(99, 102, 241, 0.08)',
-          fontSize: 13,
-          fontWeight: 600,
-        }}>
-          ★ EA{structure.id} — {structure.formula}
-          <span style={{ fontWeight: 400, color: 'var(--color-text-secondary)', marginLeft: 8 }}>
-            {structure.origin} · {structure.enthalpy < 900 ? `${structure.enthalpy.toFixed(4)} eV/atom` : '—'}
-          </span>
-        </div>
+        {/* Current node */}
+        <TreeNode key="current" id={structure.id} depth={0} isCurrent={true} {...nodeProps} />
 
-        {/* 后代区 */}
-        <div style={{ padding: '0 16px' }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            fontSize: 13, fontWeight: 600, marginBottom: 8,
-            color: 'var(--color-text-secondary)',
-          }}>
-            <ArrowDown size={14} />
-            后代 / Descendants
-            <span style={{ fontWeight: 400, fontSize: 12 }}>
-              （直接子代 {directChildCount} 个，共 {descendants.length} 个）
-            </span>
+        {/* Divider after current */}
+        {descendants.length > 0 && (
+          <div style={{ height: 1, background: 'var(--color-border)', margin: '4px 14px' }} />
+        )}
+
+        {/* Descendants section */}
+        {descendants.length > 0 && (
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', padding: '4px 14px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Descendants (direct: {directChildCount}, shown: {descendants.length})
+            </div>
+            {descendants.map((d) => (
+              <TreeNode key={`desc-${d.id}`} id={d.id} depth={d.depth} isCurrent={false} {...nodeProps} />
+            ))}
+            {!showAllDescendants && directChildCount > 0 && (
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => setShowAllDescendants(true)}
+                style={{ margin: '6px 14px', fontSize: 11 }}
+              >
+                Show more levels…
+              </button>
+            )}
           </div>
+        )}
 
-          {descendants.length === 0 ? (
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', padding: '4px 8px' }}>
-              无后代
-            </p>
-          ) : (
-            <>
-              {descendants.map((d) => renderNode(d.id, d.depth - 1, 'desc'))}
+        {descendants.length === 0 && ancestors.length === 0 && (
+          <div style={{ padding: '8px 14px', fontSize: 12, color: 'var(--color-text-muted)' }}>
+            No lineage data available (origin: {structure.origin})
+          </div>
+        )}
 
-              {!showAllDescendants && descendants.length > 0 && (
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => setShowAllDescendants(true)}
-                  style={{ marginTop: 8, fontSize: 12 }}
-                >
-                  展开更多层级...
-                </button>
-              )}
-            </>
-          )}
-        </div>
+        {/* Tooltip */}
+        {tooltip !== null && (
+          <div style={{
+            position: 'absolute',
+            left: 14,
+            top: tooltip.y,
+            zIndex: 200,
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 6,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            minWidth: 180,
+            maxWidth: 280,
+            pointerEvents: 'none',
+          }}>
+            <NodeTooltip id={tooltip.id} structureMap={structureMap} />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ import { ParetoPage } from '@/modules/Pareto/ParetoPage';
 import { ExplorerPage } from '@/modules/Explorer/ExplorerPage';
 import { FilterPage } from '@/modules/Filter/FilterPage';
 import { ComparePage } from '@/modules/Compare/ComparePage';
+import { StructureViewerModal } from '@/components/StructureViewer/StructureViewerModal';
 
 function App() {
   const theme = useUIStore((s) => s.theme);
@@ -40,6 +41,7 @@ function App() {
   return (
     <div className={theme === 'dark' ? 'dark' : ''}>
       <HashRouter>
+        <StructureViewerModal />
         <Routes>
           {/* Upload page — standalone, no sidebar */}
           <Route path="/" element={<UploadPage />} />

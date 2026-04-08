@@ -18,6 +18,7 @@ import type { Structure, SystemInfo } from '@/types/structure';
 import { ternaryToCartesian } from '@/parsers/compositionUtils';
 import { useUIStore } from '@/store/useUIStore';
 import { computeTernaryHullEdges, uniqueHullPoints, type TernaryHullInput } from '@/lib/ternaryHull';
+import { StructureViewerModal } from '@/components/StructureViewer/StructureViewerModal';
 
 /** Structure with computed cartesian coordinates */
 interface StructureWithCoords extends Structure {
