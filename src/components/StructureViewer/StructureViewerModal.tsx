@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useUIStore } from '@/store/useUIStore';
 import { useProjectStore } from '@/store/useProjectStore';
 import { JSmolViewer } from './JSmolViewer';
@@ -37,9 +38,12 @@ const DEFAULT_MEASURE_MODE = 'off' as const;
 const DEFAULT_BG_COLOR = 'white' as const;
 
 export function StructureViewerModal() {
+  const { t } = useTranslation();
   const viewerStructureId = useUIStore((s) => s.viewerStructureId);
   const closeViewer = useUIStore((s) => s.closeViewer);
   const structures = useProjectStore((s) => s.structures);
+  const tags = useProjectStore((s) => s.tags);
+  const updateStructureTags = useProjectStore((s) => s.updateStructureTags);
 
   // Toolbar state
   const [showUnitCell, setShowUnitCell] = useState(true);
@@ -221,6 +225,101 @@ export function StructureViewerModal() {
             </div>
           </Section>
 
+          {/* Quick supercell buttons */}
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {['1 1 1', '2 2 2', '3 3 3'].map((sc) => (
+              <button
+                key={sc}
+                onClick={() => {
+                  setScInput(sc);
+                  const p = sc.split(' ').map(Number) as [number, number, number];
+                  setSupercell(p);
+                }}
+                style={{
+                  padding: '2px 8px', fontSize: 11, borderRadius: 4,
+                  border: '1px solid var(--color-border, #d1d5db)',
+                  background: scInput === sc ? 'var(--color-primary, #3b82f6)' : 'transparent',
+                  color: scInput === sc ? '#fff' : 'var(--color-text, #333)',
+                  cursor: 'pointer',
+                }}
+              >
+                {sc}
+              </button>
+            ))}
+          </div>
+
+          {/* 标签 Tags */}
+          <Section title="标签 Tags">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {tags.map((tag) => {
+                const active = structure.tags.includes(tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    onClick={() => {
+                      const next = active
+                        ? structure.tags.filter((tid) => tid !== tag.id)
+                        : [...structure.tags, tag.id];
+                      updateStructureTags(structure.id, next);
+                    }}
+                    style={{
+                      padding: '2px 8px', fontSize: 11, borderRadius: 4,
+                      border: `1px solid ${tag.color}`,
+                      background: active ? tag.color : 'transparent',
+                      color: active ? '#fff' : tag.color,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {t(tag.nameKey)}
+                  </button>
+                );
+              })}
+            </div>
+          </Section>
+          {/* 截图 */}
+          <Section title="导出 Export">
+            <button
+              onClick={() => {
+                const base64 = jsmolRef.current?.evalVar('write("PNG")');
+                if (base64) {
+                    const link = document.createElement('a');
+                    link.href = 'data:image/png;base64,' + base64;
+                    link.download = `EA${structure.id}_${structure.formula}.png`;
+                    link.click();
+                }
+                }}
+
+              style={{
+                padding: '4px 12px', fontSize: 12, borderRadius: 4,
+                border: '1px solid var(--color-primary, #3b82f6)',
+                background: 'var(--color-primary, #3b82f6)',
+                color: '#fff', cursor: 'pointer', width: '100%',
+              }}
+            >
+              保存截图 PNG
+            </button>
+            <button
+              onClick={() => {
+                const blob = new Blob([structure.poscarData!], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `EA${structure.id}-SG${structure.spaceGroup}.vasp`;
+                link.click();
+                URL.revokeObjectURL(url);
+              }}
+              style={{
+                padding: '4px 12px', fontSize: 12, borderRadius: 4,
+                border: '1px solid #16a34a',
+                background: '#16a34a',
+                color: '#fff', cursor: 'pointer', width: '100%',
+                marginTop: 4,
+              }}
+            >
+              导出 POSCAR (.vasp)
+            </button>
+          </Section>
+          
           {/* 测量工具 */}
           <Section title="测量工具 Measure">
             {(['off', 'distance', 'angle'] as const).map((mode) => (
@@ -280,72 +379,7 @@ export function StructureViewerModal() {
             </div>
           </Section>
 
-          {/* 截图 */}
-          <Section title="导出 Export">
-            <button
-              onClick={() => {
-                const base64 = jsmolRef.current?.evalVar('write("PNG")');
-                if (base64) {
-                    const link = document.createElement('a');
-                    link.href = 'data:image/png;base64,' + base64;
-                    link.download = `EA${structure.id}_${structure.formula}.png`;
-                    link.click();
-                }
-                }}
 
-              style={{
-                padding: '4px 12px', fontSize: 12, borderRadius: 4,
-                border: '1px solid var(--color-primary, #3b82f6)',
-                background: 'var(--color-primary, #3b82f6)',
-                color: '#fff', cursor: 'pointer', width: '100%',
-              }}
-            >
-              保存截图 PNG
-            </button>
-            <button
-              onClick={() => {
-                const blob = new Blob([structure.poscarData!], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `EA${structure.id}-SG${structure.spaceGroup}.vasp`;
-                link.click();
-                URL.revokeObjectURL(url);
-              }}
-              style={{
-                padding: '4px 12px', fontSize: 12, borderRadius: 4,
-                border: '1px solid #16a34a',
-                background: '#16a34a',
-                color: '#fff', cursor: 'pointer', width: '100%',
-                marginTop: 4,
-              }}
-            >
-              导出 POSCAR (.vasp)
-            </button>
-          </Section>
-
-          {/* Quick supercell buttons */}
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            {['1 1 1', '2 2 2', '2 2 1', '3 3 3'].map((sc) => (
-              <button
-                key={sc}
-                onClick={() => {
-                  setScInput(sc);
-                  const p = sc.split(' ').map(Number) as [number, number, number];
-                  setSupercell(p);
-                }}
-                style={{
-                  padding: '2px 8px', fontSize: 11, borderRadius: 4,
-                  border: '1px solid var(--color-border, #d1d5db)',
-                  background: scInput === sc ? 'var(--color-primary, #3b82f6)' : 'transparent',
-                  color: scInput === sc ? '#fff' : 'var(--color-text, #333)',
-                  cursor: 'pointer',
-                }}
-              >
-                {sc}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
     </ModalShell>

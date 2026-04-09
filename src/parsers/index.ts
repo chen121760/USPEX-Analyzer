@@ -374,7 +374,7 @@ export function parseAllFiles(
         enthalpyTotal: ind.enthalpy,
         volume: volumePerAtom,
         volumeTotal: ind.volume,
-        fitness: -1,
+        fitness: NaN,
         spaceGroup: ind.symm,
         hullX,
         hullY: enthalpyPerAtom,
