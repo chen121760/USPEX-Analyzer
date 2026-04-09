@@ -28,6 +28,7 @@ function applyCondition(s: Structure, cond: FilterCondition): boolean {
   if (val == null) return false;
 
   const num = Number(val);
+  if (isNaN(num)) return false;
   const target = Number(cond.value);
 
   switch (cond.operator) {
@@ -79,6 +80,7 @@ export function FilterPage() {
     { field: 'fitness', operator: 'lte', value: 0.1 },
   ]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [excludedTags, setExcludedTags] = useState<string[]>([]);
 
 
   const [exportFormat, setExportFormat] = useState<'zip' | 'seeds' | 'csv' | 'json'>('zip');
@@ -104,10 +106,17 @@ export function FilterPage() {
   const filteredStructures = useMemo(() => {
     let result = structures;
 
-    // 标签过滤：结构必须包含所有选中的标签
+    // 标签包含过滤：结构必须含有所有选中的标签
     if (selectedTags.length > 0) {
       result = result.filter((s) =>
         selectedTags.every((tagId) => s.tags.includes(tagId))
+      );
+    }
+
+    // 标签排除过滤：含有任一排除标签的结构被移除
+    if (excludedTags.length > 0) {
+      result = result.filter((s) =>
+        excludedTags.every((tagId) => !s.tags.includes(tagId))
       );
     }
 
@@ -235,6 +244,49 @@ export function FilterPage() {
           <button
             className="btn btn-ghost btn-sm"
             onClick={() => setSelectedTags([])}
+            style={{ fontSize: 11 }}
+          >
+            清除 / Clear
+          </button>
+        )}
+      </div>
+    </div>
+
+    {/* 标签排除 */}
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+        排除标签 / Exclude by Tag
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {tags.map((tag) => {
+          const isExcluded = excludedTags.includes(tag.id);
+          const count = structures.filter((s) => s.tags.includes(tag.id)).length;
+          return (
+            <button
+              key={tag.id}
+              className="btn btn-sm"
+              onClick={() => {
+                setExcludedTags((prev) =>
+                  isExcluded ? prev.filter((t) => t !== tag.id) : [...prev, tag.id]
+                );
+              }}
+              style={{
+                borderColor: tag.color,
+                color: isExcluded ? '#fff' : tag.color,
+                background: isExcluded ? tag.color : 'transparent',
+                border: `1px solid ${tag.color}`,
+                textDecoration: isExcluded ? 'line-through' : 'none',
+                opacity: isExcluded ? 0.75 : 1,
+              }}
+            >
+              {t(tag.nameKey)} ({count})
+            </button>
+          );
+        })}
+        {excludedTags.length > 0 && (
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => setExcludedTags([])}
             style={{ fontSize: 11 }}
           >
             清除 / Clear
