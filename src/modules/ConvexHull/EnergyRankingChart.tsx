@@ -91,20 +91,19 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
       font: { size: 15, color: '#0f172a' },
     },
     xaxis: {
-      title: 'Rank',
+      title: { text: 'Rank', font: { size: 13, color: '#334155' } },
       tickfont: { size: 11, color: '#64748b' },
       gridcolor: '#e2e8f0',
     },
     yaxis: {
-      title: 'ΔH (eV/atom above ground state)',
-      titlefont: { size: 13, color: '#334155' },
+      title: { text: 'ΔH (eV/atom above ground state)', font: { size: 13, color: '#334155' } },
       tickfont: { size: 11, color: '#64748b' },
       gridcolor: '#e2e8f0',
       range: [-0.001, undefined],
       zerolinecolor: '#cbd5e1',
       automargin: true,
     },
-    margin: { t: 50, r: 40, l: 80 },
+    margin: { t: 50, r: 40, l: 80, b: 60 },
     height: 500,  // 散点图固定高度就够了
     plot_bgcolor: '#ffffff',
     paper_bgcolor: '#ffffff',
