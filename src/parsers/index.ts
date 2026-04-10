@@ -277,6 +277,17 @@ export function parseAllFiles(
       poscar?.formula ??
       (elements.length > 0 ? buildFormula(hull.composition, elements) : `ID${hull.id}`);
 
+    // Build dynamic extraProps from second objective values
+    const extraProps: Record<string, number> = {};
+    if (secondObjectiveName) {
+      if (ind !== undefined) {
+        extraProps[`${secondObjectiveName}-Individuals`] = ind.secondObjectiveValue;
+      }
+      if (pareto !== undefined) {
+        extraProps[`${secondObjectiveName}-Pareto_ranking`] = pareto.secondObjectiveValue;
+      }
+    }
+
     const structure: Structure = {
       // Identity
       id: hull.id,
@@ -304,7 +315,7 @@ export function parseAllFiles(
 
       // Pareto
       paretoFront: pareto?.paretoFront,
-      secondObjective: pareto?.secondObjective ?? ind?.secondObjective,
+      extraProps: Object.keys(extraProps).length > 0 ? extraProps : undefined,
 
       // ML Properties
       bulkModulus: ml?.bulkModulus,
@@ -383,7 +394,13 @@ export function parseAllFiles(
         parentEnthalpy: orig?.parentEnthalpy ?? 0,
         density: ind.density ?? pareto?.density ?? 0,
         paretoFront: pareto?.paretoFront,
-        secondObjective: pareto?.secondObjective ?? ind.secondObjective,
+        extraProps: (() => {
+          if (!secondObjectiveName) return undefined;
+          const ep: Record<string, number> = {};
+          ep[`${secondObjectiveName}-Individuals`] = ind.secondObjectiveValue;
+          if (pareto !== undefined) ep[`${secondObjectiveName}-Pareto_ranking`] = pareto.secondObjectiveValue;
+          return ep;
+        })(),
         bulkModulus: ml?.bulkModulus,
         shearModulus: ml?.shearModulus,
         youngModulus: ml?.youngModulus,

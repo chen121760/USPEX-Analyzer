@@ -62,7 +62,13 @@ function buildFilename(
       case 2: segments.push(`EA${s.id}`); break;
       case 3: segments.push(`SG${s.spaceGroup}`); break;
       case 4: segments.push(`Ed${s.fitness >= 0 ? s.fitness.toFixed(4) : 'NA'}`); break;
-      case 5: segments.push(`${prefix}${s.secondObjective?.toFixed(1) ?? 'NA'}`); break;
+      case 5: {
+        const paretoVal = s.extraProps
+          ? Object.entries(s.extraProps).find(([k]) => k.endsWith('-Pareto_ranking'))?.[1]
+          : undefined;
+        segments.push(`${prefix}${paretoVal != null ? paretoVal.toFixed(1) : 'NA'}`);
+        break;
+      }
       case 6: segments.push(s.formula || 'Unknown'); break;
     }
   }

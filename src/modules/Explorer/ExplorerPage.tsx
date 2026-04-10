@@ -14,7 +14,7 @@ interface FieldOption {
   type: 'numeric' | 'categorical';
 }
 
-function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: boolean): FieldOption[] {
+function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: boolean, extraPropKeys: string[]): FieldOption[] {
   const opts: FieldOption[] = [
     { key: 'enthalpy', label: t('col.enthalpy'), accessor: (s) => s.enthalpy, type: 'numeric' },
     { key: 'fitness', label: t('col.fitness'), accessor: (s) => s.fitness >= 0 ? s.fitness : undefined, type: 'numeric' },
@@ -42,8 +42,11 @@ function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: bo
   if (hasPareto) {
     opts.push(
       { key: 'paretoFront', label: t('col.paretoFront'), accessor: (s) => s.paretoFront, type: 'numeric' },
-      { key: 'secondObjective', label: t('col.secondObj'), accessor: (s) => s.secondObjective, type: 'numeric' },
     );
+  }
+
+  for (const key of extraPropKeys) {
+    opts.push({ key: `extra_${key}`, label: key, accessor: (s) => s.extraProps?.[key], type: 'numeric' });
   }
 
   return opts;
@@ -58,7 +61,13 @@ export function ExplorerPage() {
   const hasML = structures.some((s) => s.youngModulus != null && s.youngModulus! > 0);
   const hasPareto = systemInfo?.optimizationType === 'multi';
 
-  const fields = useMemo(() => getFieldOptions(t, hasML, hasPareto), [t, hasML, hasPareto]);
+  const extraPropKeys = useMemo(() => {
+    const keys = new Set<string>();
+    structures.forEach((s) => { if (s.extraProps) Object.keys(s.extraProps).forEach((k) => keys.add(k)); });
+    return Array.from(keys).sort();
+  }, [structures]);
+
+  const fields = useMemo(() => getFieldOptions(t, hasML, hasPareto, extraPropKeys), [t, hasML, hasPareto, extraPropKeys]);
 
   const [xKey, setXKey] = useState('fitness');
   const [yKey, setYKey] = useState('enthalpy');

@@ -84,7 +84,7 @@ export function parseParetoRanking(content: string): ParetoParseResult {
     const enthalpy = preNums[0] ?? 0;
     const volume = preNums[1] ?? 0;
     const density = preNums[2] ?? 0;
-    const secondObjective = preNums[3] ?? 0;
+    const secondObjectiveValue = preNums[3] ?? 0;
     const convexHull = preNums[4] ?? 0;
 
     // afterKP: symm ...
@@ -99,7 +99,7 @@ export function parseParetoRanking(content: string): ParetoParseResult {
       enthalpy,
       volume,
       density,
-      secondObjective,
+      secondObjectiveValue,
       convexHull,
       symm,
     });

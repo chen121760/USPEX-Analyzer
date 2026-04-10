@@ -16,6 +16,7 @@ export function ParetoPage() {
 
   const isMulti = systemInfo?.optimizationType === 'multi';
   const objName = systemInfo?.secondObjectiveName || 'Second Objective';
+  const paretoKey = objName !== 'Second Objective' ? `${objName}-Pareto_ranking` : null;
 
   // Get available front numbers
   const frontNumbers = useMemo(() => {
@@ -55,14 +56,14 @@ export function ParetoPage() {
     if (!selectedFronts.has(front)) continue;
 
     const pts = structures
-      .filter((s) => s.paretoFront === front && s.secondObjective != null)
+      .filter((s) => s.paretoFront === front && paretoKey != null && s.extraProps?.[paretoKey] != null)
       .sort((a, b) => (a.fitness ?? 0) - (b.fitness ?? 0));
 
     const color = FRONT_COLORS[(front - 1) % FRONT_COLORS.length];
 
     traces.push({
       x: pts.map((s) => s.fitness),
-      y: pts.map((s) => s.secondObjective!),
+      y: pts.map((s) => s.extraProps![paretoKey!]),
       mode: showLines ? ('markers+lines' as const) : ('markers' as const),
       type: 'scatter' as const,
       name: `Front ${front}`,
@@ -72,7 +73,7 @@ export function ParetoPage() {
         (s) =>
           `EA${s.id}: ${s.formula}<br>` +
           `Fitness: ${s.fitness.toFixed(4)}<br>` +
-          `${objName}: ${s.secondObjective?.toFixed(3)}<br>` +
+          `${objName}: ${s.extraProps![paretoKey!].toFixed(3)}<br>` +
           `SG: ${s.spaceGroup} | Origin: ${s.origin}`,
       ),
       hoverinfo: 'text' as const,
