@@ -766,8 +766,10 @@ export function DataTablePage() {
           <LineagePanel
             structure={target}
             allStructures={structures}
+            systemInfo={systemInfo!}
             onClose={() => setLineageId(null)}
             onSelect={(id) => setLineageId(id)}
+            onViewStructure={openViewer}
           />
         );
       })()}
