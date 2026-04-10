@@ -20,12 +20,12 @@ const FILENAME_MAP: Record<string, USPEXFileType> = {
 
 /** Display information for each file type */
 const FILE_INFO: Record<USPEXFileType, { displayKey: string; descKey: string; required: boolean }> = {
-  parameters:                  { displayKey: 'files.parameters',        descKey: 'files.parametersDesc',        required: false },
+  parameters:                  { displayKey: 'files.parameters',        descKey: 'files.parametersDesc',        required: true },
   extended_convex_hull:        { displayKey: 'files.extendedHull',      descKey: 'files.extendedHullDesc',      required: false },
-  individuals:                 { displayKey: 'files.individuals',       descKey: 'files.individualsDesc',       required: false },
+  individuals:                 { displayKey: 'files.individuals',       descKey: 'files.individualsDesc',       required: true },
   pareto_ranking:              { displayKey: 'files.pareto',            descKey: 'files.paretoDesc',            required: false },
   ml_properties:               { displayKey: 'files.mlProperties',      descKey: 'files.mlPropertiesDesc',      required: false },
-  origin:                      { displayKey: 'files.origin',            descKey: 'files.originDesc',            required: false },
+  origin:                      { displayKey: 'files.origin',            descKey: 'files.originDesc',            required: true },
   gathered_poscars:            { displayKey: 'files.poscars',           descKey: 'files.poscarsDesc',           required: true },
   gathered_poscars_unrelaxed:  { displayKey: 'files.poscarsUnrelaxed',  descKey: 'files.poscarsUnrelaxedDesc',  required: false },
   convex_hull:                 { displayKey: 'files.convexHull',        descKey: 'files.convexHullDesc',        required: false },
@@ -136,13 +136,13 @@ export function getFileTypeInfo(type: USPEXFileType) {
  * List all expected USPEX file types.
  */
 export const ALL_USPEX_FILE_TYPES: USPEXFileType[] = [
-  'parameters',
-  'extended_convex_hull',
+  // Core — required for every calculation
   'individuals',
-  'gathered_poscars',
   'origin',
+  'parameters',
+  'gathered_poscars',
+  // Optional — workflow-specific
+  'extended_convex_hull',
   'pareto_ranking',
   'ml_properties',
-  'convex_hull',
-  'gathered_poscars_unrelaxed',
 ];
