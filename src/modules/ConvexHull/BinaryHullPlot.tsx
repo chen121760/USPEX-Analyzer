@@ -7,7 +7,7 @@ type PlotlyData = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyLayout = any;
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import type { Structure, SystemInfo } from '@/types/structure';
@@ -44,13 +44,20 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
   const { t } = useTranslation();
   const openViewer = useUIStore((s) => s.openViewer);
 
+  const maxFitness = useMemo(() => {
+    const vals = structures.filter((s) => s.fitness > 0 && s.enthalpy < 900).map((s) => s.fitness);
+    return vals.length > 0 ? Math.max(...vals) : 1;
+  }, [structures]);
+
+  const [fitnessMax, setFitnessMax] = useState(() => maxFitness);
+
   const plotData = useMemo(() => {
     const stable = structures.filter((s) => s.fitness === 0 && s.enthalpy < 900);
-    const unstable = structures.filter((s) => s.fitness > 0 && s.enthalpy < 900);
+    const unstable = structures.filter((s) => s.fitness > 0 && s.fitness <= fitnessMax && s.enthalpy < 900);
     const hullPoints = stable.map((s) => ({ x: s.hullX[0] ?? 0, y: s.hullY }));
     const hullLine = computeLowerHull2D(hullPoints);
     return { stable, unstable, hullLine };
-  }, [structures]);
+  }, [structures, fitnessMax]);
 
   const { stable, unstable, hullLine } = plotData;
   const elements = systemInfo.elements;
@@ -120,10 +127,10 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
   const layout: PlotlyLayout = {
     title: { text: `${elements.join('-')} ${t('hull.title')}`, font: { size: 15, color: '#0f172a' } },
     xaxis: { title: `x(${elements[1] || 'B'})`, ...axisStyle },
-    yaxis: { title: t('hull.formationEnergy'), ...axisStyle },
+    yaxis: { title: t('hull.formationEnergy'), range: [-0.001, undefined], ...axisStyle },
     hovermode: 'closest' as const,
     showlegend: true,
-    legend: { x: 0.02, y: 0.98, font: { size: 11, color: '#334155' } },
+    legend: { x: 0.02, y: 0.02, xanchor: 'left', yanchor: 'bottom', font: { size: 11, color: '#334155' } },
     margin: { t: 50, r: 80 },
     plot_bgcolor: '#ffffff',
     paper_bgcolor: '#ffffff',
@@ -131,6 +138,24 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
 
   return (
     <>
+      {/* Fitness filter slider */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+          Fitness max
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={maxFitness}
+          step={maxFitness / 200}
+          value={fitnessMax}
+          onChange={(e) => setFitnessMax(Number(e.target.value))}
+          style={{ flex: 1, maxWidth: 300 }}
+        />
+        <span style={{ fontSize: 13, fontWeight: 600, minWidth: 70 }}>
+          ≤ {fitnessMax.toFixed(3)} eV
+        </span>
+      </div>
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <Plot
           data={traces}

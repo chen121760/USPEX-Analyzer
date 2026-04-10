@@ -11,7 +11,7 @@ type PlotlyData = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyLayout = any;
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import type { Structure, SystemInfo } from '@/types/structure';
@@ -35,12 +35,24 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
   const { t } = useTranslation();
   const openViewer = useUIStore((s) => s.openViewer);
 
+  const maxFitness = useMemo(() => {
+    const vals = structures.filter((s) => s.fitness > 0 && s.enthalpy < 900).map((s) => s.fitness);
+    return vals.length > 0 ? Math.max(...vals) : 1;
+  }, [structures]);
+
+  const [fitnessMax, setFitnessMax] = useState(() => maxFitness);
+  const [revision, setRevision] = useState(0);
+
+  function handleFitnessChange(val: number) {
+    setFitnessMax(val);
+    setRevision((r) => r + 1);
+  }
 
   const plotData = useMemo(() => {
     const elements = systemInfo.elements;
     const validStructures = structures.filter((s) => s.enthalpy < 900 && !isNaN(s.enthalpy));
     const stable = validStructures.filter((s) => s.fitness === 0);
-    const unstable = validStructures.filter((s) => s.fitness > 0);
+    const unstable = validStructures.filter((s) => s.fitness > 0 && s.fitness <= fitnessMax);
 
     // Compute cartesian coords for unstable structures
     const unstableWithCoords: StructureWithCoords[] = unstable.map((s) => {
@@ -60,15 +72,10 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
     // Unique stable points for display
     const uniqueStable = uniqueHullPoints(stableInputs);
 
-    // Max fitness for color scaling
-    const maxFitness = unstable.length > 0
-      ? Math.max(...unstable.map((s) => s.fitness))
-      : 0.1;
+    return { unstableWithCoords, stableInputs, uniqueStable, edges, elements };
+  }, [structures, systemInfo, fitnessMax]);
 
-    return { unstableWithCoords, stableInputs, uniqueStable, edges, maxFitness, elements };
-  }, [structures, systemInfo]);
-
-  const { unstableWithCoords, uniqueStable, edges, maxFitness, elements } = plotData;
+  const { unstableWithCoords, uniqueStable, edges, elements } = plotData;
 
   // Triangle vertices
   const triVerts = [[0, 0], [0.5, Math.sqrt(3) / 2], [1, 0], [0, 0]];
@@ -198,10 +205,29 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
 
   return (
     <>
+      {/* Fitness filter slider */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+          Fitness max
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={maxFitness}
+          step={maxFitness / 200}
+          value={fitnessMax}
+          onChange={(e) => handleFitnessChange(Number(e.target.value))}
+          style={{ flex: 1, maxWidth: 300 }}
+        />
+        <span style={{ fontSize: 13, fontWeight: 600, minWidth: 70 }}>
+          ≤ {fitnessMax.toFixed(3)} eV
+        </span>
+      </div>
       <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
         <Plot
           data={traces}
           layout={layout}
+          revision={revision}
           config={{ responsive: true, displayModeBar: true }}
           style={{ width: '100%', maxWidth: 700, height: 550 }}
           onClick={(event: PlotMouseEvent) => {
