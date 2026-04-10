@@ -40,11 +40,13 @@ export function buildExportFilename(
           `Ed${structure.fitness >= 0 ? structure.fitness.toFixed(4) : 'NA'}`,
         );
         break;
-      case 5:
-        segments.push(
-          `${secondObjPrefix}${structure.secondObjective != null ? structure.secondObjective.toFixed(1) : 'NA'}`,
-        );
+      case 5: {
+        const paretoVal = structure.extraProps
+          ? Object.entries(structure.extraProps).find(([k]) => k.endsWith('-Pareto_ranking'))?.[1]
+          : undefined;
+        segments.push(`${secondObjPrefix}${paretoVal != null ? paretoVal.toFixed(1) : 'NA'}`);
         break;
+      }
       case 6:
         segments.push(structure.formula || 'Unknown');
         break;
@@ -62,7 +64,7 @@ export function structuresToCSV(structures: Structure[]): string {
     'ID', 'Formula', 'Composition', 'SpaceGroup', 'Generation',
     'Enthalpy_eV_atom', 'Volume_A3_atom', 'Fitness_eV_block',
     'Density_g_cm3', 'Origin', 'ParentIDs',
-    'ParetoFront', 'SecondObjective',
+    'ParetoFront', 'ExtraProps',
     'BulkModulus_GPa', 'ShearModulus_GPa', 'YoungModulus_GPa',
     'PoissonRatio', 'PughRatio', 'VickersHardness_GPa', 'FractureToughness',
     'Q_Entropy', 'A_Order', 'S_Order',
@@ -82,7 +84,7 @@ export function structuresToCSV(structures: Structure[]): string {
     s.origin,
     `"${s.parentIds.join(' ')}"`,
     s.paretoFront ?? '',
-    s.secondObjective ?? '',
+    Object.entries(s.extraProps ?? {}).map(([k, v]) => `${k}:${v}`).join(';') || '',
     s.bulkModulus ?? '',
     s.shearModulus ?? '',
     s.youngModulus ?? '',

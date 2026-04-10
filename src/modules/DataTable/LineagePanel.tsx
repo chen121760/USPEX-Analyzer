@@ -691,11 +691,10 @@ export function LineagePanel({
             {tooltip.s.fitness >= 0 ? tooltip.s.fitness.toFixed(4) : 'N/A'}
           </div>
 
-          {hasSecondObj && tooltip.s.secondObjective != null && (
-            <div>
-              {secondObjName}: {tooltip.s.secondObjective.toFixed(3)}
-            </div>
-          )}
+          {hasSecondObj && tooltip.s.extraProps && (() => {
+            const entry = Object.entries(tooltip.s.extraProps).find(([k]) => k.endsWith('-Pareto_ranking'));
+            return entry ? <div>{secondObjName}: {entry[1].toFixed(3)}</div> : null;
+          })()}
         </div>
       )}
     </div>

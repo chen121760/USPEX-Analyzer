@@ -110,12 +110,12 @@ export function parseIndividuals(content: string): IndividualsParseResult {
     const afterKP = parts[2].trim();
 
 
-    // beforeKP: enthalpy volume density secondObj
+    // beforeKP: enthalpy volume density [secondObj?]
     const preNums = beforeKP.split(/\s+/).map(Number);
     const enthalpy = preNums[0] ?? 0;
     const volume = preNums[1] ?? 0;
     const density = preNums[2] ?? 0;
-    const secondObjective = preNums[3] ?? 0;
+    const secondObjectiveValue = preNums[3] ?? 0;
 
     // afterKP: symm q_entr a_order s_order
     const postNums = afterKP.split(/\s+/).map(Number).filter((n) => !isNaN(n));
@@ -134,7 +134,7 @@ export function parseIndividuals(content: string): IndividualsParseResult {
       enthalpy,
       volume,
       density,
-      secondObjective,
+      secondObjectiveValue,
       kpoints,
       symm,
       qEntropy,

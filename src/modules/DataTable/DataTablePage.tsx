@@ -242,12 +242,20 @@ export function DataTablePage() {
   const pageSize = 50;
 
   const hasPareto = systemInfo?.optimizationType === 'multi';
-  const hasML = structures.some((s) => s.youngModulus != null && s.youngModulus > 0);
+  const hasML = structures.some((s) => s.bulkModulus != null);
   const hasFingerprint = structures.some((s) => s.qEntropy != null && s.qEntropy > 0);
 
+  // Collect all extraProps keys present in data
+  const extraPropKeys = useMemo(() => {
+    const keys = new Set<string>();
+    structures.forEach((s) => {
+      if (s.extraProps) Object.keys(s.extraProps).forEach((k) => keys.add(k));
+    });
+    return Array.from(keys).sort();
+  }, [structures]);
+
   const columns = useMemo<ColumnDef<Structure, unknown>[]>(() => {
-    const cols: ColumnDef<Structure, unknown>[] = [
-      {
+    const cols: ColumnDef<Structure, unknown>[] = [      {
         id: 'id',
         accessorKey: 'id',
         header: t('col.id'),
@@ -368,7 +376,7 @@ export function DataTablePage() {
       },
     ];
 
-    // Pareto columns (conditional)
+    // Pareto front column (conditional)
     if (hasPareto) {
       cols.push({
         id: 'paretoFront',
@@ -377,40 +385,75 @@ export function DataTablePage() {
         size: 80,
         cell: ({ getValue }) => getValue<number | undefined>() ?? '—',
       });
+    }
+
+    // Dynamic extraProps columns (second objective from Individuals / Pareto_ranking)
+    for (const key of extraPropKeys) {
       cols.push({
-        id: 'secondObjective',
-        accessorKey: 'secondObjective',
-        header: systemInfo?.secondObjectiveName || t('col.secondObj'),
-        size: 120,
+        id: `extra_${key}`,
+        accessorFn: (s) => s.extraProps?.[key],
+        header: key,
+        size: 150,
         cell: ({ getValue }) => {
           const v = getValue<number | undefined>();
-          return v != null ? v.toFixed(3) : '—';
+          return v != null ? v.toFixed(4) : '—';
         },
       });
     }
 
     // ML columns (conditional)
     if (hasML) {
-      cols.push({
-        id: 'youngModulus',
-        accessorKey: 'youngModulus',
-        header: t('col.young'),
-        size: 110,
-        cell: ({ getValue }) => {
-          const v = getValue<number | undefined>();
-          return v != null && v > 0 ? v.toFixed(1) : '—';
+      cols.push(
+        {
+          id: 'bulkModulus',
+          accessorKey: 'bulkModulus',
+          header: 'Bulk Modulus (GPa)',
+          size: 140,
+          cell: ({ getValue }) => { const v = getValue<number | undefined>(); return v != null ? v.toFixed(1) : '—'; },
         },
-      });
-      cols.push({
-        id: 'bulkModulus',
-        accessorKey: 'bulkModulus',
-        header: t('col.bulk'),
-        size: 100,
-        cell: ({ getValue }) => {
-          const v = getValue<number | undefined>();
-          return v != null && v > 0 ? v.toFixed(1) : '—';
+        {
+          id: 'shearModulus',
+          accessorKey: 'shearModulus',
+          header: 'Shear Modulus (GPa)',
+          size: 150,
+          cell: ({ getValue }) => { const v = getValue<number | undefined>(); return v != null ? v.toFixed(1) : '—'; },
         },
-      });
+        {
+          id: 'youngModulus',
+          accessorKey: 'youngModulus',
+          header: 'Young Modulus (GPa)',
+          size: 150,
+          cell: ({ getValue }) => { const v = getValue<number | undefined>(); return v != null ? v.toFixed(1) : '—'; },
+        },
+        {
+          id: 'poissonRatio',
+          accessorKey: 'poissonRatio',
+          header: 'Poisson Ratio',
+          size: 120,
+          cell: ({ getValue }) => { const v = getValue<number | undefined>(); return v != null ? v.toFixed(3) : '—'; },
+        },
+        {
+          id: 'pughRatio',
+          accessorKey: 'pughRatio',
+          header: 'Pugh Ratio (G/K)',
+          size: 120,
+          cell: ({ getValue }) => { const v = getValue<number | undefined>(); return v != null ? v.toFixed(3) : '—'; },
+        },
+        {
+          id: 'vickersHardness',
+          accessorKey: 'vickersHardness',
+          header: 'Vickers Hardness (GPa)',
+          size: 160,
+          cell: ({ getValue }) => { const v = getValue<number | undefined>(); return v != null ? v.toFixed(2) : '—'; },
+        },
+        {
+          id: 'fractureToughness',
+          accessorKey: 'fractureToughness',
+          header: 'Fracture Toughness (MPa·m^½)',
+          size: 200,
+          cell: ({ getValue }) => { const v = getValue<number | undefined>(); return v != null ? v.toFixed(2) : '—'; },
+        },
+      );
     }
 
     // Fingerprint columns (conditional)
@@ -447,7 +490,7 @@ export function DataTablePage() {
       });
     }
     return cols;
-  }, [t, hasPareto, hasML, hasFingerprint, systemInfo, tags, compareIds, openViewer, toggleCompare]);
+  }, [t, hasPareto, hasML, hasFingerprint, extraPropKeys, tags, compareIds, openViewer, toggleCompare]);
 
   const tableData = useMemo(() => {
     let data = structures;

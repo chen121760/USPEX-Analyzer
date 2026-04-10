@@ -42,7 +42,10 @@ export interface Structure {
 
   // --- Pareto (optional — multi-objective only) ---
   paretoFront?: number;
-  secondObjective?: number;
+
+  // --- Dynamic extra properties (second objective, etc.) ---
+  // Keys: "{name}-Individuals" and "{name}-Pareto_ranking"
+  extraProps?: Record<string, number>;
 
   // --- ML Elastic Properties (optional) ---
   bulkModulus?: number;        // GPa
@@ -159,7 +162,7 @@ export interface ParsedIndividual {
   enthalpy: number;       // total eV
   volume: number;         // total Å³
   density: number;        // g/cm³
-  secondObjective: number;
+  secondObjectiveValue: number;
   kpoints: number[];
   symm: number;
   qEntropy: number;
@@ -175,7 +178,7 @@ export interface ParsedPareto {
   enthalpy: number;
   volume: number;
   density: number;
-  secondObjective: number;
+  secondObjectiveValue: number;
   convexHull: number;
   symm: number;
 }
