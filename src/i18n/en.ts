@@ -50,7 +50,15 @@ const en = {
   'upload.missing': 'Not uploaded',
   'upload.recognized': 'Recognized',
   'upload.systemDetected': 'System detected',
-  'upload.requiredFilesHint': 'Please upload extended_convex_hull or Individuals file',
+  'upload.groupCore': 'Core — upload for every calculation',
+  'upload.groupVarcomp': 'Variable-composition',
+  'upload.groupMulti': 'Multi-objective optimization',
+  'upload.groupML': 'ML elastic model (optType 1201–1207)',
+  'upload.recentProjects': 'Recent Projects',
+  'upload.nameProject': 'Name Your Project',
+  'upload.nameFirst': 'Please name the project first',
+  'upload.namePlaceholder': 'e.g. Ti-O_100GPa_1',
+  'upload.confirmDelete': 'Delete this project from history?',
 
   // ---- File types ----
   'files.parameters': 'Parameters.txt',

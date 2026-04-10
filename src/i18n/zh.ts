@@ -50,7 +50,15 @@ const zh = {
   'upload.missing': '未上传',
   'upload.recognized': '已识别',
   'upload.systemDetected': '检测到体系',
-  'upload.requiredFilesHint': '需要上传 extended_convex_hull 或 Individuals 文件',
+  'upload.groupCore': '核心文件 — 每次计算都上传',
+  'upload.groupVarcomp': '变组分计算',
+  'upload.groupMulti': '多目标优化',
+  'upload.groupML': '弹性模量 ML 模型（optType 1201–1207）',
+  'upload.recentProjects': '最近的项目',
+  'upload.nameProject': '给这个项目起个名字',
+  'upload.nameFirst': '请先给项目起个名字',
+  'upload.namePlaceholder': '例如：Ti-O_100GPa_1',
+  'upload.confirmDelete': '确认从历史记录中删除这个项目？',
 
   // ---- File types ----
   'files.parameters': 'Parameters.txt',

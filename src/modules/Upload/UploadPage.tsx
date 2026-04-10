@@ -2,16 +2,12 @@ import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
-import { detectFileType, ALL_USPEX_FILE_TYPES, getFileTypeInfo } from '@/lib/fileDetection';
-import {
-  UploadCloud, FileText, CheckCircle2, Circle, AlertCircle, Globe,
-} from 'lucide-react';
+import { detectFileType } from '@/lib/fileDetection';
+import { UploadCloud, FileText, CheckCircle2, AlertCircle, Globe } from 'lucide-react';
 import type { DetectedFile, USPEXFileType, ProjectFile } from '@/types/structure';
-// useEffect：页面加载时执行一次（读取历史）
-// useState 已有，不用再加
 import { useEffect } from 'react';
 import { loadRecentProjects, deleteProject, saveProject, type StoredProject } from '@/lib/projectStorage';
-import { Clock, Trash2 } from 'lucide-react'; // 图标
+import { Clock, Trash2 } from 'lucide-react';
 import logoImg from '@/assets/logo.jpg';
 
 export function UploadPage() {
@@ -26,6 +22,7 @@ export function UploadPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [projectName, setProjectNameLocal] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
+  const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -46,7 +43,8 @@ export function UploadPage() {
 
   // 点击删除按钮 → 从 IndexedDB 删除 → 从页面列表移除
   const handleDeleteProject = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // 防止触发外层的恢复点击
+    e.stopPropagation();
+    if (!window.confirm(t('upload.confirmDelete'))) return;
     await deleteProject(id);
     setRecentProjects((prev) => prev.filter((p) => p.id !== id));
   };
@@ -152,7 +150,8 @@ export function UploadPage() {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: 'flex-start',
+        paddingTop: 32,
         padding: 24,
         background: 'var(--color-bg)',
       }}
@@ -172,203 +171,131 @@ export function UploadPage() {
         <img
           src={logoImg}
           alt="USPEX Analyzer"
-          style={{ width: 300, height: 300, borderRadius: 6, margin: '0 auto' }}
+          style={{ width: 250, height: 250, borderRadius: 6, margin: '0 auto' }}
         />
       </div>
 
-      {/* Drop zone */}
-      <div
-        className={`dropzone ${isDragging ? 'active' : ''}`}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onClick={handleClick}
-        style={{ maxWidth: 560, width: '100%', marginBottom: 24, padding: '36px 24px' }}
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          style={{ display: 'none' }}
-          onChange={handleInputChange}
-        />
-        <UploadCloud size={36} color="var(--color-primary)" style={{ marginBottom: 1 }} />
-        <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 4px', color: 'var(--color-text)' }}>
-          {t('upload.dragHint')}
-        </p>
-        <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '0 0 12px' }}>
-          {t('upload.orLoadProject')}
-        </p>
-        <div style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          justifyContent: 'center',
-          gap: '4px 6px',
-        }}>
-          {[
-            'Parameters.txt',
-            'extended_convex_hull',
-            'Individuals',
-            'gatheredPOSCARS',
-            'origin',
-            'Pareto_ranking',
-            'MLProperties',
-            'convex_hull',
-          ].map((name) => (
-            <span
-              key={name}
-              style={{
-                fontSize: 11,
-                padding: '2px 8px',
-                borderRadius: 10,
-                background: 'var(--color-border)',
-                color: 'var(--color-text-secondary)',
-              }}
-            >
-              {name}
-            </span>
-          ))}
-        </div>
-      </div>
+      {/* Main content: upload + recent side by side when history exists */}
+      <div style={{
+        display: 'flex',
+        flexDirection: recentProjects.length > 0 ? 'row' : 'column',
+        alignItems: recentProjects.length > 0 ? 'flex-start' : 'center',
+        gap: 24,
+        width: '100%',
+        maxWidth: recentProjects.length > 0 ? 1100 : 560,
+        justifyContent: 'center',
+      }}>
+        {/* Left: naming + drop zone + start button */}
+        <div style={{ flex: recentProjects.length > 0 ? '0 0 560px' : undefined, width: recentProjects.length > 0 ? undefined : '100%' }}>
 
-      {/* 只有有历史记录时才显示这个区块 */}
-      {recentProjects.length > 0 && (
-        <div style={{ maxWidth: 560, width: '100%', marginTop: 8 }}>
-
-          {/* 标题 */}
-          <h3 style={{
-            fontSize: 13, fontWeight: 600, marginBottom: 10,
-            color: 'var(--color-text-secondary)',
-            display: 'flex', alignItems: 'center', gap: 6
-          }}>
-            <Clock size={14} />
-            最近的项目
-          </h3>
-
-          {/* 列表 */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {recentProjects.map((stored) => (
-              <div
-                key={stored.id}
-                onClick={() => handleRestoreProject(stored)} // 点击整行恢复
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '10px 14px', borderRadius: 8, cursor: 'pointer',
-                  border: '1px solid var(--color-border)',
-                  background: 'var(--color-surface)',
-                }}
-              >
-                <FileText size={16} color="var(--color-primary)" />
-
-                {/* 项目名称 + 结构数量和时间 */}
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{stored.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                    {stored.project.structures.length} 个结构 ·
-                    {new Date(stored.savedAt).toLocaleString()}
-                  </div>
-                </div>
-
-                {/* 删除按钮，阻止冒泡避免触发恢复 */}
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={(e) => handleDeleteProject(stored.id, e)}
-                  style={{ padding: 4 }}
-                >
-                  <Trash2 size={14} color="var(--color-text-muted)" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}      
-
-      {/* Detected files list */}
-      {(detectedFiles.length > 0 || errors.length > 0) && (
-        <div style={{ maxWidth: 560, width: '100%' }} className="fade-in">
-          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
-            {t('upload.detected')}
-          </h3>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {ALL_USPEX_FILE_TYPES.map((ftype) => {
-              const isDetected = detectedTypes.has(ftype);
-              const info = getFileTypeInfo(ftype);
-
-              return (
-                <div
-                  key={ftype}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '8px 12px',
-                    borderRadius: 6,
-                    border: `1px solid ${isDetected ? 'var(--color-success)' : 'var(--color-border)'}`,
-                    background: isDetected ? 'rgba(22, 163, 74, 0.05)' : 'transparent',
-                    opacity: isDetected ? 1 : 0.5,
-                  }}
-                >
-                  {isDetected ? (
-                    <CheckCircle2 size={16} color="var(--color-success)" />
-                  ) : (
-                    <Circle size={16} color="var(--color-text-muted)" />
-                  )}
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500 }}>{t(info.displayKey)}</div>
-                    <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                      {t(info.descKey)}
-                    </div>
-                  </div>
-                  <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                    {info.required ? t('upload.required') : t('upload.optional')}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Errors */}
-          {errors.map((err, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, color: 'var(--color-danger)', fontSize: 12 }}>
-              <AlertCircle size={14} />
-              {err}
-            </div>
-          ))}
-
-          {/* 项目命名输入框 */}
-          <div style={{ marginBottom: 16 }}>
+          {/* Project name — above dropzone */}
+          <div style={{ marginBottom: 10 }}>
             <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 6 }}>
-              给这个项目起个名字/Name Your Project 
+              {t('upload.nameProject')}
             </label>
             <input
               type="text"
               value={projectName}
               onChange={(e) => setProjectNameLocal(e.target.value)}
-              placeholder="such as：Ti-O_100GPa_1"
+              placeholder={t('upload.namePlaceholder')}
+              onClick={(e) => e.stopPropagation()}
               style={{
-                width: '100%',
-                padding: '8px 12px',
-                borderRadius: 6,
-                border: '1px solid var(--color-border)',
-                fontSize: 13,
-                background: 'var(--color-surface)',
-                color: 'var(--color-text)',
+                width: '100%', padding: '8px 12px', borderRadius: 6,
+                border: '1px solid var(--color-border)', fontSize: 13,
+                background: 'var(--color-surface)', color: 'var(--color-text)',
                 boxSizing: 'border-box',
               }}
             />
           </div>
 
+          {/* Drop zone */}
+          <div
+            className={`dropzone ${isDragging ? 'active' : ''}`}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onClick={handleClick}
+            style={{ width: '100%', marginBottom: 16, padding: '28px 24px' }}
+          >
+            <input ref={inputRef} type="file" multiple style={{ display: 'none' }} onChange={handleInputChange} />
+            <UploadCloud size={36} color="var(--color-primary)" style={{ display: 'block', margin: '0 auto 8px' }} />
+            <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 4px', color: 'var(--color-text)' }}>
+              {t('upload.dragHint')}
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '0 0 16px' }}>
+              {t('upload.orLoadProject')}
+            </p>
+
+            {/* File groups with live status */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+              {([
+                { labelKey: 'upload.groupCore', color: '#16a34a', bg: 'rgba(22,163,74,0.12)', files: [
+                  { name: 'Individuals', type: 'individuals' },
+                  { name: 'origin', type: 'origin' },
+                  { name: 'Parameters.txt', type: 'parameters' },
+                  { name: 'gatheredPOSCARS', type: 'gathered_poscars' },
+                ] },
+                { labelKey: 'upload.groupVarcomp', color: '#3b82f6', bg: 'rgba(59,130,246,0.12)', files: [
+                  { name: 'extended_convex_hull', type: 'extended_convex_hull' },
+                ] },
+                { labelKey: 'upload.groupMulti', color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)', files: [
+                  { name: 'Pareto_ranking', type: 'pareto_ranking' },
+                ] },
+                { labelKey: 'upload.groupML', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', files: [
+                  { name: 'MLProperties', type: 'ml_properties' },
+                ] },
+              ] as const).map((group) => (
+                <div key={group.labelKey}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {t(group.labelKey)}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 6px' }}>
+                    {group.files.map(({ name, type }) => {
+                      const uploaded = detectedTypes.has(type as USPEXFileType);
+                      return (
+                        <span
+                          key={name}
+                          style={{
+                            fontSize: 11, padding: '2px 8px', borderRadius: 10,
+                            background: group.bg,
+                            color: group.color,
+                            opacity: uploaded ? 1 : 0.5,
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            transition: 'opacity 0.2s, box-shadow 0.2s',
+                            boxShadow: uploaded ? `0 0 0 1px ${group.color}60` : 'none',
+                          }}
+                        >
+                          {uploaded && <CheckCircle2 size={10} />}
+                          {name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Errors inside dropzone */}
+            {errors.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                {errors.map((err, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center', color: 'var(--color-danger)', fontSize: 12 }}>
+                    <AlertCircle size={13} />
+                    {err}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Start button */}
-          <div style={{ marginTop: 24, textAlign: 'center' }}>
+          <div style={{ textAlign: 'center' }}>
             <button
               className="btn btn-primary"
               onClick={startAnalysis}
               disabled={!canStart || !projectName.trim()}
               style={{
-                padding: '10px 32px',
-                fontSize: 15,
+                padding: '10px 32px', fontSize: 15,
                 opacity: canStart && projectName.trim() ? 1 : 0.4,
                 cursor: canStart && projectName.trim() ? 'pointer' : 'not-allowed',
               }}
@@ -382,12 +309,71 @@ export function UploadPage() {
             )}
             {canStart && !projectName.trim() && (
               <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 8 }}>
-                请先给项目起个名字/Name first
+                {t('upload.nameFirst')}
               </p>
             )}
           </div>
         </div>
-      )}
+
+        {/* Right: Recent projects */}
+        {recentProjects.length > 0 && (
+          <div style={{ flex: '1 1 300px', minWidth: 260, maxWidth: 400 }}>
+            <h3 style={{
+              fontSize: 13, fontWeight: 600, marginBottom: 10,
+              color: 'var(--color-text-secondary)',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <Clock size={14} />
+              {t('upload.recentProjects')}
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {recentProjects.map((stored) => {
+                const si = stored.project.systemInfo;
+                const systemLabel = si ? si.elements.join('-') : '—';
+                const compMode = si ? (si.compositionMode === 'varcomp' ? t('system.varcomp') : t('system.fixedComp')) : '';
+                const gens = si ? `${si.totalGenerations} gen` : '';
+                return (
+                  <div
+                    key={stored.id}
+                    onClick={() => handleRestoreProject(stored)}
+                    onMouseEnter={() => setHoveredProjectId(stored.id)}
+                    onMouseLeave={() => setHoveredProjectId(null)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '10px 14px', borderRadius: 8, cursor: 'pointer',
+                      border: `1px solid ${hoveredProjectId === stored.id ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                      background: hoveredProjectId === stored.id ? 'var(--color-surface-hover, rgba(99,102,241,0.06))' : 'var(--color-surface)',
+                      transition: 'border-color 0.15s, background 0.15s',
+                    }}
+                  >
+                    <FileText size={16} color="var(--color-primary)" style={{ flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {stored.name}
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-primary)', marginTop: 1 }}>
+                        {systemLabel}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <span>{compMode}</span>
+                        {gens && <span>· {gens}</span>}
+                        <span>· {stored.project.structures.length} {t('system.totalStructures').toLowerCase()}</span>
+                      </div>
+                    </div>
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={(e) => handleDeleteProject(stored.id, e)}
+                      style={{ padding: 4, flexShrink: 0 }}
+                    >
+                      <Trash2 size={14} color="var(--color-text-muted)" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

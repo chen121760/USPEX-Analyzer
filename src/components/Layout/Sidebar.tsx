@@ -73,7 +73,11 @@ export function Sidebar() {
           minHeight: 48,
         }}
       >
-        <img src={logoImg} alt="USPEX Analyzer" style={{ width: 200, height: 200, borderRadius: 1 }} />
+        <img
+          src={logoImg}
+          alt="USPEX Analyzer"
+          style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', borderRadius: 1, display: 'block' }}
+        />
 
       </div>
 

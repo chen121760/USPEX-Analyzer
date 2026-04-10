@@ -9,28 +9,27 @@ type PlotlyData = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyLayout = any;
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import type { Structure, SystemInfo } from '@/types/structure';
 import { useUIStore } from '@/store/useUIStore';
 
 
-/** Distinct colors for origin methods */
-const ORIGIN_COLORS: Record<string, string> = {
-  Random: '#6366f1',
-  Heredity: '#16a34a',
-  Mutation: '#f59e0b',
-  Permutate: '#ec4899',
-  softmutate: '#06b6d4',
-  RandTop: '#8b5cf6',
-  TransMutate: '#64748b',
-  Seeds: '#dc2626',
-  latticeMutation: '#0ea5e9',
-};
+/** Palette for auto-assigning colors to any origin method */
+const COLOR_PALETTE = [
+  '#6366f1', '#16a34a', '#f59e0b', '#ec4899', '#06b6d4',
+  '#8b5cf6', '#dc2626', '#0ea5e9', '#64748b', '#f97316',
+  '#14b8a6', '#a855f7', '#84cc16', '#e11d48', '#0284c7',
+];
+
+const originColorCache = new Map<string, string>();
 
 function getOriginColor(origin: string): string {
-  return ORIGIN_COLORS[origin] ?? '#94a3b8';
+  if (!originColorCache.has(origin)) {
+    originColorCache.set(origin, COLOR_PALETTE[originColorCache.size % COLOR_PALETTE.length]);
+  }
+  return originColorCache.get(origin)!;
 }
 
 interface Props {
@@ -42,18 +41,21 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
   const { t } = useTranslation();
   const openViewer = useUIStore((s) => s.openViewer);
 
-  const plotData = useMemo(() => {
-    const all = structures
+  const allSorted = useMemo(() =>
+    structures
       .filter((s) => !isNaN(s.enthalpy) && s.enthalpy < 900)
-      .sort((a, b) => a.enthalpy - b.enthalpy);
+      .sort((a, b) => a.enthalpy - b.enthalpy),
+  [structures]);
 
-    const top100 = all.slice(0, 100); // 只截一次，后面全用 top100
+  const [displayCount, setDisplayCount] = useState(() => Math.min(100, allSorted.length));
 
+  const plotData = useMemo(() => {
+    const top = allSorted.slice(0, displayCount);
     return {
-      ranks: top100.map((_, i) => i + 1),
-      fitness: top100.map((s) => s.fitness ?? 0),
-      colors: top100.map((s) => getOriginColor(s.origin)),
-      hoverTexts: top100.map((s) =>
+      ranks: top.map((_, i) => i + 1),
+      fitness: top.map((s) => s.fitness ?? 0),
+      colors: top.map((s) => getOriginColor(s.origin)),
+      hoverTexts: top.map((s) =>
         `EA${s.id}: ${s.formula}<br>` +
         `ΔH: ${(s.fitness ?? 0).toFixed(4)} eV/atom<br>` +
         `Enthalpy: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
@@ -61,11 +63,9 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
         `Origin: ${s.origin}<br>` +
         `Gen: ${s.generation}`,
       ),
-      totalAll: all.length,
-      ids: top100.map((s) => s.id),
-      total: top100.length,
+      ids: top.map((s) => s.id),
     };
-  }, [structures]);
+  }, [allSorted, displayCount]);
 
 
   const trace: PlotlyData = {
@@ -91,20 +91,19 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
       font: { size: 15, color: '#0f172a' },
     },
     xaxis: {
-      title: 'Rank',
+      title: { text: 'Rank', font: { size: 13, color: '#334155' } },
       tickfont: { size: 11, color: '#64748b' },
       gridcolor: '#e2e8f0',
     },
     yaxis: {
-      title: 'ΔH (eV/atom above ground state)',
-      titlefont: { size: 13, color: '#334155' },
+      title: { text: 'ΔH (eV/atom above ground state)', font: { size: 13, color: '#334155' } },
       tickfont: { size: 11, color: '#64748b' },
       gridcolor: '#e2e8f0',
-      rangemode: 'tozero' as const,
+      range: [-0.001, undefined],
       zerolinecolor: '#cbd5e1',
       automargin: true,
     },
-    margin: { t: 50, r: 40, l: 80 },
+    margin: { t: 50, r: 40, l: 80, b: 60 },
     height: 500,  // 散点图固定高度就够了
     plot_bgcolor: '#ffffff',
     paper_bgcolor: '#ffffff',
@@ -114,9 +113,26 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
 
   return (
     <>
+      {/* Slider to control how many structures to display */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+          {t('hull.showTop', 'Show top')}
+        </span>
+        <input
+          type="range"
+          min={1}
+          max={allSorted.length}
+          value={displayCount}
+          onChange={(e) => setDisplayCount(Number(e.target.value))}
+          style={{ flex: 1, maxWidth: 300 }}
+        />
+        <span style={{ fontSize: 13, fontWeight: 600, minWidth: 60 }}>
+          {displayCount} / {allSorted.length}
+        </span>
+      </div>
+
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 12 }}>
         {t('hull.energyRankingDesc', 'Fixed composition — showing enthalpy ranking')}
-        {plotData.totalAll > 100 && ` (showing top 100 of ${plotData.totalAll})`}
       </p>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -140,11 +156,11 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
           Origin methods
         </h3>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {Object.entries(ORIGIN_COLORS).map(([origin, color]) => {
+          {Array.from(new Set(structures.map((s) => s.origin))).map((origin) => {
+            const color = getOriginColor(origin);
             const count = structures.filter((s) => s.origin === origin).length;
-            if (count === 0) return null;
             return (
-              <span key={origin} className="tag-badge" style={{ background: `${color}20`, color, fontSize: 12, padding: '3px 10px' }}>
+              <span key={origin} className="tag-badge" style={{ background: `${color}20`, color: color as string, fontSize: 12, padding: '3px 10px' }}>
                 {origin} ({count})
               </span>
             );

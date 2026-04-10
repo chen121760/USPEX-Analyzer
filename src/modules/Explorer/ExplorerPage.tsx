@@ -143,23 +143,24 @@ export function ExplorerPage() {
   }, [filteredData, xField, yField, colorField]);
 
   const axisStyle = {
-    titlefont: { size: 13, color: '#334155' },
     tickfont: { size: 11, color: '#64748b' },
     gridcolor: '#e2e8f0',
     zerolinecolor: '#cbd5e1',
     linecolor: '#94a3b8',
   };
 
+  const titleFont = { size: 13, color: '#334155' };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const layout: any = {
     title: { text: `${xField.label} vs ${yField.label}`, font: { size: 15, color: '#0f172a' } },
-    xaxis: { title: xField.label, ...axisStyle },
-    yaxis: { title: yField.label, ...axisStyle },
+    xaxis: { title: { text: xField.label, font: titleFont }, ...axisStyle },
+    yaxis: { title: { text: yField.label, font: titleFont }, ...axisStyle },
     hovermode: 'closest' as const,
     showlegend: true,
     legend: { font: { size: 11, color: '#334155' } },
     dragmode: 'lasso' as const,
-    margin: { t: 50 },
+    margin: { t: 50, l: 60, b: 60 },
     plot_bgcolor: '#ffffff',
     paper_bgcolor: '#ffffff',
   };
