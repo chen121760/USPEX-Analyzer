@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useUIStore } from '@/store/useUIStore';
@@ -69,9 +69,13 @@ export function ExplorerPage() {
 
   const fields = useMemo(() => getFieldOptions(t, hasML, hasPareto, extraPropKeys), [t, hasML, hasPareto, extraPropKeys]);
 
-  const [xKey, setXKey] = useState('fitness');
-  const [yKey, setYKey] = useState('enthalpy');
-  const [colorKey, setColorKey] = useState('origin');
+  // 从 UIStore 读取轴选择，切换页面后不会丢失
+  const xKey      = useUIStore((s) => s.explorerXKey);
+  const setXKey   = useUIStore((s) => s.setExplorerXKey);
+  const yKey      = useUIStore((s) => s.explorerYKey);
+  const setYKey   = useUIStore((s) => s.setExplorerYKey);
+  const colorKey  = useUIStore((s) => s.explorerColorKey);
+  const setColorKey = useUIStore((s) => s.setExplorerColorKey);
 
   const xField = fields.find((f) => f.key === xKey) ?? fields[0];
   const yField = fields.find((f) => f.key === yKey) ?? fields[1];

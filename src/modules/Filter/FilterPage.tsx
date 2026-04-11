@@ -1,6 +1,7 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
+import { useUIStore } from '@/store/useUIStore';
 import { X, Plus, Download } from 'lucide-react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -82,18 +83,43 @@ export function FilterPage() {
   const systemInfo = useProjectStore((s) => s.systemInfo);
   const tags = useProjectStore((s) => s.tags);
 
-  const [conditions, setConditions] = useState<FilterCondition[]>([
-    { field: 'fitness', operator: 'lte', value: 0.1 },
-  ]);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [excludedTags, setExcludedTags] = useState<string[]>([]);
+  // 从 UIStore 读取所有筛选状态（这样切换页面再回来，状态还在）
+  // 原来这里用的是 useState，每次离开页面状态就丢了
+  // 现在改成从 UIStore 读，UIStore 会自动存到 localStorage
+  const conditions      = useUIStore((s) => s.filterConditions);
+  const setConditions   = useUIStore((s) => s.setFilterConditions);
+  const tagStates       = useUIStore((s) => s.filterTagStates);
+  const setTagStates    = useUIStore((s) => s.setFilterTagStates);
+  const exportFormat    = useUIStore((s) => s.filterExportFormat);
+  const setExportFormat = useUIStore((s) => s.setFilterExportFormat);
+  const nameParts       = useUIStore((s) => s.filterNameParts);
+  const setNameParts    = useUIStore((s) => s.setFilterNameParts);
+  const sortKey         = useUIStore((s) => s.filterSortKey);
+  const setSortKey      = useUIStore((s) => s.setFilterSortKey);
+  const sortReverse     = useUIStore((s) => s.filterSortReverse);
+  const setSortReverse  = useUIStore((s) => s.setFilterSortReverse);
 
+  // secondObjPrefix 不需要持久化，保持简单
+  const secondObjPrefix = 'Obj';
 
-  const [exportFormat, setExportFormat] = useState<'zip' | 'seeds' | 'csv' | 'json'>('zip');
-  const [nameParts, setNameParts] = useState<number[]>([1, 2, 6, 3]);
-  const [sortKey, setSortKey] = useState('fitness');
-  const [sortReverse, setSortReverse] = useState(false);
-  const [secondObjPrefix] = useState('Obj');
+  // 点击标签时，循环切换三种状态：灰 → 绿（include）→ 红（exclude）→ 灰
+  const handleTagClick = (tagId: string) => {
+    // 读取当前状态（undefined = 灰色）
+    const currentState = tagStates[tagId]
+
+    if (currentState === undefined) {
+      // 灰色 → 绿色
+      setTagStates({ ...tagStates, [tagId]: 'include' })
+    } else if (currentState === 'include') {
+      // 绿色 → 红色
+      setTagStates({ ...tagStates, [tagId]: 'exclude' })
+    } else {
+      // 红色 → 灰色：从字典里删掉这个 key
+      const next = { ...tagStates }
+      delete next[tagId]
+      setTagStates(next)
+    }
+  }
 
   const addCondition = () => {
     setConditions([...conditions, { field: 'spaceGroup', operator: 'gte', value: 1 }]);
@@ -112,17 +138,26 @@ export function FilterPage() {
   const filteredStructures = useMemo(() => {
     let result = structures;
 
-    // 标签包含过滤：结构必须含有所有选中的标签
-    if (selectedTags.length > 0) {
+    // 从 tagStates 字典里分别提取"必须含有"和"必须排除"的标签 id 列表
+    const includedTagIds = Object.entries(tagStates)
+      .filter(([, state]) => state === 'include')
+      .map(([id]) => id)
+
+    const excludedTagIds = Object.entries(tagStates)
+      .filter(([, state]) => state === 'exclude')
+      .map(([id]) => id)
+
+    // 包含过滤：结构必须同时拥有所有绿色标签
+    if (includedTagIds.length > 0) {
       result = result.filter((s) =>
-        selectedTags.every((tagId) => s.tags.includes(tagId))
+        includedTagIds.every((tagId) => s.tags.includes(tagId))
       );
     }
 
-    // 标签排除过滤：含有任一排除标签的结构被移除
-    if (excludedTags.length > 0) {
+    // 排除过滤：结构不能含有任何红色标签
+    if (excludedTagIds.length > 0) {
       result = result.filter((s) =>
-        excludedTags.every((tagId) => !s.tags.includes(tagId))
+        excludedTagIds.every((tagId) => !s.tags.includes(tagId))
       );
     }
 
@@ -132,7 +167,8 @@ export function FilterPage() {
     }
 
     return result;
-  }, [structures, conditions, selectedTags]);
+  // tagStates 包含了所有标签状态，conditions 是数值筛选条件，都要放进依赖数组
+  }, [structures, conditions, tagStates]);
 
 
   // Sort
@@ -183,9 +219,11 @@ export function FilterPage() {
   }, [sortedStructures, exportFormat, nameParts, secondObjPrefix, systemInfo]);
 
   const toggleNamePart = (part: number) => {
-    setNameParts((prev) =>
-      prev.includes(part) ? prev.filter((p) => p !== part) : [...prev, part].sort(),
-    );
+    // UIStore 的 setter 只接受新值，不接受函数，所以先计算出新数组再传入
+    const next = nameParts.includes(part)
+      ? nameParts.filter((p) => p !== part)
+      : [...nameParts, part].sort();
+    setNameParts(next);
   };
 
   const selectStyle: React.CSSProperties = {
@@ -218,86 +256,67 @@ export function FilterPage() {
             {t('filter.conditions')}
           </h3>
 
-    {/* 标签筛选 */}
+    {/* 标签筛选区域：三态切换（灰/绿/红） */}
     <div style={{ marginBottom: 12 }}>
-      <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-        按标签筛选 / Filter by Tag
-      </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        {tags.map((tag) => {
-          const isSelected = selectedTags.includes(tag.id);
-          const count = structures.filter((s) => s.tags.includes(tag.id)).length;
-          return (
-            <button
-              key={tag.id}
-              className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-outline'}`}
-              onClick={() => {
-                setSelectedTags((prev) =>
-                  isSelected ? prev.filter((t) => t !== tag.id) : [...prev, tag.id]
-                );
-              }}
-              style={{
-                borderColor: tag.color,
-                color: isSelected ? '#fff' : tag.color,
-                background: isSelected ? tag.color : 'transparent',
-              }}
-            >
-              {t(tag.nameKey)} ({count})
-            </button>
-          );
-        })}
-        {selectedTags.length > 0 && (
+      {/* 标题行：左边是标题，右边是"清除"按钮（只有选了标签才显示） */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          {t('filter.tagFilter')}
+        </div>
+        {/* 只有当 tagStates 里有内容（即有标签被选中）时，才显示"清除"按钮 */}
+        {Object.keys(tagStates).length > 0 && (
           <button
             className="btn btn-ghost btn-sm"
-            onClick={() => setSelectedTags([])}
+            onClick={() => setTagStates({})}
             style={{ fontSize: 11 }}
           >
-            清除 / Clear
+            {t('filter.clearTags')}
           </button>
         )}
       </div>
-    </div>
 
-    {/* 标签排除 */}
-    <div style={{ marginBottom: 12 }}>
-      <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-        排除标签 / Exclude by Tag
+      {/* 操作提示文字 */}
+      <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+        {t('filter.tagFilterHint')}
       </div>
+
+      {/* 标签按钮列表 */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {tags.map((tag) => {
-          const isExcluded = excludedTags.includes(tag.id);
-          const count = structures.filter((s) => s.tags.includes(tag.id)).length;
+          // 读取这个标签当前的状态（undefined = 灰色）
+          const state = tagStates[tag.id]
+          // 统计有这个标签的结构数量，显示在括号里
+          const count = structures.filter((s) => s.tags.includes(tag.id)).length
+
+          // 根据状态决定按钮的样式
+          // 绿色（include）：用标签自己的颜色填充背景，白色文字
+          // 红色（exclude）：红色背景，白色文字，加删除线
+          // 灰色（未选）：透明背景，用标签颜色作为边框和文字颜色
+          const buttonStyle: React.CSSProperties = {
+            border: `1px solid ${state === 'exclude' ? '#ef4444' : tag.color}`,
+            color: state ? '#fff' : tag.color,
+            background: state === 'include'
+              ? tag.color
+              : state === 'exclude'
+                ? '#ef4444'
+                : 'transparent',
+            textDecoration: state === 'exclude' ? 'line-through' : 'none',
+            transition: 'all 0.15s',
+          }
+
           return (
             <button
               key={tag.id}
               className="btn btn-sm"
-              onClick={() => {
-                setExcludedTags((prev) =>
-                  isExcluded ? prev.filter((t) => t !== tag.id) : [...prev, tag.id]
-                );
-              }}
-              style={{
-                borderColor: tag.color,
-                color: isExcluded ? '#fff' : tag.color,
-                background: isExcluded ? tag.color : 'transparent',
-                border: `1px solid ${tag.color}`,
-                textDecoration: isExcluded ? 'line-through' : 'none',
-                opacity: isExcluded ? 0.75 : 1,
-              }}
+              onClick={() => handleTagClick(tag.id)}
+              style={buttonStyle}
             >
+              {/* 绿色时显示 ✓，红色时显示 ✗，灰色时不显示符号 */}
+              {state === 'include' ? '✓ ' : state === 'exclude' ? '✗ ' : ''}
               {t(tag.nameKey)} ({count})
             </button>
-          );
+          )
         })}
-        {excludedTags.length > 0 && (
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => setExcludedTags([])}
-            style={{ fontSize: 11 }}
-          >
-            清除 / Clear
-          </button>
-        )}
       </div>
     </div>
 
@@ -457,6 +476,7 @@ export function FilterPage() {
           <table className="data-table">
             <thead>
               <tr>
+                {/* 固定列：这几列永远显示 */}
                 <th>#</th>
                 <th>ID</th>
                 <th>{t('col.formula')}</th>
@@ -464,20 +484,68 @@ export function FilterPage() {
                 <th>{t('col.enthalpy')}</th>
                 <th>{t('col.fitness')}</th>
                 <th>{t('col.origin')}</th>
+
+                {/* 动态列：从筛选条件里提取出"不在固定列里的字段"，额外显示 */}
+                {/* 先收集所有筛选条件用到的字段名 */}
+                {/* 再过滤掉已经在固定列里的字段，避免重复 */}
+                {conditions
+                  .map((cond) => cond.field)
+                  // 去掉重复的字段名（同一个字段可能被用了多次）
+                  .filter((field, index, self) => self.indexOf(field) === index)
+                  // 去掉已经在固定列里的字段，不需要再显示一遍
+                  .filter((field) => !['enthalpy', 'fitness', 'spaceGroup'].includes(field))
+                  .map((field) => (
+                    // 用字段名作为列标题，优先用翻译，没有翻译就直接显示字段名
+                    <th key={field} style={{ color: 'var(--color-primary)', fontStyle: 'italic' }}>
+                      {t(`col.${field}`) || field}
+                    </th>
+                  ))
+                }
               </tr>
             </thead>
             <tbody>
-              {sortedStructures.slice(0, 50).map((s, i) => (
-                <tr key={s.id}>
-                  <td>{i + 1}</td>
-                  <td style={{ fontWeight: 600 }}>EA{s.id}</td>
-                  <td>{s.formula}</td>
-                  <td>{s.spaceGroup}</td>
-                  <td>{s.enthalpy < 900 ? s.enthalpy.toFixed(4) : '—'}</td>
-                  <td>{s.fitness >= 0 ? s.fitness.toFixed(4) : '—'}</td>
-                  <td>{s.origin}</td>
-                </tr>
-              ))}
+              {sortedStructures.slice(0, 50).map((s, i) => {
+                // 计算这一行需要额外显示哪些动态列（和表头保持一致）
+                const extraFields = conditions
+                  .map((cond) => cond.field)
+                  .filter((field, index, self) => self.indexOf(field) === index)
+                  .filter((field) => !['enthalpy', 'fitness', 'spaceGroup'].includes(field));
+
+                return (
+                  <tr key={s.id}>
+                    {/* 固定列的数据 */}
+                    <td>{i + 1}</td>
+                    <td style={{ fontWeight: 600 }}>EA{s.id}</td>
+                    <td>{s.formula}</td>
+                    <td>{s.spaceGroup}</td>
+                    <td>{s.enthalpy < 900 ? s.enthalpy.toFixed(4) : '—'}</td>
+                    <td>{s.fitness >= 0 ? s.fitness.toFixed(4) : '—'}</td>
+                    <td>{s.origin}</td>
+
+                    {/* 动态列的数据：从结构对象里读取对应字段的值 */}
+                    {extraFields.map((field) => {
+                      // 把结构对象当作一个普通字典来读取任意字段的值
+                      const rawValue = (s as unknown as Record<string, unknown>)[field];
+
+                      // 把值转成数字，方便判断是否有效
+                      const numValue = Number(rawValue);
+
+                      // 如果值不存在，或者不是有效数字，就显示破折号
+                      const displayValue = rawValue == null || isNaN(numValue)
+                        ? '—'
+                        : numValue < 900
+                          ? numValue.toFixed(4)
+                          : numValue.toFixed(1);
+
+                      return (
+                        <td key={field} style={{ color: 'var(--color-primary)' }}>
+                          {displayValue}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {sortedStructures.length > 50 && (
