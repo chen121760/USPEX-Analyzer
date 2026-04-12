@@ -58,6 +58,12 @@ const en = {
   'table.next': 'Next',
   "table.filterNumeric": "Numeric",
   "table.filterText": "Text",
+  "table.filterNComponents": "System Type",
+  "table.filterElemFraction": "Element Fraction",
+  "table.filterUnary": "Unary (1 element)",
+  "table.filterBinary": "Binary (2 elements)",
+  "table.filterTernary": "Ternary (3 elements)",
+  "table.filterSelectElement": "Select element",
 
 
   // ---- Upload Page ----
@@ -229,6 +235,7 @@ const en = {
   'filter.clearTags': 'Clear Tags',
   'filter.title': 'Filter & Export',
   'filter.conditions': 'Filter Conditions',
+  'filter.compositionFilter': 'Composition Filter',
   'filter.field': 'Field',
   'filter.operator': 'Operator',
   'filter.value': 'Value',

@@ -1,4 +1,4 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useUIStore } from '@/store/useUIStore';
@@ -7,6 +7,22 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { buildSeedsFile } from '@/lib/poscarWriter';
 import type { Structure, FilterCondition } from '@/types/structure';
+
+// 体系类型筛选条件（FilterPage 本地类型，不存入 UIStore）
+interface NComponentsCondition {
+  kind: 'nComponents';
+  value: 1 | 2 | 3;
+}
+
+// 元素摩尔分数筛选条件（FilterPage 本地类型）
+interface ElemFractionCondition {
+  kind: 'elementFraction';
+  element: string;
+  operator: '>' | '<' | '>=' | '<=' | '=';
+  value: number;
+}
+
+type LocalCondition = NComponentsCondition | ElemFractionCondition;
 
 
 const NUMERIC_FIELDS = [
@@ -102,6 +118,13 @@ export function FilterPage() {
   // secondObjPrefix 不需要持久化，保持简单
   const secondObjPrefix = 'Obj';
 
+  // 本地的体系类型 / 元素摩尔分数筛选条件（不需要持久化）
+  const [localConditions, setLocalConditions] = useState<LocalCondition[]>([]);
+  const [filterNComp, setFilterNComp] = useState<1 | 2 | 3>(2);
+  const [filterElemEl, setFilterElemEl] = useState('');
+  const [filterElemOp, setFilterElemOp] = useState<ElemFractionCondition['operator']>('>');
+  const [filterElemVal, setFilterElemVal] = useState('');
+
   // 点击标签时，循环切换三种状态：灰 → 绿（include）→ 红（exclude）→ 灰
   const handleTagClick = (tagId: string) => {
     // 读取当前状态（undefined = 灰色）
@@ -138,37 +161,48 @@ export function FilterPage() {
   const filteredStructures = useMemo(() => {
     let result = structures;
 
-    // 从 tagStates 字典里分别提取"必须含有"和"必须排除"的标签 id 列表
     const includedTagIds = Object.entries(tagStates)
       .filter(([, state]) => state === 'include')
-      .map(([id]) => id)
-
+      .map(([id]) => id);
     const excludedTagIds = Object.entries(tagStates)
       .filter(([, state]) => state === 'exclude')
-      .map(([id]) => id)
+      .map(([id]) => id);
 
-    // 包含过滤：结构必须同时拥有所有绿色标签
     if (includedTagIds.length > 0) {
-      result = result.filter((s) =>
-        includedTagIds.every((tagId) => s.tags.includes(tagId))
-      );
+      result = result.filter((s) => includedTagIds.every((tagId) => s.tags.includes(tagId)));
     }
-
-    // 排除过滤：结构不能含有任何红色标签
     if (excludedTagIds.length > 0) {
-      result = result.filter((s) =>
-        excludedTagIds.every((tagId) => !s.tags.includes(tagId))
-      );
+      result = result.filter((s) => excludedTagIds.every((tagId) => !s.tags.includes(tagId)));
     }
-
-    // 数值条件过滤
     if (conditions.length > 0) {
       result = result.filter((s) => applyAllConditions(s, conditions));
     }
 
+    // 本地条件：体系类型 + 元素摩尔分数
+    for (const lc of localConditions) {
+      if (lc.kind === 'nComponents') {
+        result = result.filter((s) => s.composition.filter((c) => c > 0).length === lc.value);
+      } else if (lc.kind === 'elementFraction') {
+        const elIdx = systemInfo?.elements.indexOf(lc.element) ?? -1;
+        if (elIdx === -1) continue;
+        result = result.filter((s) => {
+          const total = s.composition.reduce((a, b) => a + b, 0);
+          if (total === 0) return false;
+          const frac = s.composition[elIdx] / total;
+          switch (lc.operator) {
+            case '>':  return frac > lc.value;
+            case '<':  return frac < lc.value;
+            case '>=': return frac >= lc.value;
+            case '<=': return frac <= lc.value;
+            case '=':  return Math.abs(frac - lc.value) < 0.001;
+            default:   return true;
+          }
+        });
+      }
+    }
+
     return result;
-  // tagStates 包含了所有标签状态，conditions 是数值筛选条件，都要放进依赖数组
-  }, [structures, conditions, tagStates]);
+  }, [structures, conditions, tagStates, localConditions, systemInfo]);
 
 
   // Sort
@@ -364,6 +398,82 @@ export function FilterPage() {
               <Plus size={14} />
               {t('btn.addCondition')}
             </button>
+          </div>
+
+          {/* 体系类型 + 元素摩尔分数筛选 */}
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+              {t('filter.compositionFilter')}
+            </div>
+
+            {/* 体系类型 */}
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, color: 'var(--color-text-muted)', minWidth: 80 }}>{t('table.filterNComponents')}:</span>
+              <select value={filterNComp} onChange={(e) => setFilterNComp(Number(e.target.value) as 1 | 2 | 3)} style={selectStyle}>
+                <option value={1}>{t('table.filterUnary')}</option>
+                <option value={2}>{t('table.filterBinary')}</option>
+                <option value={3}>{t('table.filterTernary')}</option>
+              </select>
+              <button className="btn btn-outline btn-sm" style={{ fontSize: 11 }} onClick={() => {
+                const labelMap: Record<number, string> = { 1: t('table.filterUnary'), 2: t('table.filterBinary'), 3: t('table.filterTernary') };
+                setLocalConditions((prev) => [...prev, { kind: 'nComponents', value: filterNComp }]);
+                void labelMap;
+              }}>
+                <Plus size={12} /> {t('btn.addFilter')}
+              </button>
+            </div>
+
+            {/* 元素摩尔分数 */}
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, color: 'var(--color-text-muted)', minWidth: 80 }}>{t('table.filterElemFraction')}:</span>
+              <select value={filterElemEl} onChange={(e) => setFilterElemEl(e.target.value)} style={selectStyle}>
+                <option value="">{t('table.filterSelectElement')}</option>
+                {(systemInfo?.elements ?? []).map((el) => (
+                  <option key={el} value={el}>{el}</option>
+                ))}
+              </select>
+              <select value={filterElemOp} onChange={(e) => setFilterElemOp(e.target.value as ElemFractionCondition['operator'])} style={{ ...selectStyle, width: 50 }}>
+                <option value=">">&gt;</option>
+                <option value="<">&lt;</option>
+                <option value=">=">&ge;</option>
+                <option value="<=">&le;</option>
+                <option value="=">=</option>
+              </select>
+              <input type="number" min={0} max={1} step={0.01} value={filterElemVal}
+                onChange={(e) => setFilterElemVal(e.target.value)}
+                placeholder="0~1" style={{ ...inputStyle, width: 70 }} />
+              <button className="btn btn-outline btn-sm" style={{ fontSize: 11 }} onClick={() => {
+                if (!filterElemEl || filterElemVal === '') return;
+                setLocalConditions((prev) => [...prev, {
+                  kind: 'elementFraction',
+                  element: filterElemEl,
+                  operator: filterElemOp,
+                  value: Number(filterElemVal),
+                }]);
+                setFilterElemVal('');
+              }}>
+                <Plus size={12} /> {t('btn.addFilter')}
+              </button>
+            </div>
+
+            {/* 已激活的本地条件标签 */}
+            {localConditions.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                {localConditions.map((lc, i) => (
+                  <span key={i} style={{
+                    fontSize: 11, padding: '2px 8px', borderRadius: 12,
+                    background: 'var(--color-primary)', color: '#fff',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                  }}>
+                    {lc.kind === 'nComponents'
+                      ? ({ 1: t('table.filterUnary'), 2: t('table.filterBinary'), 3: t('table.filterTernary') })[lc.value]
+                      : `x(${lc.element}) ${lc.operator} ${lc.value}`}
+                    <X size={12} style={{ cursor: 'pointer' }}
+                      onClick={() => setLocalConditions((prev) => prev.filter((_, idx) => idx !== i))} />
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <div

@@ -37,17 +37,36 @@ interface NumericFilterCondition {
 }
 
 // 文字筛选条件的数据结构
-// values 是一个数组，因为可以同时选多个值（比如选多个 origin）
 interface TextFilterCondition {
   kind: 'text';
   column: TextFilterColumn;
   label: string;
   operator: 'contains' | 'notContains' | 'equals' | 'notEquals';
-  values: string[];  // 多选的值列表
+  values: string[];
 }
 
-// 两种条件合并成一个联合类型，方便统一存储
-type FilterCondition = NumericFilterCondition | TextFilterCondition;
+// 体系类型筛选：一元/二元/三元
+interface NComponentsFilterCondition {
+  kind: 'nComponents';
+  label: string;
+  value: 1 | 2 | 3;  // 1=一元, 2=二元, 3=三元
+}
+
+// 元素摩尔分数筛选：某元素的摩尔分数满足条件
+interface ElementFractionFilterCondition {
+  kind: 'elementFraction';
+  label: string;
+  element: string;       // 元素符号，如 "Li"
+  operator: '>' | '<' | '>=' | '<=' | '=';
+  value: number;         // 摩尔分数，0~1
+}
+
+// 四种条件合并成一个联合类型
+type FilterCondition =
+  | NumericFilterCondition
+  | TextFilterCondition
+  | NComponentsFilterCondition
+  | ElementFractionFilterCondition;
 
 
 function SortIcon({ sorted }: { sorted: false | 'asc' | 'desc' }) {
@@ -325,15 +344,19 @@ export function DataTablePage() {
   const hasFingerprint = structures.some((s) => s.qEntropy != null && s.qEntropy > 0);
 
   // 当前正在编辑的筛选条件（还没点"添加"）
-  // colKind 区分当前选的列是数字列还是文字列
-  const [colKind, setColKind] = useState<'numeric' | 'text'>('numeric');
+  const [colKind, setColKind] = useState<'numeric' | 'text' | 'nComponents' | 'elementFraction'>('numeric');
   const [filterNumCol, setFilterNumCol] = useState<NumericFilterColumn>('enthalpy');
   const [filterNumOp, setFilterNumOp] = useState<NumericFilterCondition['operator']>('>');
   const [filterNumVal, setFilterNumVal] = useState('');
   const [filterTextCol, setFilterTextCol] = useState<TextFilterColumn>('formula');
   const [filterTextOp, setFilterTextOp] = useState<TextFilterCondition['operator']>('contains');
-  // 文字筛选的输入框（单行输入，回车或逗号分隔多个值）
   const [filterTextInput, setFilterTextInput] = useState('');
+  // 体系类型筛选：1=一元, 2=二元, 3=三元
+  const [filterNComp, setFilterNComp] = useState<1 | 2 | 3>(2);
+  // 元素摩尔分数筛选
+  const [filterElemEl, setFilterElemEl] = useState('');
+  const [filterElemOp, setFilterElemOp] = useState<ElementFractionFilterCondition['operator']>('>');
+  const [filterElemVal, setFilterElemVal] = useState('');
 
   // 所有可选的数字列（从数据里动态判断哪些有值）
   const numericFilterColumns = useMemo(() => {
@@ -638,7 +661,6 @@ export function DataTablePage() {
     // 遍历所有筛选条件，逐一过滤
     for (const f of filters) {
       if (f.kind === 'numeric') {
-        // 数字条件：读取对应字段的数值，用运算符比较
         data = data.filter((s) => {
           const val = (s as unknown as Record<string, number>)[f.column];
           if (val == null) return false;
@@ -651,28 +673,47 @@ export function DataTablePage() {
             default:   return true;
           }
         });
-      } else {
-        // 文字条件：读取对应字段的文字，检查是否包含/等于 values 里的任意一个
+      } else if (f.kind === 'text') {
         data = data.filter((s) => {
           const val = String((s as unknown as Record<string, unknown>)[f.column] ?? '').toLowerCase();
-          // 检查 val 是否匹配 values 里的任意一个（只要匹配一个就算）
           const matchesAny = f.values.some((v) => {
             const target = v.toLowerCase();
             if (f.operator === 'contains' || f.operator === 'notContains') {
               return val.includes(target);
             } else {
-              // equals / notEquals：精确匹配
               return val === target;
             }
           });
-          // contains/equals：匹配到就保留；notContains/notEquals：匹配到就排除
           return (f.operator === 'contains' || f.operator === 'equals') ? matchesAny : !matchesAny;
+        });
+      } else if (f.kind === 'nComponents') {
+        // 体系类型：composition 数组中非零元素的个数
+        data = data.filter((s) => {
+          const n = s.composition.filter((c) => c > 0).length;
+          return n === f.value;
+        });
+      } else if (f.kind === 'elementFraction') {
+        // 元素摩尔分数：先找到该元素在 systemInfo.elements 里的下标
+        const elIdx = systemInfo?.elements.indexOf(f.element) ?? -1;
+        if (elIdx === -1) continue;
+        data = data.filter((s) => {
+          const total = s.composition.reduce((a, b) => a + b, 0);
+          if (total === 0) return false;
+          const frac = s.composition[elIdx] / total;
+          switch (f.operator) {
+            case '>':  return frac > f.value;
+            case '<':  return frac < f.value;
+            case '>=': return frac >= f.value;
+            case '<=': return frac <= f.value;
+            case '=':  return Math.abs(frac - f.value) < 0.001;
+            default:   return true;
+          }
         });
       }
     }
 
     return data;
-  }, [structures, selectedTag, filters]);
+  }, [structures, selectedTag, filters, systemInfo]);
 
   const table = useReactTable({
     data: tableData,
@@ -768,14 +809,16 @@ export function DataTablePage() {
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{t('table.filterLabel')}</span>
 
-        {/* 切换数字列 / 文字列 */}
+        {/* 切换筛选类型 */}
         <select
           value={colKind}
-          onChange={(e) => setColKind(e.target.value as 'numeric' | 'text')}
+          onChange={(e) => setColKind(e.target.value as typeof colKind)}
           style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
         >
           <option value="numeric">{t('table.filterNumeric')}</option>
           <option value="text">{t('table.filterText')}</option>
+          <option value="nComponents">{t('table.filterNComponents')}</option>
+          <option value="elementFraction">{t('table.filterElemFraction')}</option>
         </select>
 
         {colKind === 'numeric' ? (
@@ -830,7 +873,7 @@ export function DataTablePage() {
               {t('btn.addFilter')}
             </button>
           </>
-        ) : (
+        ) : colKind === 'text' ? (
           <>
             {/* 文字列选择 */}
             <select
@@ -859,7 +902,6 @@ export function DataTablePage() {
               size={3}
               value={filterTextInput.split(',').filter(Boolean)}
               onChange={(e) => {
-                // 把所有选中的 option 的 value 用逗号拼起来
                 const selected = Array.from(e.target.selectedOptions).map((o) => o.value);
                 setFilterTextInput(selected.join(','));
               }}
@@ -895,6 +937,87 @@ export function DataTablePage() {
               {t('btn.addFilter')}
             </button>
           </>
+        ) : colKind === 'nComponents' ? (
+          <>
+            {/* 体系类型选择 */}
+            <select
+              value={filterNComp}
+              onChange={(e) => setFilterNComp(Number(e.target.value) as 1 | 2 | 3)}
+              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            >
+              <option value={1}>{t('table.filterUnary')}</option>
+              <option value={2}>{t('table.filterBinary')}</option>
+              <option value={3}>{t('table.filterTernary')}</option>
+            </select>
+            <button
+              className="btn btn-sm btn-primary"
+              style={{ fontSize: 11, padding: '3px 10px' }}
+              onClick={() => {
+                const labelMap: Record<number, string> = { 1: t('table.filterUnary'), 2: t('table.filterBinary'), 3: t('table.filterTernary') };
+                setFilters((prev) => [...prev, {
+                  kind: 'nComponents',
+                  label: labelMap[filterNComp],
+                  value: filterNComp,
+                }]);
+                setPageIndex(0);
+              }}
+            >
+              {t('btn.addFilter')}
+            </button>
+          </>
+        ) : (
+          <>
+            {/* 元素选择 */}
+            <select
+              value={filterElemEl}
+              onChange={(e) => setFilterElemEl(e.target.value)}
+              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            >
+              <option value="">{t('table.filterSelectElement')}</option>
+              {(systemInfo?.elements ?? []).map((el) => (
+                <option key={el} value={el}>{el}</option>
+              ))}
+            </select>
+            {/* 运算符 */}
+            <select
+              value={filterElemOp}
+              onChange={(e) => setFilterElemOp(e.target.value as ElementFractionFilterCondition['operator'])}
+              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', width: 50 }}
+            >
+              <option value=">">&gt;</option>
+              <option value="<">&lt;</option>
+              <option value=">=">&ge;</option>
+              <option value="<=">&le;</option>
+              <option value="=">=</option>
+            </select>
+            {/* 摩尔分数输入 0~1 */}
+            <input
+              type="number"
+              min={0} max={1} step={0.01}
+              value={filterElemVal}
+              onChange={(e) => setFilterElemVal(e.target.value)}
+              placeholder="0~1"
+              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', width: 70 }}
+            />
+            <button
+              className="btn btn-sm btn-primary"
+              style={{ fontSize: 11, padding: '3px 10px' }}
+              onClick={() => {
+                if (!filterElemEl || filterElemVal === '') return;
+                setFilters((prev) => [...prev, {
+                  kind: 'elementFraction',
+                  label: `x(${filterElemEl})`,
+                  element: filterElemEl,
+                  operator: filterElemOp,
+                  value: Number(filterElemVal),
+                }]);
+                setFilterElemVal('');
+                setPageIndex(0);
+              }}
+            >
+              {t('btn.addFilter')}
+            </button>
+          </>
         )}
 
         {/* 重置按钮：有任何筛选条件时才显示 */}
@@ -921,10 +1044,13 @@ export function DataTablePage() {
                 display: 'flex', alignItems: 'center', gap: 4,
               }}
             >
-              {/* 数字条件显示：列名 运算符 数值 */}
               {f.kind === 'numeric'
                 ? `${f.label} ${f.operator} ${f.value}`
-                : `${f.label} ${t(`table.filter${f.operator.charAt(0).toUpperCase() + f.operator.slice(1)}`)} [${f.values.join(', ')}]`
+                : f.kind === 'nComponents'
+                  ? f.label
+                  : f.kind === 'elementFraction'
+                    ? `x(${f.element}) ${f.operator} ${f.value}`
+                    : `${f.label} ${t(`table.filter${f.operator.charAt(0).toUpperCase() + f.operator.slice(1)}`)} [${f.values.join(', ')}]`
               }
               <X
                 size={12}

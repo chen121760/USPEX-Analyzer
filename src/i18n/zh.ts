@@ -58,6 +58,12 @@ const zh = {
   'table.next': '下一页',
   "table.filterNumeric": "数值列",
   "table.filterText": "文本列",
+  "table.filterNComponents": "体系类型",
+  "table.filterElemFraction": "元素摩尔分数",
+  "table.filterUnary": "一元（1种元素）",
+  "table.filterBinary": "二元（2种元素）",
+  "table.filterTernary": "三元（3种元素）",
+  "table.filterSelectElement": "选择元素",
 
 
   // ---- Upload Page ----
@@ -229,6 +235,7 @@ const zh = {
   'filter.clearTags': '清除标签',
   'filter.title': '筛选与导出',
   'filter.conditions': '筛选条件',
+  'filter.compositionFilter': '组成筛选',
   'filter.field': '字段',
   'filter.operator': '运算符',
   'filter.value': '值',
