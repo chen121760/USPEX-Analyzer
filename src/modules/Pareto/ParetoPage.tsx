@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import { useUIStore } from '@/store/useUIStore';
+import { formulaToHtml } from '@/parsers/compositionUtils';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyData = any;
 
@@ -85,7 +86,7 @@ export function ParetoPage() {
       line: showLines ? { color, width: 1.5, dash: 'dot' } : undefined,
       text: pts.map(
         (s) =>
-          `EA${s.id}: ${s.formula}<br>` +
+          `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
           `Fitness: ${s.fitness.toFixed(4)}<br>` +
           `${objName}: ${s.extraProps![paretoKey!].toFixed(3)}<br>` +
           `SG: ${s.spaceGroup} | Origin: ${s.origin}`,

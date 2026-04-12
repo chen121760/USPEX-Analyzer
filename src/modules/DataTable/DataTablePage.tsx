@@ -16,6 +16,7 @@ import {
   ArrowUpDown, ArrowUp, ArrowDown, Search, Eye, GitBranch, ArrowLeftRight, Tag, MessageSquare, X,
 } from 'lucide-react';
 import { LineagePanel } from './LineagePanel';
+import { FormulaDisplay } from '@/components/FormulaDisplay';
 import type { Structure } from '@/types/structure';
 
 // 数字列：支持 > < >= <= = 运算符
@@ -402,12 +403,13 @@ export function DataTablePage() {
         accessorKey: 'formula',
         header: t('col.formula'),
         size: 100,
+        cell: ({ getValue }) => <FormulaDisplay formula={getValue<string>()} />,
       },
       {
         id: 'tags',
         accessorFn: (s) => s.tags,
         header: t('col.tags'),
-        size: 80,
+        size: 100,
         enableSorting: false,
         cell: ({ row }) => {
           const s = row.original;
@@ -772,8 +774,8 @@ export function DataTablePage() {
           onChange={(e) => setColKind(e.target.value as 'numeric' | 'text')}
           style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
         >
-          <option value="numeric"># {t('col.enthalpy').split(' ')[0]}...</option>
-          <option value="text">Aa {t('col.formula')}/{t('col.origin')}</option>
+          <option value="numeric">{t('table.filterNumeric')}</option>
+          <option value="text">{t('table.filterText')}</option>
         </select>
 
         {colKind === 'numeric' ? (

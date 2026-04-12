@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import type { Structure, SystemInfo } from '@/types/structure';
 import { useUIStore } from '@/store/useUIStore';
+import { formulaToHtml } from '@/parsers/compositionUtils';
 
 /**
  * Compute 2D lower convex hull (Andrew's monotone chain).
@@ -78,10 +79,11 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
       },
       text: unstable.map(
         (s) =>
-          `EA${s.id}: ${s.formula}<br>` +
-          `Enthalpy: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
-          `Fitness: ${s.fitness.toFixed(4)}<br>` +
-          `SG: ${s.spaceGroup} | Origin: ${s.origin}`,
+          `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
+          `ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
+          `Fitness: ${s.fitness.toFixed(4)} eV/atom<br>` +
+          `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>` +
+          `Origin: ${s.origin}`,
       ),
       customdata: unstable.map((s) => s.id),
       hoverinfo: 'text' as const,
@@ -102,14 +104,16 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
       type: 'scatter' as const,
       name: 'Stable',
       marker: { color: '#dc2626', size: 10, symbol: 'diamond' },
-      text: stable.map((s) => s.formula),
+      text: stable.map((s) => formulaToHtml(s.formula)),
       textposition: 'top center' as const,
       textfont: { size: 10 },
       hovertext: stable.map(
         (s) =>
-          `EA${s.id}: ${s.formula}<br>` +
-          `Enthalpy: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
-          `SG: ${s.spaceGroup}`,
+          `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
+          `ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
+          `Fitness: ${s.fitness.toFixed(4)} eV/atom<br>` +
+          `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>` +
+          `Origin: ${s.origin}`,
       ),
       customdata: stable.map((s) => s.id),
       hoverinfo: 'text' as const,

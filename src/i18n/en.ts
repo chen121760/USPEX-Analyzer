@@ -56,6 +56,9 @@ const en = {
   'table.last': 'Last',
   'table.prev': 'Prev',
   'table.next': 'Next',
+  "table.filterNumeric": "Numeric",
+  "table.filterText": "Text",
+
 
   // ---- Upload Page ----
   'upload.title': 'Upload USPEX Output Files',

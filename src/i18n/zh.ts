@@ -56,6 +56,9 @@ const zh = {
   'table.last': '末页',
   'table.prev': '上一页',
   'table.next': '下一页',
+  "table.filterNumeric": "数值列",
+  "table.filterText": "文本列",
+
 
   // ---- Upload Page ----
   'upload.title': '上传 USPEX 输出文件',

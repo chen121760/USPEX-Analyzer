@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useUIStore } from '@/store/useUIStore';
 import Plot, { type PlotMouseEvent } from 'react-plotly.js';
+import { formulaToHtml } from '@/parsers/compositionUtils';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyData = any;
 import type { Structure } from '@/types/structure';
@@ -107,7 +108,7 @@ export function ExplorerPage() {
         },
         text: filteredData.map(
           (s) =>
-            `EA${s.id}: ${s.formula}<br>` +
+            `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
             `${xField.label}: ${xField.accessor(s)}<br>` +
             `${yField.label}: ${yField.accessor(s)}<br>` +
             `SG: ${s.spaceGroup} | Origin: ${s.origin}`,
