@@ -15,7 +15,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import type { Structure, SystemInfo } from '@/types/structure';
-import { ternaryToCartesian } from '@/parsers/compositionUtils';
+import { ternaryToCartesian, formulaToHtml } from '@/parsers/compositionUtils';
 import { useUIStore } from '@/store/useUIStore';
 import { computeTernaryHullEdges, uniqueHullPoints, type TernaryHullInput } from '@/lib/ternaryHull';
 import { StructureViewerModal } from '@/components/StructureViewer/StructureViewerModal';
@@ -69,13 +69,18 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
     // Compute tie-lines
     const edges = computeTernaryHullEdges(stableInputs);
 
-    // Unique stable points for display
+    // Unique stable points for display — join back to full Structure for hover info
     const uniqueStable = uniqueHullPoints(stableInputs);
+    const structureMap = new Map(structures.map((s) => [s.id, s]));
+    const uniqueStableFull = uniqueStable.map((p) => ({
+      ...p,
+      full: structureMap.get(p.id),
+    }));
 
-    return { unstableWithCoords, stableInputs, uniqueStable, edges, elements };
+    return { unstableWithCoords, stableInputs, uniqueStableFull, edges, elements };
   }, [structures, systemInfo, fitnessMax]);
 
-  const { unstableWithCoords, uniqueStable, edges, elements } = plotData;
+  const { unstableWithCoords, uniqueStableFull, edges, elements } = plotData;
 
   // Triangle vertices
   const triVerts = [[0, 0], [0.5, Math.sqrt(3) / 2], [1, 0], [0, 0]];
@@ -117,10 +122,11 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
       },
       text: unstableWithCoords.map(
         (s) =>
-          `EA${s.id}: ${s.formula}<br>` +
-          `Enthalpy: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
-          `Fitness: ${s.fitness.toFixed(4)}<br>` +
-          `SG: ${s.spaceGroup} | Origin: ${s.origin}`,
+          `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
+          `ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
+          `Fitness: ${s.fitness.toFixed(4)} eV/atom<br>` +
+          `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>` +
+          `Origin: ${s.origin}`,
       ),
       hoverinfo: 'text' as const,
       customdata: unstableWithCoords.map((s) => s.id),
@@ -139,30 +145,36 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
 
     // Stable points
     {
-      x: uniqueStable.map((p) => p.cartX),
-      y: uniqueStable.map((p) => p.cartY),
+      x: uniqueStableFull.map((p) => p.cartX),
+      y: uniqueStableFull.map((p) => p.cartY),
       mode: 'markers+text' as const,
       type: 'scatter' as const,
       name: 'Stable',
       marker: { color: '#dc2626', size: 10, symbol: 'diamond' },
-      text: uniqueStable.map((p) => {
+      text: uniqueStableFull.map((p) => {
         if (elements.length >= 3) {
-          return elements.map((el, i) => {
+          const plain = elements.map((el, i) => {
             const count = p.composition[i];
             return count === 0 ? '' : count === 1 ? el : `${el}${count}`;
           }).filter(Boolean).join('');
+          return formulaToHtml(plain);
         }
         return `EA${p.id}`;
       }),
       textposition: 'top center' as const,
       textfont: { size: 8 },
-      hovertext: uniqueStable.map((p) =>
-        `EA${p.id}<br>` +
-        `Enthalpy: ${p.enthalpy.toFixed(4)} eV/atom<br>` +
-        `Composition: [${p.composition.join(', ')}]`,
-      ),
+      hovertext: uniqueStableFull.map((p) => {
+        const s = p.full;
+        return (
+          `EA${p.id}: ${formulaToHtml(s?.formula ?? '')}<br>` +
+          `ΔH: ${p.enthalpy.toFixed(4)} eV/atom<br>` +
+          `Fitness: 0.0000 eV/atom<br>` +
+          `SG: ${s?.spaceGroup ?? '—'} | Gen: ${s?.generation ?? '—'}<br>` +
+          `Origin: ${s?.origin ?? '—'}`
+        );
+      }),
       hoverinfo: 'text' as const,
-      customdata: uniqueStable.map((p) => p.id),
+      customdata: uniqueStableFull.map((p) => p.id),
     },
   ];
 
@@ -242,10 +254,10 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
       {/* Stable phases list */}
       <div className="card" style={{ marginTop: 16 }}>
         <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--color-text-secondary)' }}>
-          {t('hull.stablePhases')} ({uniqueStable.length})
+          {t('hull.stablePhases')} ({uniqueStableFull.length})
         </h3>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {uniqueStable.map((p) => {
+          {uniqueStableFull.map((p) => {
             const formula = elements.length >= 3
               ? elements.map((el, i) => p.composition[i] === 0 ? '' : p.composition[i] === 1 ? el : `${el}${p.composition[i]}`).filter(Boolean).join('')
               : `EA${p.id}`;

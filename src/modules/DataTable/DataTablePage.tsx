@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useUIStore } from '@/store/useUIStore';
@@ -15,16 +16,57 @@ import {
   ArrowUpDown, ArrowUp, ArrowDown, Search, Eye, GitBranch, ArrowLeftRight, Tag, MessageSquare, X,
 } from 'lucide-react';
 import { LineagePanel } from './LineagePanel';
+import { FormulaDisplay } from '@/components/FormulaDisplay';
 import type { Structure } from '@/types/structure';
 
-type NumericFilterColumn = 'enthalpy' | 'fitness' | 'volume' | 'density' | 'spaceGroup' | 'generation';
+// 数字列：支持 > < >= <= = 运算符
+type NumericFilterColumn = 'enthalpy' | 'fitness' | 'volume' | 'density' | 'spaceGroup' | 'generation'
+  | 'paretoFront' | 'bulkModulus' | 'shearModulus' | 'youngModulus' | 'poissonRatio'
+  | 'pughRatio' | 'vickersHardness' | 'fractureToughness' | 'qEntropy' | 'aOrder' | 'sOrder';
 
-interface FilterCondition {
+// 文字列：支持"包含"和"不包含"，可多选值
+type TextFilterColumn = 'formula' | 'origin';
+
+// 数字筛选条件的数据结构
+interface NumericFilterCondition {
+  kind: 'numeric';
   column: NumericFilterColumn;
   label: string;
   operator: '>' | '<' | '>=' | '<=' | '=';
   value: number;
 }
+
+// 文字筛选条件的数据结构
+interface TextFilterCondition {
+  kind: 'text';
+  column: TextFilterColumn;
+  label: string;
+  operator: 'contains' | 'notContains' | 'equals' | 'notEquals';
+  values: string[];
+}
+
+// 体系类型筛选：一元/二元/三元
+interface NComponentsFilterCondition {
+  kind: 'nComponents';
+  label: string;
+  value: 1 | 2 | 3;  // 1=一元, 2=二元, 3=三元
+}
+
+// 元素摩尔分数筛选：某元素的摩尔分数满足条件
+interface ElementFractionFilterCondition {
+  kind: 'elementFraction';
+  label: string;
+  element: string;       // 元素符号，如 "Li"
+  operator: '>' | '<' | '>=' | '<=' | '=';
+  value: number;         // 摩尔分数，0~1
+}
+
+// 四种条件合并成一个联合类型
+type FilterCondition =
+  | NumericFilterCondition
+  | TextFilterCondition
+  | NComponentsFilterCondition
+  | ElementFractionFilterCondition;
 
 
 function SortIcon({ sorted }: { sorted: false | 'asc' | 'desc' }) {
@@ -46,16 +88,44 @@ function TagPicker({
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  // pos 是下拉框的最终显示位置，初始值在 handleOpen 里计算，之后由视口矫正 useEffect 微调
+  const [pos, setPos] = useState({ top: 0, left: 0 });
 
-  // 点击外部关闭
+  // 点击外部关闭：同时排除 triggerRef 和 dropdownRef 内部的点击
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      const insideTrigger  = triggerRef.current?.contains(target);
+      const insideDropdown = dropdownRef.current?.contains(target);
+      if (!insideTrigger && !insideDropdown) setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  // 视口边界矫正：下拉框渲染后，检查是否超出屏幕边缘，超出则调整位置
+  useEffect(() => {
+    if (!open || !dropdownRef.current) return;
+    const rect = dropdownRef.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    // 每次只做最小幅度的矫正，避免抖动
+    setPos((prev) => {
+      let { top, left } = prev;
+      // 右侧溢出：左移，让下拉框右边缘贴住视口右边缘（留 8px 间距）
+      if (rect.right > vw - 8) left = left - (rect.right - vw + 8);
+      // 底部溢出：向上弹出，让下拉框出现在触发按钮上方
+      if (rect.bottom > vh - 8 && triggerRef.current) {
+        const triggerRect = triggerRef.current.getBoundingClientRect();
+        top = triggerRect.top - rect.height - 4;
+      }
+      // 左侧溢出（矫正过头了）：贴住左边缘
+      if (left < 8) left = 8;
+      return { top, left };
+    });
   }, [open]);
 
   const toggle = (tagId: string) => {
@@ -65,11 +135,20 @@ function TagPicker({
     onToggle(structureId, next);
   };
 
+  const handleOpen = () => {
+    if (!open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      // 初始位置：触发按钮正下方，左对齐
+      setPos({ top: rect.bottom + 4, left: rect.left });
+    }
+    setOpen((v) => !v);
+  };
+
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <div ref={triggerRef}>
       {/* 已选标签 + 点击区域 */}
       <div
-        onClick={() => setOpen(!open)}
+        onClick={handleOpen}
         style={{
           display: 'flex', gap: 4, flexWrap: 'wrap', cursor: 'pointer',
           minHeight: 24, alignItems: 'center', padding: '2px 4px',
@@ -77,58 +156,46 @@ function TagPicker({
         }}
         title="点击编辑标签"
       >
-        {currentTags.length === 0 && (
-          <Tag size={12} style={{ opacity: 0.3 }} />
-        )}
+        {currentTags.length === 0 && <Tag size={12} style={{ opacity: 0.3 }} />}
         {currentTags.map((tagId) => {
           const tag = allTags.find((t) => t.id === tagId);
           if (!tag) return null;
           return (
-            <span
-              key={tagId}
-              className="tag-badge"
-              style={{ background: `${tag.color}20`, color: tag.color, fontSize: 11 }}
-            >
+            <span key={tagId} className="tag-badge"
+              style={{ background: `${tag.color}20`, color: tag.color, fontSize: 11 }}>
               {t(tag.nameKey)}
             </span>
           );
         })}
       </div>
 
-      {/* 下拉框 */}
-      {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, zIndex: 50,
+      {/* 下拉框：portal 到 body，视口矫正后显示 */}
+      {open && createPortal(
+        <div ref={dropdownRef} style={{
+          position: 'fixed', top: pos.top, left: pos.left,
+          zIndex: 9999,
           background: 'var(--color-surface)', border: '1px solid var(--color-border)',
           borderRadius: 8, padding: 6, minWidth: 160,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
         }}>
           {allTags.map((tag) => {
             const checked = currentTags.includes(tag.id);
             return (
-              <label
-                key={tag.id}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '5px 8px', borderRadius: 4, cursor: 'pointer',
-                  fontSize: 12, color: 'var(--color-text)',
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => toggle(tag.id)}
-                  style={{ accentColor: tag.color }}
-                />
-                <span style={{
-                  width: 10, height: 10, borderRadius: '50%',
-                  background: tag.color, flexShrink: 0,
-                }} />
+              <label key={tag.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '5px 8px', borderRadius: 4, cursor: 'pointer',
+                fontSize: 12, color: 'var(--color-text)',
+              }}>
+                <input type="checkbox" checked={checked}
+                  onChange={() => toggle(tag.id)} style={{ accentColor: tag.color }} />
+                <span style={{ width: 10, height: 10, borderRadius: '50%',
+                  background: tag.color, flexShrink: 0 }} />
                 {t(tag.nameKey)}
               </label>
             );
           })}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -146,12 +213,18 @@ function NotesEditor({
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState(currentNotes);
-  const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, right: 0 });
 
+  // 点击外部时保存并关闭
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const outsidePopup   = popupRef.current   && !popupRef.current.contains(target);
+      const outsideTrigger = triggerRef.current && !triggerRef.current.contains(target);
+      if (outsidePopup && outsideTrigger) {
         onSave(structureId, text);
         setOpen(false);
       }
@@ -160,52 +233,76 @@ function NotesEditor({
     return () => document.removeEventListener('mousedown', handler);
   }, [open, text, structureId, onSave]);
 
-  if (!open) {
-    return (
+  // 视口边界矫正：弹框渲染后检查是否超出底部，超出则改为向上弹出
+  useEffect(() => {
+    if (!open || !popupRef.current || !triggerRef.current) return;
+    const popupRect   = popupRef.current.getBoundingClientRect();
+    const triggerRect = triggerRef.current.getBoundingClientRect();
+    const vh = window.innerHeight;
+    if (popupRect.bottom > vh - 8) {
+      // 底部溢出：改为在触发按钮上方弹出
+      setPos((prev) => ({
+        ...prev,
+        top: triggerRect.top - popupRect.height - 4,
+      }));
+    }
+  }, [open]);
+
+  const handleOpen = () => {
+    setText(currentNotes);
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      // 初始位置：按钮正下方，右对齐到按钮右边缘
+      setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+    }
+    setOpen(true);
+  };
+
+  return (
+    <>
       <button
+        ref={triggerRef}
         className="btn btn-ghost btn-sm"
-        onClick={() => { setText(currentNotes); setOpen(true); }}
+        onClick={handleOpen}
         title={currentNotes || '添加备注'}
-        style={{
-          padding: '2px 6px',
-          color: currentNotes ? 'var(--color-primary)' : undefined,
-        }}
+        style={{ padding: '2px 6px', color: currentNotes ? 'var(--color-primary)' : undefined }}
       >
         <MessageSquare size={14} />
       </button>
-    );
-  }
 
-  return (
-    <div ref={ref} style={{
-      position: 'absolute', right: 0, top: '100%', zIndex: 50,
-      background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-      borderRadius: 8, padding: 10, width: 240,
-      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <span style={{ fontSize: 12, fontWeight: 600 }}>EA{structureId} 备注</span>
-        <button
-          className="btn btn-ghost btn-sm"
-          onClick={() => { onSave(structureId, text); setOpen(false); }}
-          style={{ padding: 2 }}
-        >
-          <X size={14} />
-        </button>
-      </div>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="写点备注..."
-        rows={3}
-        style={{
-          width: '100%', padding: 8, borderRadius: 6, fontSize: 12,
-          border: '1px solid var(--color-border)', resize: 'vertical',
-          background: 'var(--color-bg)', color: 'var(--color-text)',
-          boxSizing: 'border-box', outline: 'none',
-        }}
-      />
-    </div>
+      {open && createPortal(
+        <div ref={popupRef} style={{
+          position: 'fixed', top: pos.top, right: pos.right,
+          zIndex: 9999,
+          background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+          borderRadius: 8, padding: 10, width: 240,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 600 }}>EA{structureId} 备注</span>
+            <button className="btn btn-ghost btn-sm"
+              onClick={() => { onSave(structureId, text); setOpen(false); }}
+              style={{ padding: 2 }}>
+              <X size={14} />
+            </button>
+          </div>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="写点备注..."
+            rows={3}
+            autoFocus
+            style={{
+              width: '100%', padding: 8, borderRadius: 6, fontSize: 12,
+              border: '1px solid var(--color-border)', resize: 'vertical',
+              background: 'var(--color-bg)', color: 'var(--color-text)',
+              boxSizing: 'border-box', outline: 'none',
+            }}
+          />
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 
@@ -220,30 +317,92 @@ export function DataTablePage() {
   const toggleCompare = useUIStore((s) => s.toggleCompare);
   const compareIds = useUIStore((s) => s.compareIds);
 
-  const [sorting, setSorting] = useState<SortingState>([]);
+  // 排序状态从 UIStore 读取，切换页面后不会丢失
+  const sortingRaw    = useUIStore((s) => s.tableSorting) as SortingState;
+  const setSortingRaw = useUIStore((s) => s.setTableSorting);
+  // react-table 的 onSortingChange 可能传入新值，也可能传入一个"更新函数"
+  // 这个包装函数统一处理两种情况
+  const sorting = sortingRaw;
+  const setSorting = (updaterOrValue: SortingState | ((old: SortingState) => SortingState)) => {
+    if (typeof updaterOrValue === 'function') {
+      setSortingRaw(updaterOrValue(sortingRaw));
+    } else {
+      setSortingRaw(updaterOrValue);
+    }
+  };
   const [globalFilter, setGlobalFilter] = useState('');
   const [lineageId, setLineageId] = useState<number | null>(null);
   const [selectedTag, setSelectedTag] = useState<string>('');
   const [filters, setFilters] = useState<FilterCondition[]>([]);
-  const [filterCol, setFilterCol] = useState<NumericFilterColumn>('enthalpy');
-  const [filterOp, setFilterOp] = useState<FilterCondition['operator']>('>');
-  const [filterVal, setFilterVal] = useState('');
-
-  const filterableColumns = useMemo(() => [
-    { key: 'enthalpy' as const, label: t('col.enthalpy') },
-    { key: 'fitness' as const, label: t('col.fitness') },
-    { key: 'volume' as const, label: t('col.volume') },
-    { key: 'density' as const, label: t('col.density') },
-    { key: 'spaceGroup' as const, label: t('col.spaceGroup') },
-    { key: 'generation' as const, label: t('col.generation') },
-  ], [t]);
 
   const [pageIndex, setPageIndex] = useState(0);
   const pageSize = 50;
 
-  const hasPareto = systemInfo?.optimizationType === 'multi';
-  const hasML = structures.some((s) => s.bulkModulus != null);
+  // 这三个变量要在 numericFilterColumns 之前定义，因为后者依赖它们
+  const hasPareto     = systemInfo?.optimizationType === 'multi';
+  const hasML         = structures.some((s) => s.bulkModulus != null);
   const hasFingerprint = structures.some((s) => s.qEntropy != null && s.qEntropy > 0);
+
+  // 当前正在编辑的筛选条件（还没点"添加"）
+  const [colKind, setColKind] = useState<'numeric' | 'text' | 'nComponents' | 'elementFraction'>('numeric');
+  const [filterNumCol, setFilterNumCol] = useState<NumericFilterColumn>('enthalpy');
+  const [filterNumOp, setFilterNumOp] = useState<NumericFilterCondition['operator']>('>');
+  const [filterNumVal, setFilterNumVal] = useState('');
+  const [filterTextCol, setFilterTextCol] = useState<TextFilterColumn>('formula');
+  const [filterTextOp, setFilterTextOp] = useState<TextFilterCondition['operator']>('contains');
+  const [filterTextInput, setFilterTextInput] = useState('');
+  // 体系类型筛选：1=一元, 2=二元, 3=三元
+  const [filterNComp, setFilterNComp] = useState<1 | 2 | 3>(2);
+  // 元素摩尔分数筛选
+  const [filterElemEl, setFilterElemEl] = useState('');
+  const [filterElemOp, setFilterElemOp] = useState<ElementFractionFilterCondition['operator']>('>');
+  const [filterElemVal, setFilterElemVal] = useState('');
+
+  // 所有可选的数字列（从数据里动态判断哪些有值）
+  const numericFilterColumns = useMemo(() => {
+    // 基础列：永远存在
+    const base: { key: NumericFilterColumn; label: string }[] = [
+      { key: 'enthalpy',   label: t('col.enthalpy') },
+      { key: 'fitness',    label: t('col.fitness') },
+      { key: 'volume',     label: t('col.volume') },
+      { key: 'density',    label: t('col.density') },
+      { key: 'spaceGroup', label: t('col.spaceGroup') },
+      { key: 'generation', label: t('col.generation') },
+    ];
+    // 条件列：只有数据里有这个字段才加进来
+    if (hasPareto)     base.push({ key: 'paretoFront',       label: t('col.paretoFront') });
+    if (hasML) {
+      base.push({ key: 'bulkModulus',       label: t('col.bulk') });
+      base.push({ key: 'shearModulus',      label: t('col.shear') });
+      base.push({ key: 'youngModulus',      label: t('col.young') });
+      base.push({ key: 'poissonRatio',      label: t('col.poisson') });
+      base.push({ key: 'pughRatio',         label: t('col.pugh') });
+      base.push({ key: 'vickersHardness',   label: t('col.hardness') });
+      base.push({ key: 'fractureToughness', label: t('col.toughness') });
+    }
+    if (hasFingerprint) {
+      base.push({ key: 'qEntropy', label: t('col.qEntropy') });
+      base.push({ key: 'aOrder',   label: t('col.aOrder') });
+      base.push({ key: 'sOrder',   label: t('col.sOrder') });
+    }
+    return base;
+  }, [t, hasPareto, hasML, hasFingerprint]);
+
+  // 文字列：固定两个
+  const textFilterColumns: { key: TextFilterColumn; label: string }[] = useMemo(() => [
+    { key: 'formula', label: t('col.formula') },
+    { key: 'origin',  label: t('col.origin') },
+  ], [t]);
+
+  // 文字列的可选值（从数据里收集所有出现过的值，供用户点选）
+  const textColumnOptions = useMemo(() => {
+    const formulaSet = new Set(structures.map((s) => s.formula));
+    const originSet  = new Set(structures.map((s) => s.origin));
+    return {
+      formula: Array.from(formulaSet).sort(),
+      origin:  Array.from(originSet).sort(),
+    };
+  }, [structures]);
 
   // Collect all extraProps keys present in data
   const extraPropKeys = useMemo(() => {
@@ -267,12 +426,13 @@ export function DataTablePage() {
         accessorKey: 'formula',
         header: t('col.formula'),
         size: 100,
+        cell: ({ getValue }) => <FormulaDisplay formula={getValue<string>()} />,
       },
       {
         id: 'tags',
         accessorFn: (s) => s.tags,
         header: t('col.tags'),
-        size: 120,
+        size: 100,
         enableSorting: false,
         cell: ({ row }) => {
           const s = row.original;
@@ -304,9 +464,7 @@ export function DataTablePage() {
               <button className="btn btn-ghost btn-sm" onClick={() => toggleCompare(s.id)} title={isInCompare ? t('compare.removeFromCompare') : t('compare.addToCompare')} style={{ padding: '2px 6px', color: isInCompare ? 'var(--color-primary)' : undefined }}>
                 <ArrowLeftRight size={14} />
               </button>
-              <div style={{ position: 'relative' }}>
-                <NotesEditor structureId={s.id} currentNotes={s.notes} onSave={updateStructureNotes} />
-              </div>
+              <NotesEditor structureId={s.id} currentNotes={s.notes} onSave={updateStructureNotes} />
               <button className="btn btn-ghost btn-sm" onClick={() => setLineageId(s.id)} title="查看谱系 / Lineage" style={{ padding: '2px 6px' }}>
                 <GitBranch size={14} />
               </button>
@@ -500,24 +658,62 @@ export function DataTablePage() {
       data = data.filter((s) => s.tags.includes(selectedTag));
     }
 
-    // 数值筛选
+    // 遍历所有筛选条件，逐一过滤
     for (const f of filters) {
-      data = data.filter((s) => {
-        const val = (s as unknown as Record<string, number>)[f.column];
-        if (val == null) return false;
-        switch (f.operator) {
-          case '>': return val > f.value;
-          case '<': return val < f.value;
-          case '>=': return val >= f.value;
-          case '<=': return val <= f.value;
-          case '=': return Math.abs(val - f.value) < 0.0001;
-          default: return true;
-        }
-      });
+      if (f.kind === 'numeric') {
+        data = data.filter((s) => {
+          const val = (s as unknown as Record<string, number>)[f.column];
+          if (val == null) return false;
+          switch (f.operator) {
+            case '>':  return val > f.value;
+            case '<':  return val < f.value;
+            case '>=': return val >= f.value;
+            case '<=': return val <= f.value;
+            case '=':  return Math.abs(val - f.value) < 0.0001;
+            default:   return true;
+          }
+        });
+      } else if (f.kind === 'text') {
+        data = data.filter((s) => {
+          const val = String((s as unknown as Record<string, unknown>)[f.column] ?? '').toLowerCase();
+          const matchesAny = f.values.some((v) => {
+            const target = v.toLowerCase();
+            if (f.operator === 'contains' || f.operator === 'notContains') {
+              return val.includes(target);
+            } else {
+              return val === target;
+            }
+          });
+          return (f.operator === 'contains' || f.operator === 'equals') ? matchesAny : !matchesAny;
+        });
+      } else if (f.kind === 'nComponents') {
+        // 体系类型：composition 数组中非零元素的个数
+        data = data.filter((s) => {
+          const n = s.composition.filter((c) => c > 0).length;
+          return n === f.value;
+        });
+      } else if (f.kind === 'elementFraction') {
+        // 元素摩尔分数：先找到该元素在 systemInfo.elements 里的下标
+        const elIdx = systemInfo?.elements.indexOf(f.element) ?? -1;
+        if (elIdx === -1) continue;
+        data = data.filter((s) => {
+          const total = s.composition.reduce((a, b) => a + b, 0);
+          if (total === 0) return false;
+          const frac = s.composition[elIdx] / total;
+          switch (f.operator) {
+            case '>':  return frac > f.value;
+            case '<':  return frac < f.value;
+            case '>=': return frac >= f.value;
+            case '<=': return frac <= f.value;
+            case '=':  return Math.abs(frac - f.value) < 0.001;
+            default:   return true;
+          }
+        });
+      }
     }
 
     return data;
-  }, [structures, selectedTag, filters]);
+  }, [structures, selectedTag, filters, systemInfo]);
 
   const table = useReactTable({
     data: tableData,
@@ -554,9 +750,10 @@ export function DataTablePage() {
   return (
     <div className="fade-in">
 
-    {/* Toolbar */}
+    {/* ===== 工具栏 ===== */}
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
-      {/* 搜索 + 计数 */}
+
+      {/* 搜索框 + 结果计数 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ position: 'relative', flex: 1, maxWidth: 300 }}>
           <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)' }} />
@@ -566,14 +763,9 @@ export function DataTablePage() {
             value={globalFilter}
             onChange={(e) => { setGlobalFilter(e.target.value); setPageIndex(0); }}
             style={{
-              width: '100%',
-              padding: '6px 12px 6px 30px',
-              border: '1px solid var(--color-border)',
-              borderRadius: 6,
-              fontSize: 13,
-              background: 'var(--color-bg)',
-              color: 'var(--color-text)',
-              outline: 'none',
+              width: '100%', padding: '6px 12px 6px 30px',
+              border: '1px solid var(--color-border)', borderRadius: 6,
+              fontSize: 13, background: 'var(--color-bg)', color: 'var(--color-text)', outline: 'none',
             }}
           />
         </div>
@@ -582,15 +774,15 @@ export function DataTablePage() {
         </span>
       </div>
 
-      {/* 标签筛选 */}
+      {/* 标签筛选行 */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>标签:</span>
+        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{t('table.tagLabel')}</span>
         <button
           className={`btn btn-sm ${!selectedTag ? 'btn-primary' : 'btn-outline'}`}
           onClick={() => { setSelectedTag(''); setPageIndex(0); }}
           style={{ fontSize: 11, padding: '2px 8px' }}
         >
-          全部
+          {t('btn.all')}
         </button>
         {tags.map((tag) => {
           const count = structures.filter((s) => s.tags.includes(tag.id)).length;
@@ -601,8 +793,7 @@ export function DataTablePage() {
               className={`btn btn-sm ${selectedTag === tag.id ? 'btn-primary' : 'btn-outline'}`}
               onClick={() => { setSelectedTag(selectedTag === tag.id ? '' : tag.id); setPageIndex(0); }}
               style={{
-                fontSize: 11,
-                padding: '2px 8px',
+                fontSize: 11, padding: '2px 8px',
                 borderColor: tag.color,
                 color: selectedTag === tag.id ? '#fff' : tag.color,
                 background: selectedTag === tag.id ? tag.color : 'transparent',
@@ -613,90 +804,235 @@ export function DataTablePage() {
           );
         })}
       </div>
-      {/* 数值筛选 */}
+
+      {/* 筛选条件构建行 */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>筛选 Filter:</span>
+        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{t('table.filterLabel')}</span>
 
-        {/* 选列 */}
+        {/* 切换筛选类型 */}
         <select
-          value={filterCol}
-          onChange={(e) => setFilterCol(e.target.value as NumericFilterColumn)}
-          style={{
-            padding: '3px 6px', fontSize: 12, borderRadius: 4,
-            border: '1px solid var(--color-border)',
-            background: 'var(--color-bg)', color: 'var(--color-text)',
-          }}
+          value={colKind}
+          onChange={(e) => setColKind(e.target.value as typeof colKind)}
+          style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
         >
-            {filterableColumns.map((c) => (
-              <option key={c.key} value={c.key}>{c.label}</option>
-            ))}
+          <option value="numeric">{t('table.filterNumeric')}</option>
+          <option value="text">{t('table.filterText')}</option>
+          <option value="nComponents">{t('table.filterNComponents')}</option>
+          <option value="elementFraction">{t('table.filterElemFraction')}</option>
         </select>
 
-        {/* 选运算符 */}
-        <select
-          value={filterOp}
-          onChange={(e) => setFilterOp(e.target.value as FilterCondition['operator'])}
-          style={{
-            padding: '3px 6px', fontSize: 12, borderRadius: 4,
-            border: '1px solid var(--color-border)',
-            background: 'var(--color-bg)', color: 'var(--color-text)',
-            width: 50,
-          }}
-        >
-          <option value=">">&gt;</option>
-          <option value="<">&lt;</option>
-          <option value=">=">&ge;</option>
-          <option value="<=">&le;</option>
-          <option value="=">=</option>
-        </select>
+        {colKind === 'numeric' ? (
+          <>
+            {/* 数字列选择 */}
+            <select
+              value={filterNumCol}
+              onChange={(e) => setFilterNumCol(e.target.value as NumericFilterColumn)}
+              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            >
+              {numericFilterColumns.map((c) => (
+                <option key={c.key} value={c.key}>{c.label}</option>
+              ))}
+            </select>
+            {/* 运算符 */}
+            <select
+              value={filterNumOp}
+              onChange={(e) => setFilterNumOp(e.target.value as NumericFilterCondition['operator'])}
+              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', width: 50 }}
+            >
+              <option value=">">&gt;</option>
+              <option value="<">&lt;</option>
+              <option value=">=">&ge;</option>
+              <option value="<=">&le;</option>
+              <option value="=">=</option>
+            </select>
+            {/* 数值输入 */}
+            <input
+              type="number"
+              value={filterNumVal}
+              onChange={(e) => setFilterNumVal(e.target.value)}
+              placeholder={t('table.filterPlaceholder')}
+              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', width: 80 }}
+            />
+            <button
+              className="btn btn-sm btn-primary"
+              style={{ fontSize: 11, padding: '3px 10px' }}
+              onClick={() => {
+                if (filterNumVal === '') return;
+                const col = numericFilterColumns.find((c) => c.key === filterNumCol);
+                setFilters((prev) => [...prev, {
+                  kind: 'numeric',
+                  column: filterNumCol,
+                  label: col?.label || filterNumCol,
+                  operator: filterNumOp,
+                  value: Number(filterNumVal),
+                }]);
+                setFilterNumVal('');
+                setPageIndex(0);
+              }}
+            >
+              {t('btn.addFilter')}
+            </button>
+          </>
+        ) : colKind === 'text' ? (
+          <>
+            {/* 文字列选择 */}
+            <select
+              value={filterTextCol}
+              onChange={(e) => setFilterTextCol(e.target.value as TextFilterColumn)}
+              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            >
+              {textFilterColumns.map((c) => (
+                <option key={c.key} value={c.key}>{c.label}</option>
+              ))}
+            </select>
+            {/* 文字运算符 */}
+            <select
+              value={filterTextOp}
+              onChange={(e) => setFilterTextOp(e.target.value as TextFilterCondition['operator'])}
+              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            >
+              <option value="contains">{t('table.filterContains')}</option>
+              <option value="notContains">{t('table.filterNotContains')}</option>
+              <option value="equals">{t('table.filterEquals')}</option>
+              <option value="notEquals">{t('table.filterNotEquals')}</option>
+            </select>
+            {/* 可选值下拉（多选） */}
+            <select
+              multiple
+              size={3}
+              value={filterTextInput.split(',').filter(Boolean)}
+              onChange={(e) => {
+                const selected = Array.from(e.target.selectedOptions).map((o) => o.value);
+                setFilterTextInput(selected.join(','));
+              }}
+              style={{
+                padding: '2px 4px', fontSize: 11, borderRadius: 4,
+                border: '1px solid var(--color-border)',
+                background: 'var(--color-bg)', color: 'var(--color-text)',
+                minWidth: 120, maxWidth: 200,
+              }}
+            >
+              {textColumnOptions[filterTextCol].map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+            <button
+              className="btn btn-sm btn-primary"
+              style={{ fontSize: 11, padding: '3px 10px' }}
+              onClick={() => {
+                const values = filterTextInput.split(',').filter(Boolean);
+                if (values.length === 0) return;
+                const col = textFilterColumns.find((c) => c.key === filterTextCol);
+                setFilters((prev) => [...prev, {
+                  kind: 'text',
+                  column: filterTextCol,
+                  label: col?.label || filterTextCol,
+                  operator: filterTextOp,
+                  values,
+                }]);
+                setFilterTextInput('');
+                setPageIndex(0);
+              }}
+            >
+              {t('btn.addFilter')}
+            </button>
+          </>
+        ) : colKind === 'nComponents' ? (
+          <>
+            {/* 体系类型选择 */}
+            <select
+              value={filterNComp}
+              onChange={(e) => setFilterNComp(Number(e.target.value) as 1 | 2 | 3)}
+              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            >
+              <option value={1}>{t('table.filterUnary')}</option>
+              <option value={2}>{t('table.filterBinary')}</option>
+              <option value={3}>{t('table.filterTernary')}</option>
+            </select>
+            <button
+              className="btn btn-sm btn-primary"
+              style={{ fontSize: 11, padding: '3px 10px' }}
+              onClick={() => {
+                const labelMap: Record<number, string> = { 1: t('table.filterUnary'), 2: t('table.filterBinary'), 3: t('table.filterTernary') };
+                setFilters((prev) => [...prev, {
+                  kind: 'nComponents',
+                  label: labelMap[filterNComp],
+                  value: filterNComp,
+                }]);
+                setPageIndex(0);
+              }}
+            >
+              {t('btn.addFilter')}
+            </button>
+          </>
+        ) : (
+          <>
+            {/* 元素选择 */}
+            <select
+              value={filterElemEl}
+              onChange={(e) => setFilterElemEl(e.target.value)}
+              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            >
+              <option value="">{t('table.filterSelectElement')}</option>
+              {(systemInfo?.elements ?? []).map((el) => (
+                <option key={el} value={el}>{el}</option>
+              ))}
+            </select>
+            {/* 运算符 */}
+            <select
+              value={filterElemOp}
+              onChange={(e) => setFilterElemOp(e.target.value as ElementFractionFilterCondition['operator'])}
+              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', width: 50 }}
+            >
+              <option value=">">&gt;</option>
+              <option value="<">&lt;</option>
+              <option value=">=">&ge;</option>
+              <option value="<=">&le;</option>
+              <option value="=">=</option>
+            </select>
+            {/* 摩尔分数输入 0~1 */}
+            <input
+              type="number"
+              min={0} max={1} step={0.01}
+              value={filterElemVal}
+              onChange={(e) => setFilterElemVal(e.target.value)}
+              placeholder="0~1"
+              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', width: 70 }}
+            />
+            <button
+              className="btn btn-sm btn-primary"
+              style={{ fontSize: 11, padding: '3px 10px' }}
+              onClick={() => {
+                if (!filterElemEl || filterElemVal === '') return;
+                setFilters((prev) => [...prev, {
+                  kind: 'elementFraction',
+                  label: `x(${filterElemEl})`,
+                  element: filterElemEl,
+                  operator: filterElemOp,
+                  value: Number(filterElemVal),
+                }]);
+                setFilterElemVal('');
+                setPageIndex(0);
+              }}
+            >
+              {t('btn.addFilter')}
+            </button>
+          </>
+        )}
 
-        {/* 输入数值 */}
-        <input
-          type="number"
-          value={filterVal}
-          onChange={(e) => setFilterVal(e.target.value)}
-          placeholder="数值"
-          style={{
-            padding: '3px 6px', fontSize: 12, borderRadius: 4,
-            border: '1px solid var(--color-border)',
-            background: 'var(--color-bg)', color: 'var(--color-text)',
-            width: 80,
-          }}
-        />
-
-        {/* 添加按钮 */}
-        <button
-          className="btn btn-sm btn-primary"
-          style={{ fontSize: 11, padding: '3px 10px' }}
-          onClick={() => {
-            if (filterVal === '') return;
-            const col = filterableColumns.find((c) => c.key === filterCol);
-            setFilters((prev) => [...prev, {
-              column: filterCol,
-              label: col?.label || filterCol,
-              operator: filterOp,
-              value: Number(filterVal),
-            }]);
-            setFilterVal('');
-            setPageIndex(0);
-          }}
-        >
-          添加 Add
-        </button>
-
-        {/* 重置按钮 */}
+        {/* 重置按钮：有任何筛选条件时才显示 */}
         {filters.length > 0 && (
           <button
             className="btn btn-sm btn-outline"
             style={{ fontSize: 11, padding: '3px 10px' }}
             onClick={() => { setFilters([]); setSelectedTag(''); setGlobalFilter(''); setPageIndex(0); }}
           >
-            重置 Reset
+            {t('btn.resetFilter')}
           </button>
         )}
       </div>
 
-      {/* 已激活的筛选条件（小标签） */}
+      {/* 已激活的筛选条件（小标签，点 × 可单独删除） */}
       {filters.length > 0 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {filters.map((f, i) => (
@@ -708,114 +1044,146 @@ export function DataTablePage() {
                 display: 'flex', alignItems: 'center', gap: 4,
               }}
             >
-              {f.label} {f.operator} {f.value}
+              {f.kind === 'numeric'
+                ? `${f.label} ${f.operator} ${f.value}`
+                : f.kind === 'nComponents'
+                  ? f.label
+                  : f.kind === 'elementFraction'
+                    ? `x(${f.element}) ${f.operator} ${f.value}`
+                    : `${f.label} ${t(`table.filter${f.operator.charAt(0).toUpperCase() + f.operator.slice(1)}`)} [${f.values.join(', ')}]`
+              }
               <X
                 size={12}
                 style={{ cursor: 'pointer' }}
-                onClick={() => {
-                  setFilters((prev) => prev.filter((_, idx) => idx !== i));
-                  setPageIndex(0);
-                }}
+                onClick={() => { setFilters((prev) => prev.filter((_, idx) => idx !== i)); setPageIndex(0); }}
               />
             </span>
           ))}
         </div>
-      )}  
+      )}
     </div>
 
+    {/* ===== 表格 ===== */}
+    {/*
+      overflow: auto  → 让表格可以横向和纵向滚动
+      position: relative → 让内部的 sticky 定位生效（sticky 需要一个有滚动的父容器）
+    */}
+    <div style={{ overflow: 'auto', maxHeight: 'calc(100vh - 220px)', border: '1px solid var(--color-border)', borderRadius: 8, position: 'relative' }}>
+      {/*
+        tableLayout: 'fixed' → 列宽完全由 th 的 width 决定，不会被内容撑开
+        width: table.getTotalSize() → 表格总宽度 = 所有列宽之和，确保横向滚动正确
+      */}
+      <table
+        className="data-table"
+        style={{
+          borderCollapse: 'separate',
+          borderSpacing: 0,
+          tableLayout: 'fixed',
+          width: table.getTotalSize(),
+          minWidth: table.getTotalSize(),
+        }}
+      >
+        <thead>
+          {table.getHeaderGroups().map((hg) => (
+            <tr key={hg.id}>
+              {hg.headers.map((header, colIndex) => {
+                const isSticky = colIndex < 4;
+                const stickyLeft = isSticky
+                  ? hg.headers.slice(0, colIndex).reduce((sum, h) => sum + h.getSize(), 0)
+                  : undefined;
+                // 列宽：同时设 width / minWidth / maxWidth，配合 tableLayout: fixed 才能精确控制
+                const colWidth = header.getSize();
 
-      {/* Table */}
-      <div style={{ overflow: 'auto', maxHeight: 'calc(100vh - 180px)', border: '1px solid var(--color-border)', borderRadius: 8 }}>
-        <table className="data-table">
-          <thead>
-            {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id}>
-                {hg.headers.map((header) => (
+                return (
                   <th
                     key={header.id}
                     onClick={header.column.getCanSort() ? header.column.getToggleSortingHandler() : undefined}
-                    style={{ width: header.getSize(), cursor: header.column.getCanSort() ? 'pointer' : 'default' }}
+                    style={{
+                      width: colWidth,
+                      minWidth: colWidth,
+                      maxWidth: colWidth,
+                      cursor: header.column.getCanSort() ? 'pointer' : 'default',
+                      position: isSticky ? 'sticky' : undefined,
+                      left: stickyLeft,
+                      zIndex: isSticky ? 3 : 1,
+                      background: 'var(--color-surface)',
+                      borderRight: colIndex === 3 ? '2px solid var(--color-border)' : undefined,
+                    }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       {flexRender(header.column.columnDef.header, header.getContext())}
-                      {header.column.getCanSort() && (
-                        <SortIcon sorted={header.column.getIsSorted()} />
-                      )}
+                      {header.column.getCanSort() && <SortIcon sorted={header.column.getIsSorted()} />}
                     </div>
                   </th>
-                ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody>
-            {table.getRowModel().rows
-              .slice(currentPageIndex * pageSize, (currentPageIndex + 1) * pageSize)
-              .map((row) => (
-              <tr key={row.original.id}>
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id}>
+                );
+              })}
+            </tr>
+          ))}
+        </thead>
+        <tbody>
+          {table.getRowModel().rows
+            .slice(currentPageIndex * pageSize, (currentPageIndex + 1) * pageSize)
+            .map((row) => (
+            <tr key={row.original.id}>
+              {row.getVisibleCells().map((cell, colIndex) => {
+                const isSticky = colIndex < 4;
+                const stickyLeft = isSticky
+                  ? row.getVisibleCells().slice(0, colIndex).reduce((sum, c) => sum + c.column.getSize(), 0)
+                  : undefined;
+                const colWidth = cell.column.getSize();
+
+                return (
+                  <td
+                    key={cell.id}
+                    style={{
+                      width: colWidth,
+                      minWidth: colWidth,
+                      maxWidth: colWidth,
+                      // overflow: hidden 配合 tableLayout: fixed，防止内容撑开列宽
+                      overflow: 'hidden',
+                      position: isSticky ? 'sticky' : undefined,
+                      left: stickyLeft,
+                      zIndex: isSticky ? 2 : undefined,
+                      background: 'var(--color-bg)',
+                      borderRight: colIndex === 3 ? '2px solid var(--color-border)' : undefined,
+                    }}
+                  >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
 
-      {/* 分页 */}
-      <div style={{
-        display: 'flex', justifyContent: 'center', alignItems: 'center',
-        gap: 12, marginTop: 12, fontSize: 13,
-      }}>
-        <button
-          className="btn btn-outline btn-sm"
-          onClick={() => setPageIndex(0)}
-          disabled={currentPageIndex === 0}
-        >
-          首页
-        </button>
-        <button
-          className="btn btn-outline btn-sm"
-          onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
-          disabled={currentPageIndex === 0}
-        >
-          上一页
-        </button>
-        <span style={{ color: 'var(--color-text-secondary)' }}>
-          第 {currentPageIndex + 1} / {totalPages} 页
-        </span>
-        <button
-          className="btn btn-outline btn-sm"
-          onClick={() => setPageIndex((p) => Math.min(totalPages - 1, p + 1))}
-          disabled={currentPageIndex >= totalPages - 1}
-        >
-          下一页
-        </button>
-        <button
-          className="btn btn-outline btn-sm"
-          onClick={() => setPageIndex(totalPages - 1)}
-          disabled={currentPageIndex >= totalPages - 1}
-        >
-          末页
-        </button>
-      </div>
+    {/* 分页控制 */}
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 12, fontSize: 13 }}>
+      <button className="btn btn-outline btn-sm" onClick={() => setPageIndex(0)} disabled={currentPageIndex === 0}>{t('table.first')}</button>
+      <button className="btn btn-outline btn-sm" onClick={() => setPageIndex((p) => Math.max(0, p - 1))} disabled={currentPageIndex === 0}>{t('table.prev')}</button>
+      <span style={{ color: 'var(--color-text-secondary)' }}>
+        {t('table.page')} {currentPageIndex + 1} {t('table.of')} {totalPages}
+      </span>
+      <button className="btn btn-outline btn-sm" onClick={() => setPageIndex((p) => Math.min(totalPages - 1, p + 1))} disabled={currentPageIndex >= totalPages - 1}>{t('table.next')}</button>
+      <button className="btn btn-outline btn-sm" onClick={() => setPageIndex(totalPages - 1)} disabled={currentPageIndex >= totalPages - 1}>{t('table.last')}</button>
+    </div>
 
-      {/* ↓ 谱系面板加在这里 ↓ */}
-      {lineageId !== null && (() => {
-        const target = structures.find((s) => s.id === lineageId);
-        if (!target) return null;
-        return (
-          <LineagePanel
-            structure={target}
-            allStructures={structures}
-            systemInfo={systemInfo!}
-            onClose={() => setLineageId(null)}
-            onSelect={(id) => setLineageId(id)}
-            onViewStructure={openViewer}
-          />
-        );
-      })()}
+    {/* 谱系面板（点击谱系按钮后弹出） */}
+    {lineageId !== null && (() => {
+      const target = structures.find((s) => s.id === lineageId);
+      if (!target) return null;
+      return (
+        <LineagePanel
+          structure={target}
+          allStructures={structures}
+          systemInfo={systemInfo!}
+          onClose={() => setLineageId(null)}
+          onSelect={(id) => setLineageId(id)}
+          onViewStructure={openViewer}
+        />
+      );
+    })()}
 
     </div>
   );

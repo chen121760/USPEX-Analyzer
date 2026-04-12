@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import type { Structure, SystemInfo } from '@/types/structure';
 import { useUIStore } from '@/store/useUIStore';
+import { formulaToHtml } from '@/parsers/compositionUtils';
 
 
 /** Palette for auto-assigning colors to any origin method */
@@ -56,7 +57,7 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
       fitness: top.map((s) => s.fitness ?? 0),
       colors: top.map((s) => getOriginColor(s.origin)),
       hoverTexts: top.map((s) =>
-        `EA${s.id}: ${s.formula}<br>` +
+        `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
         `ΔH: ${(s.fitness ?? 0).toFixed(4)} eV/atom<br>` +
         `Enthalpy: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
         `SG: ${s.spaceGroup}<br>` +

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useUIStore } from '@/store/useUIStore';
 import { X, Eye, ArrowLeftRight } from 'lucide-react';
+import { FormulaDisplay } from '@/components/FormulaDisplay';
 import type { Structure } from '@/types/structure';
 
 /** Property row for the comparison table */
@@ -41,7 +42,7 @@ function StructureCard({ structure, onRemove }: { structure: Structure; onRemove
       <div style={{ textAlign: 'center', marginBottom: 8 }}>
         <div style={{ fontSize: 16, fontWeight: 700 }}>EA{structure.id}</div>
         <div style={{ fontSize: 14, color: 'var(--color-text-secondary)' }}>
-          {structure.formula}
+          <FormulaDisplay formula={structure.formula} />
         </div>
         <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
           SG {structure.spaceGroup}
@@ -129,7 +130,7 @@ export function ComparePage() {
               </th>
               {compareStructures.map((s) => (
                 <th key={s.id} style={{ textAlign: 'left', padding: '8px 12px', fontSize: 12, fontWeight: 600, borderBottom: '2px solid var(--color-border)' }}>
-                  EA{s.id} ({s.formula})
+                  EA{s.id} (<FormulaDisplay formula={s.formula} />)
                 </th>
               ))}
             </tr>

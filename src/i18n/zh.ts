@@ -38,6 +38,33 @@ const zh = {
   'btn.tagFilter': '标签筛选',
   'btn.selectAll': '全选',
   'btn.deselectAll': '取消全选',
+  'btn.addFilter': '添加',
+  'btn.resetFilter': '重置',
+  'btn.all': '全部',
+
+  // ---- DataTable toolbar ----
+  'table.tagLabel': '标签:',
+  'table.filterLabel': '筛选:',
+  'table.filterPlaceholder': '数值',
+  'table.filterContains': '包含',
+  'table.filterNotContains': '不包含',
+  'table.filterEquals': '等于',
+  'table.filterNotEquals': '不等于',
+  'table.page': '第',
+  'table.of': '/',
+  'table.first': '首页',
+  'table.last': '末页',
+  'table.prev': '上一页',
+  'table.next': '下一页',
+  "table.filterNumeric": "数值列",
+  "table.filterText": "文本列",
+  "table.filterNComponents": "体系类型",
+  "table.filterElemFraction": "元素摩尔分数",
+  "table.filterUnary": "一元（1种元素）",
+  "table.filterBinary": "二元（2种元素）",
+  "table.filterTernary": "三元（3种元素）",
+  "table.filterSelectElement": "选择元素",
+
 
   // ---- Upload Page ----
   'upload.title': '上传 USPEX 输出文件',
@@ -203,8 +230,12 @@ const zh = {
   'compare.hint': '请从表格中选择 2–4 个结构进行对比',
 
   // ---- Filter & Export ----
+  'filter.tagFilter': '标签筛选',
+  'filter.tagFilterHint': '单击变绿（必须含有），再次单击变红（必须排除），第三次单击恢复',
+  'filter.clearTags': '清除标签',
   'filter.title': '筛选与导出',
   'filter.conditions': '筛选条件',
+  'filter.compositionFilter': '组成筛选',
   'filter.field': '字段',
   'filter.operator': '运算符',
   'filter.value': '值',

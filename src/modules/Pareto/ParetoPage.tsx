@@ -1,8 +1,9 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import { useUIStore } from '@/store/useUIStore';
+import { formulaToHtml } from '@/parsers/compositionUtils';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyData = any;
 
@@ -27,12 +28,26 @@ export function ParetoPage() {
     return Array.from(fronts).sort((a, b) => a - b);
   }, [structures]);
 
-  const [selectedFronts, setSelectedFronts] = useState<Set<number>>(new Set());
-  const [showLines, setShowLines] = useState(true);
+  // 从 UIStore 读取 Pareto 页面状态，切换页面后不会丢失
+  const selectedFrontsArr    = useUIStore((s) => s.paretoSelectedFronts);
+  const setSelectedFrontsArr = useUIStore((s) => s.setParetoSelectedFronts);
+  const showLines            = useUIStore((s) => s.paretoShowLines);
+  const setShowLines         = useUIStore((s) => s.setParetoShowLines);
 
-  // Sync selectedFronts when frontNumbers changes (e.g. data loads)
+  // UIStore 里存的是普通数组（因为 Set 无法被 JSON 序列化存到 localStorage）
+  // 这里把数组转回 Set，方便后面用 .has() 判断
+  const selectedFronts = new Set(selectedFrontsArr);
+
+  // 把 Set 转回数组再存进 UIStore 的辅助函数
+  const setSelectedFronts = (next: Set<number>) => {
+    setSelectedFrontsArr(Array.from(next));
+  };
+
+  // 数据加载后，如果还没有选中任何前沿，默认选前 3 个
   useEffect(() => {
-    setSelectedFronts(new Set(frontNumbers.slice(0, 3)));
+    if (selectedFrontsArr.length === 0 && frontNumbers.length > 0) {
+      setSelectedFrontsArr(frontNumbers.slice(0, 3));
+    }
   }, [frontNumbers]);
 
   const toggleFront = (n: number) => {
@@ -71,7 +86,7 @@ export function ParetoPage() {
       line: showLines ? { color, width: 1.5, dash: 'dot' } : undefined,
       text: pts.map(
         (s) =>
-          `EA${s.id}: ${s.formula}<br>` +
+          `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
           `Fitness: ${s.fitness.toFixed(4)}<br>` +
           `${objName}: ${s.extraProps![paretoKey!].toFixed(3)}<br>` +
           `SG: ${s.spaceGroup} | Origin: ${s.origin}`,

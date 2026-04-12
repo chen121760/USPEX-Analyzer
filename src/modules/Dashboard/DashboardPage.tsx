@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useUIStore } from '@/store/useUIStore';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { formulaToHtml } from '@/parsers/compositionUtils';
 
 /** Count occurrences of a field value */
 function countBy<T>(items: T[], accessor: (item: T) => string): Record<string, number> {
@@ -24,7 +25,7 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
   );
 }
 
-function BarChart({ data, maxBars = 15 }: { data: Record<string, number>; maxBars?: number }) {
+function BarChart({ data, maxBars = 15, htmlLabels = false }: { data: Record<string, number>; maxBars?: number; htmlLabels?: boolean }) {
   const sorted = Object.entries(data)
     .sort((a, b) => b[1] - a[1])
     .slice(0, maxBars);
@@ -36,7 +37,9 @@ function BarChart({ data, maxBars = 15 }: { data: Record<string, number>; maxBar
       {sorted.map(([label, count]) => (
         <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
           <span style={{ minWidth: 80, textAlign: 'right', color: 'var(--color-text-secondary)', fontWeight: 500 }}>
-            {label}
+            {htmlLabels
+              ? <span dangerouslySetInnerHTML={{ __html: formulaToHtml(label) }} />
+              : label}
           </span>
           <div style={{ flex: 1, background: 'var(--color-bg-tertiary)', borderRadius: 3, height: 18, overflow: 'hidden' }}>
             <div
@@ -142,7 +145,7 @@ export function DashboardPage() {
             <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--color-text-secondary)' }}>
               {t('dashboard.compositionDistribution')}
             </h3>
-            <BarChart data={stats.compDist} maxBars={20} />
+            <BarChart data={stats.compDist} maxBars={20} htmlLabels />
           </div>
         </div>
       )}

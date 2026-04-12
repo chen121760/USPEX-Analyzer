@@ -5,6 +5,7 @@ import { useProjectStore } from '@/store/useProjectStore';
 import { JSmolViewer } from './JSmolViewer';
 import type { JSmolViewerHandle } from './JSmolViewer';
 import { X } from 'lucide-react';
+import { formulaToHtml } from '@/parsers/compositionUtils';
 
 /** Jmol script snippets for toolbar buttons */
 const SCRIPTS = {
@@ -116,9 +117,8 @@ export function StructureViewerModal() {
     }
   };
 
-  // Info line
-  const info = [
-    structure.formula,
+  // Info line — formula 单独渲染以支持下标，其余部分拼成字符串
+  const infoSuffix = [
     `SG: ${structure.spaceGroup}`,
     structure.latticeParams
       ? `a=${structure.latticeParams.a.toFixed(2)} b=${structure.latticeParams.b.toFixed(2)} c=${structure.latticeParams.c.toFixed(2)}`
@@ -126,7 +126,7 @@ export function StructureViewerModal() {
   ].filter(Boolean).join('  |  ');
 
   return (
-    <ModalShell onClose={closeViewer} title={`EA${structure.id} — ${structure.formula}`}>
+    <ModalShell onClose={closeViewer} title={<>EA{structure.id} — <span dangerouslySetInnerHTML={{ __html: formulaToHtml(structure.formula) }} /></>}>
       {/* Info bar */}
       <div style={{
         padding: '6px 16px',
@@ -135,7 +135,8 @@ export function StructureViewerModal() {
         borderBottom: '1px solid var(--color-border, #e5e7eb)',
         background: 'var(--color-bg, #f9fafb)',
       }}>
-        {info}
+        <span dangerouslySetInnerHTML={{ __html: formulaToHtml(structure.formula) }} />
+        {infoSuffix && <>{'  |  '}{infoSuffix}</>}
       </div>
 
       {/* Main content: viewer + toolbar */}
@@ -391,7 +392,7 @@ export function StructureViewerModal() {
 function ModalShell({ children, onClose, title }: {
   children: React.ReactNode;
   onClose: () => void;
-  title: string;
+  title: React.ReactNode;
 }) {
   return (
     <div

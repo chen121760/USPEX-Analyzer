@@ -38,6 +38,33 @@ const en = {
   'btn.tagFilter': 'Tag Filter',
   'btn.selectAll': 'Select All',
   'btn.deselectAll': 'Deselect All',
+  'btn.addFilter': 'Add',
+  'btn.resetFilter': 'Reset',
+  'btn.all': 'All',
+
+  // ---- DataTable toolbar ----
+  'table.tagLabel': 'Tag:',
+  'table.filterLabel': 'Filter:',
+  'table.filterPlaceholder': 'Value',
+  'table.filterContains': 'contains',
+  'table.filterNotContains': 'not contains',
+  'table.filterEquals': 'equals',
+  'table.filterNotEquals': 'not equals',
+  'table.page': 'Page',
+  'table.of': 'of',
+  'table.first': 'First',
+  'table.last': 'Last',
+  'table.prev': 'Prev',
+  'table.next': 'Next',
+  "table.filterNumeric": "Numeric",
+  "table.filterText": "Text",
+  "table.filterNComponents": "System Type",
+  "table.filterElemFraction": "Element Fraction",
+  "table.filterUnary": "Unary (1 element)",
+  "table.filterBinary": "Binary (2 elements)",
+  "table.filterTernary": "Ternary (3 elements)",
+  "table.filterSelectElement": "Select element",
+
 
   // ---- Upload Page ----
   'upload.title': 'Upload USPEX Output Files',
@@ -203,8 +230,12 @@ const en = {
   'compare.hint': 'Select 2–4 structures from the table to compare',
 
   // ---- Filter & Export ----
+  'filter.tagFilter': 'Filter by Tag',
+  'filter.tagFilterHint': 'Click once to require (green), click again to exclude (red), click again to reset',
+  'filter.clearTags': 'Clear Tags',
   'filter.title': 'Filter & Export',
   'filter.conditions': 'Filter Conditions',
+  'filter.compositionFilter': 'Composition Filter',
   'filter.field': 'Field',
   'filter.operator': 'Operator',
   'filter.value': 'Value',

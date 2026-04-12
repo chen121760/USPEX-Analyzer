@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { X, Eye } from 'lucide-react';
+import { FormulaDisplay } from '@/components/FormulaDisplay';
 import type { Structure, SystemInfo } from '@/types/structure';
 
 interface Props {
@@ -479,7 +480,7 @@ export function LineagePanel({
               color: 'var(--color-text-muted)',
             }}
           >
-            {structure.formula} · {structure.origin} · SG{structure.spaceGroup}
+            <FormulaDisplay formula={structure.formula} /> · {structure.origin} · SG{structure.spaceGroup}
           </p>
         </div>
 
@@ -676,7 +677,7 @@ export function LineagePanel({
           }}
         >
           <div style={{ fontWeight: 700, marginBottom: 4 }}>
-            EA{tooltip.s.id} · {tooltip.s.formula}
+            EA{tooltip.s.id} · <FormulaDisplay formula={tooltip.s.formula} />
           </div>
           <div>Origin: {tooltip.s.origin}</div>
           <div>Gen: {tooltip.s.generation}</div>
