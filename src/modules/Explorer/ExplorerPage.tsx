@@ -15,7 +15,7 @@ interface FieldOption {
   type: 'numeric' | 'categorical';
 }
 
-function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: boolean, extraPropKeys: string[]): FieldOption[] {
+function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: boolean, extraPropKeys: string[], elements: string[]): FieldOption[] {
   const opts: FieldOption[] = [
     { key: 'enthalpy', label: t('col.enthalpy'), accessor: (s) => s.enthalpy, type: 'numeric' },
     { key: 'fitness', label: t('col.fitness'), accessor: (s) => s.fitness >= 0 ? s.fitness : undefined, type: 'numeric' },
@@ -29,6 +29,19 @@ function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: bo
     { key: 'origin', label: t('col.origin'), accessor: (s) => s.origin, type: 'categorical' },
     { key: 'formula', label: t('col.formula'), accessor: (s) => s.formula, type: 'categorical' },
   ];
+
+  // 每个元素的摩尔分数 x(El)
+  for (const [i, el] of elements.entries()) {
+    opts.push({
+      key: `xfrac_${el}`,
+      label: `x(${el})`,
+      accessor: (s) => {
+        const total = s.composition.reduce((a, b) => a + b, 0);
+        return total > 0 ? s.composition[i] / total : undefined;
+      },
+      type: 'numeric',
+    });
+  }
 
   if (hasML) {
     opts.push(
@@ -68,7 +81,10 @@ export function ExplorerPage() {
     return Array.from(keys).sort();
   }, [structures]);
 
-  const fields = useMemo(() => getFieldOptions(t, hasML, hasPareto, extraPropKeys), [t, hasML, hasPareto, extraPropKeys]);
+  const fields = useMemo(
+    () => getFieldOptions(t, hasML, hasPareto, extraPropKeys, systemInfo?.elements ?? []),
+    [t, hasML, hasPareto, extraPropKeys, systemInfo],
+  );
 
   // 从 UIStore 读取轴选择，切换页面后不会丢失
   const xKey      = useUIStore((s) => s.explorerXKey);
@@ -136,8 +152,8 @@ export function ExplorerPage() {
       name: cat,
       marker: { color: COLORS[i % COLORS.length], size: 6, opacity: 0.7 },
       text: pts.map(
-        (s) =>
-          `EA${s.id}: ${s.formula}<br>` +
+          (s) =>
+            `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
           `${xField.label}: ${xField.accessor(s)}<br>` +
           `${yField.label}: ${yField.accessor(s)}<br>` +
           `SG: ${s.spaceGroup} | Origin: ${s.origin}`,
