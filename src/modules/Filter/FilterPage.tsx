@@ -7,24 +7,8 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { buildSeedsFile } from '@/lib/poscarWriter';
 import { FormulaDisplay } from '@/components/FormulaDisplay';
-import type { Structure } from '@/types/structure';
+import type { Structure, UnifiedCondition, NumericOperator, CompOperator } from '@/types/structure';
 
-// ── 统一筛选条件类型 ──────────────────────────────────────────
-type NumericOperator = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte';
-type CompOperator = '>' | '<' | '>=' | '<=' | '=';
-
-type UnifiedCondition =
-  | { kind: 'numeric'; field: string; operator: NumericOperator; value: number }
-  | { kind: 'nComponents'; value: 1 | 2 | 3 }
-  | { kind: 'elementFraction'; element: string; operator: CompOperator; value: number };
-
-// ── 数值字段列表 ──────────────────────────────────────────────
-const NUMERIC_FIELDS = [
-  'fitness', 'enthalpy', 'volume', 'density', 'spaceGroup', 'generation',
-  'youngModulus', 'bulkModulus', 'shearModulus', 'poissonRatio',
-  'vickersHardness', 'fractureToughness', 'qEntropy', 'aOrder', 'sOrder',
-  'paretoFront',
-];
 
 const NUMERIC_OPS: NumericOperator[] = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'];
 const COMP_OPS: CompOperator[] = ['>', '>=', '<', '<=', '='];
@@ -127,12 +111,26 @@ export function FilterPage() {
 
   const secondObjPrefix = 'Obj';
 
-  // 统一条件列表
-  const [conditions, setConditions] = useState<UnifiedCondition[]>([]);
+  // 动态数值字段列表（根据实际数据判断）
+  const hasPareto      = systemInfo?.optimizationType === 'multi';
+  const hasML          = structures.some((s) => s.bulkModulus != null);
+  const hasFingerprint = structures.some((s) => s.qEntropy != null && s.qEntropy > 0);
+
+  const numericFields = useMemo(() => {
+    const base = ['fitness', 'enthalpy', 'volume', 'density', 'spaceGroup', 'generation'];
+    if (hasPareto)      base.push('paretoFront');
+    if (hasML)          base.push('youngModulus', 'bulkModulus', 'shearModulus', 'poissonRatio', 'vickersHardness', 'fractureToughness');
+    if (hasFingerprint) base.push('qEntropy', 'aOrder', 'sOrder');
+    return base;
+  }, [hasPareto, hasML, hasFingerprint]);
+
+  // 统一条件列表 — 接入 UIStore 持久化
+  const conditions    = useUIStore((s) => s.filterUnifiedConditions);
+  const setConditions = useUIStore((s) => s.setFilterUnifiedConditions);
 
   // 条件构建器的临时状态
   const [condKind, setCondKind] = useState<'numeric' | 'nComponents' | 'elementFraction'>('numeric');
-  const [numField, setNumField] = useState(NUMERIC_FIELDS[0]);
+  const [numField, setNumField] = useState(() => numericFields[0]);
   const [numOp, setNumOp] = useState<NumericOperator>('lte');
   const [numVal, setNumVal] = useState('');
   const [nComp, setNComp] = useState<1 | 2 | 3>(2);
@@ -158,13 +156,13 @@ export function FilterPage() {
   const addCondition = () => {
     if (condKind === 'numeric') {
       if (numVal === '') return;
-      setConditions((prev) => [...prev, { kind: 'numeric', field: numField, operator: numOp, value: Number(numVal) }]);
+      setConditions([...conditions, { kind: 'numeric', field: numField, operator: numOp, value: Number(numVal) }]);
       setNumVal('');
     } else if (condKind === 'nComponents') {
-      setConditions((prev) => [...prev, { kind: 'nComponents', value: nComp }]);
+      setConditions([...conditions, { kind: 'nComponents', value: nComp }]);
     } else {
       if (!elemEl || elemVal === '') return;
-      setConditions((prev) => [...prev, { kind: 'elementFraction', element: elemEl, operator: elemOp, value: Number(elemVal) }]);
+      setConditions([...conditions, { kind: 'elementFraction', element: elemEl, operator: elemOp, value: Number(elemVal) }]);
       setElemVal('');
     }
   };
@@ -291,7 +289,7 @@ export function FilterPage() {
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
               {condKind === 'numeric' && <>
                 <select value={numField} onChange={(e) => setNumField(e.target.value)} style={selectStyle}>
-                  {NUMERIC_FIELDS.map((f) => <option key={f} value={f}>{t(`col.${f}`) || f}</option>)}
+                  {numericFields.map((f) => <option key={f} value={f}>{t(`col.${f}`) || f}</option>)}
                 </select>
                 <select value={numOp} onChange={(e) => setNumOp(e.target.value as NumericOperator)} style={{ ...selectStyle, width: 120 }}>
                   {NUMERIC_OPS.map((op) => <option key={op} value={op}>{t(`op.${op}`)}</option>)}
@@ -341,7 +339,7 @@ export function FilterPage() {
                 }}>
                   {conditionLabel(cond, t)}
                   <X size={12} style={{ cursor: 'pointer' }}
-                    onClick={() => setConditions((prev) => prev.filter((_, idx) => idx !== i))} />
+                    onClick={() => setConditions(conditions.filter((_, idx) => idx !== i))} />
                 </span>
               ))}
               <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }}
@@ -403,7 +401,7 @@ export function FilterPage() {
           <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
             <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{t('export.sortBy')}:</span>
             <select value={sortKey} onChange={(e) => setSortKey(e.target.value)} style={selectStyle}>
-              {NUMERIC_FIELDS.map((f) => <option key={f} value={f}>{t(`col.${f}`) || f}</option>)}
+              {numericFields.map((f) => <option key={f} value={f}>{t(`col.${f}`) || f}</option>)}
             </select>
             <button className="btn btn-outline btn-sm" onClick={() => setSortReverse(!sortReverse)}>
               {sortReverse ? t('export.descending') : t('export.ascending')}

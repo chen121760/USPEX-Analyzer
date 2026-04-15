@@ -295,6 +295,16 @@ const zh = {
   'op.in': '属于',
   'op.contains': '包含',
 
+  // ---- Mark panel ----
+  'mark.title': '图表标记',
+  'mark.byTag': '按标签标记',
+  'mark.byEaId': '按 EA ID 标记',
+  'mark.eaPlaceholder': '例如 EA1, EA5, EA10 或 1 5 10',
+  'mark.matched': '匹配到 {{count}} 个结构',
+  'mark.noMatch': '未匹配到任何结构',
+  'mark.clearAll': '清除所有标记',
+  'mark.eaSearchName': '★ EA 搜索',
+
   // ---- Generic ----
   'search': '搜索…',
   'loading': '加载中…',

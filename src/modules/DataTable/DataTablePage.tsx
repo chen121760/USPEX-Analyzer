@@ -17,56 +17,19 @@ import {
 } from 'lucide-react';
 import { LineagePanel } from './LineagePanel';
 import { FormulaDisplay } from '@/components/FormulaDisplay';
-import type { Structure } from '@/types/structure';
+import type {
+  Structure,
+  NumericFilterColumn,
+  TextFilterColumn,
+  NumericFilterCondition,
+  TextFilterCondition,
+  NComponentsFilterCondition,
+  ElementFractionFilterCondition,
+  TableFilterCondition,
+} from '@/types/structure';
 
-// 数字列：支持 > < >= <= = 运算符
-type NumericFilterColumn = 'enthalpy' | 'fitness' | 'volume' | 'density' | 'spaceGroup' | 'generation'
-  | 'paretoFront' | 'bulkModulus' | 'shearModulus' | 'youngModulus' | 'poissonRatio'
-  | 'pughRatio' | 'vickersHardness' | 'fractureToughness' | 'qEntropy' | 'aOrder' | 'sOrder';
-
-// 文字列：支持"包含"和"不包含"，可多选值
-type TextFilterColumn = 'formula' | 'origin';
-
-// 数字筛选条件的数据结构
-interface NumericFilterCondition {
-  kind: 'numeric';
-  column: NumericFilterColumn;
-  label: string;
-  operator: '>' | '<' | '>=' | '<=' | '=';
-  value: number;
-}
-
-// 文字筛选条件的数据结构
-interface TextFilterCondition {
-  kind: 'text';
-  column: TextFilterColumn;
-  label: string;
-  operator: 'contains' | 'notContains' | 'equals' | 'notEquals';
-  values: string[];
-}
-
-// 体系类型筛选：一元/二元/三元
-interface NComponentsFilterCondition {
-  kind: 'nComponents';
-  label: string;
-  value: 1 | 2 | 3;  // 1=一元, 2=二元, 3=三元
-}
-
-// 元素摩尔分数筛选：某元素的摩尔分数满足条件
-interface ElementFractionFilterCondition {
-  kind: 'elementFraction';
-  label: string;
-  element: string;       // 元素符号，如 "Li"
-  operator: '>' | '<' | '>=' | '<=' | '=';
-  value: number;         // 摩尔分数，0~1
-}
-
-// 四种条件合并成一个联合类型
-type FilterCondition =
-  | NumericFilterCondition
-  | TextFilterCondition
-  | NComponentsFilterCondition
-  | ElementFractionFilterCondition;
+// 本地别名，保持组件内部代码不变
+type FilterCondition = TableFilterCondition;
 
 
 function SortIcon({ sorted }: { sorted: false | 'asc' | 'desc' }) {
@@ -333,7 +296,10 @@ export function DataTablePage() {
   const [globalFilter, setGlobalFilter] = useState('');
   const [lineageId, setLineageId] = useState<number | null>(null);
   const [selectedTag, setSelectedTag] = useState<string>('');
-  const [filters, setFilters] = useState<FilterCondition[]>([]);
+
+  // 筛选条件接入 UIStore，切换页面后不丢失
+  const filters    = useUIStore((s) => s.tableFilters) as FilterCondition[];
+  const setFilters = useUIStore((s) => s.setTableFilters) as (f: FilterCondition[]) => void;
 
   const [pageIndex, setPageIndex] = useState(0);
   const pageSize = 50;
@@ -449,7 +415,7 @@ export function DataTablePage() {
       {
         id: 'actions',
         header: t('col.actions'),
-        size: 100,
+        size: 140,
         enableSorting: false,
         cell: ({ row }) => {
           const s = row.original;
@@ -859,7 +825,7 @@ export function DataTablePage() {
               onClick={() => {
                 if (filterNumVal === '') return;
                 const col = numericFilterColumns.find((c) => c.key === filterNumCol);
-                setFilters((prev) => [...prev, {
+                setFilters([...filters, {
                   kind: 'numeric',
                   column: filterNumCol,
                   label: col?.label || filterNumCol,
@@ -923,7 +889,7 @@ export function DataTablePage() {
                 const values = filterTextInput.split(',').filter(Boolean);
                 if (values.length === 0) return;
                 const col = textFilterColumns.find((c) => c.key === filterTextCol);
-                setFilters((prev) => [...prev, {
+                setFilters([...filters, {
                   kind: 'text',
                   column: filterTextCol,
                   label: col?.label || filterTextCol,
@@ -954,7 +920,7 @@ export function DataTablePage() {
               style={{ fontSize: 11, padding: '3px 10px' }}
               onClick={() => {
                 const labelMap: Record<number, string> = { 1: t('table.filterUnary'), 2: t('table.filterBinary'), 3: t('table.filterTernary') };
-                setFilters((prev) => [...prev, {
+                setFilters([...filters, {
                   kind: 'nComponents',
                   label: labelMap[filterNComp],
                   value: filterNComp,
@@ -1004,7 +970,7 @@ export function DataTablePage() {
               style={{ fontSize: 11, padding: '3px 10px' }}
               onClick={() => {
                 if (!filterElemEl || filterElemVal === '') return;
-                setFilters((prev) => [...prev, {
+                setFilters([...filters, {
                   kind: 'elementFraction',
                   label: `x(${filterElemEl})`,
                   element: filterElemEl,
@@ -1055,7 +1021,7 @@ export function DataTablePage() {
               <X
                 size={12}
                 style={{ cursor: 'pointer' }}
-                onClick={() => { setFilters((prev) => prev.filter((_, idx) => idx !== i)); setPageIndex(0); }}
+                onClick={() => { setFilters(filters.filter((_, idx) => idx !== i)); setPageIndex(0); }}
               />
             </span>
           ))}

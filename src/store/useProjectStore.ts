@@ -17,6 +17,7 @@ import type {
 } from '@/types/structure';
 import { parseAllFiles, type ParseResult } from '@/parsers';
 import { saveProject } from '@/lib/projectStorage';
+import { useUIStore } from '@/store/useUIStore';
 
 // 这个函数负责把当前 store 的数据导出并存入 IndexedDB
 // get 是 zustand 提供的，可以拿到 store 当前的所有数据
@@ -149,6 +150,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         isLoading: false,
         isDataLoaded: true,
       });
+      useUIStore.getState().clearProjectFilters();
       autoSave(get);
     } catch (error) {
       console.error('Parse error:', error);
@@ -184,6 +186,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       isDataLoaded: true,
       parseWarnings: [],
     });
+    useUIStore.getState().clearProjectFilters();
   },
 
   exportProjectFile: () => {

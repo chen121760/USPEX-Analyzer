@@ -106,6 +106,58 @@ export interface TagDefinition {
   color: string;
 }
 
+// ── DataTable 筛选条件类型 ────────────────────────────────────
+export type NumericFilterColumn = 'enthalpy' | 'fitness' | 'volume' | 'density' | 'spaceGroup' | 'generation'
+  | 'paretoFront' | 'bulkModulus' | 'shearModulus' | 'youngModulus' | 'poissonRatio'
+  | 'pughRatio' | 'vickersHardness' | 'fractureToughness' | 'qEntropy' | 'aOrder' | 'sOrder';
+
+export type TextFilterColumn = 'formula' | 'origin';
+
+export interface NumericFilterCondition {
+  kind: 'numeric';
+  column: NumericFilterColumn;
+  label: string;
+  operator: '>' | '<' | '>=' | '<=' | '=';
+  value: number;
+}
+
+export interface TextFilterCondition {
+  kind: 'text';
+  column: TextFilterColumn;
+  label: string;
+  operator: 'contains' | 'notContains' | 'equals' | 'notEquals';
+  values: string[];
+}
+
+export interface NComponentsFilterCondition {
+  kind: 'nComponents';
+  label: string;
+  value: 1 | 2 | 3;
+}
+
+export interface ElementFractionFilterCondition {
+  kind: 'elementFraction';
+  label: string;
+  element: string;
+  operator: '>' | '<' | '>=' | '<=' | '=';
+  value: number;
+}
+
+export type TableFilterCondition =
+  | NumericFilterCondition
+  | TextFilterCondition
+  | NComponentsFilterCondition
+  | ElementFractionFilterCondition;
+
+// ── Filter 统一条件类型（FilterPage 使用，持久化到 UIStore）──
+export type NumericOperator = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte';
+export type CompOperator = '>' | '<' | '>=' | '<=' | '=';
+
+export type UnifiedCondition =
+  | { kind: 'numeric'; field: string; operator: NumericOperator; value: number }
+  | { kind: 'nComponents'; value: 1 | 2 | 3 }
+  | { kind: 'elementFraction'; element: string; operator: CompOperator; value: number };
+
 /** Filter condition for advanced querying */
 export interface FilterCondition {
   field: string;

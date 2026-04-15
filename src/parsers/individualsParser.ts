@@ -27,7 +27,7 @@ export interface IndividualsParseResult {
 function detectSecondObjective(headerLine: string): string {
   const standardCols = new Set([
     'Gen', 'ID', 'Origin', 'Composition', 'Enthalpy', 'Volume',
-    'Density', 'KPOINTS', 'SYMM', 'Q_entr', 'A_order', 'S_order',
+    'Density', 'Fitness', 'KPOINTS', 'SYMM', 'Q_entr', 'A_order', 'S_order',
   ]);
 
   const tokens = headerLine.trim().split(/\s+/);
@@ -36,13 +36,13 @@ function detectSecondObjective(headerLine: string): string {
       return token;
     }
   }
-  return 'SecondObjective';
+  return ''; // no second objective found
 }
 
 export function parseIndividuals(content: string): IndividualsParseResult {
   const lines = content.split('\n');
   const results: ParsedIndividual[] = [];
-  let secondObjectiveName = 'SecondObjective';
+  let secondObjectiveName = '';
   let maxGen = 0;
 
   // Find header line to detect second objective name

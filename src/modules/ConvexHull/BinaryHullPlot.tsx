@@ -12,7 +12,10 @@ import { useTranslation } from 'react-i18next';
 import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import type { Structure, SystemInfo } from '@/types/structure';
 import { useUIStore } from '@/store/useUIStore';
+import { useProjectStore } from '@/store/useProjectStore';
 import { formulaToHtml } from '@/parsers/compositionUtils';
+import { parseEaIds } from '@/lib/parseEaIds';
+import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
 
 /**
  * Compute 2D lower convex hull (Andrew's monotone chain).
@@ -41,9 +44,27 @@ interface Props {
   systemInfo: SystemInfo;
 }
 
+function makeStarTrace(
+  x: number[], y: number[], color: string, name: string, ids: number[],
+): PlotlyData {
+  return {
+    x, y,
+    mode: 'markers',
+    type: 'scatter',
+    name,
+    marker: { symbol: 'star', size: 14, color, line: { width: 1, color: 'white' } },
+    hoverinfo: 'skip',
+    customdata: ids,
+    showlegend: true,
+  };
+}
+
 export function BinaryHullPlot({ structures, systemInfo }: Props) {
   const { t } = useTranslation();
   const openViewer = useUIStore((s) => s.openViewer);
+  const markActiveTags  = useUIStore((s) => s.markActiveTags);
+  const markEaInput     = useUIStore((s) => s.markEaInput);
+  const allTags         = useProjectStore((s) => s.tags);
 
   const maxFitness = useMemo(() => {
     const vals = structures.filter((s) => s.fitness > 0 && s.enthalpy < 900).map((s) => s.fitness);
@@ -62,6 +83,41 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
 
   const { stable, unstable, hullLine } = plotData;
   const elements = systemInfo.elements;
+
+  // --- Mark overlay traces ---
+  const overlayTraces = useMemo(() => {
+    const result: PlotlyData[] = [];
+    const allVisible = [...stable, ...unstable];
+
+    for (const tagId of markActiveTags) {
+      const tagDef = allTags.find((t) => t.id === tagId);
+      if (!tagDef) continue;
+      const tagged = allVisible.filter((s) => s.tags.includes(tagId));
+      if (tagged.length === 0) continue;
+      result.push(makeStarTrace(
+        tagged.map((s) => s.hullX[0] ?? 0),
+        tagged.map((s) => s.hullY),
+        tagDef.color,
+        `★ ${t(tagDef.nameKey)}`,
+        tagged.map((s) => s.id),
+      ));
+    }
+
+    const eaIds = parseEaIds(markEaInput);
+    if (eaIds.size > 0) {
+      const eaMarked = allVisible.filter((s) => eaIds.has(s.id));
+      if (eaMarked.length > 0) {
+        result.push(makeStarTrace(
+          eaMarked.map((s) => s.hullX[0] ?? 0),
+          eaMarked.map((s) => s.hullY),
+          '#FFD700',
+          t('mark.eaSearchName'),
+          eaMarked.map((s) => s.id),
+        ));
+      }
+    }
+    return result;
+  }, [stable, unstable, markActiveTags, markEaInput, allTags, t]);
 
   const traces: PlotlyData[] = [
     {
@@ -118,6 +174,7 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
       customdata: stable.map((s) => s.id),
       hoverinfo: 'text' as const,
     },
+    ...overlayTraces,
   ];
 
   const axisStyle = {
@@ -143,6 +200,7 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
 
   return (
     <>
+      <MarkPanel />
       {/* Fitness filter slider */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
         <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>

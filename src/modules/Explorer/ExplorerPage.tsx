@@ -4,6 +4,8 @@ import { useProjectStore } from '@/store/useProjectStore';
 import { useUIStore } from '@/store/useUIStore';
 import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import { formulaToHtml } from '@/parsers/compositionUtils';
+import { parseEaIds } from '@/lib/parseEaIds';
+import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyData = any;
 import type { Structure } from '@/types/structure';
@@ -68,9 +70,12 @@ function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: bo
 
 export function ExplorerPage() {
   const { t } = useTranslation();
-  const openViewer = useUIStore((s) => s.openViewer);
-  const structures = useProjectStore((s) => s.structures);
-  const systemInfo = useProjectStore((s) => s.systemInfo);
+  const openViewer      = useUIStore((s) => s.openViewer);
+  const markActiveTags  = useUIStore((s) => s.markActiveTags);
+  const markEaInput     = useUIStore((s) => s.markEaInput);
+  const allTags         = useProjectStore((s) => s.tags);
+  const structures      = useProjectStore((s) => s.structures);
+  const systemInfo      = useProjectStore((s) => s.systemInfo);
 
   const hasML = structures.some((s) => s.youngModulus != null && s.youngModulus! > 0);
   const hasPareto = systemInfo?.optimizationType === 'multi';
@@ -163,6 +168,46 @@ export function ExplorerPage() {
     }));
   }, [filteredData, xField, yField, colorField]);
 
+  // --- Mark overlay traces ---
+  const overlayTraces: PlotlyData[] = useMemo(() => {
+    const result: PlotlyData[] = [];
+
+    for (const tagId of markActiveTags) {
+      const tagDef = allTags.find((tg) => tg.id === tagId);
+      if (!tagDef) continue;
+      const tagged = filteredData.filter((s) => s.tags.includes(tagId));
+      if (tagged.length === 0) continue;
+      result.push({
+        x: tagged.map((s) => xField.accessor(s) as number),
+        y: tagged.map((s) => yField.accessor(s) as number),
+        mode: 'markers', type: 'scatter',
+        name: `★ ${t(tagDef.nameKey)}`,
+        marker: { symbol: 'star', size: 14, color: tagDef.color, line: { width: 1, color: 'white' } },
+        hoverinfo: 'skip',
+        customdata: tagged.map((s) => s.id),
+        showlegend: true,
+      });
+    }
+
+    const eaIds = parseEaIds(markEaInput);
+    if (eaIds.size > 0) {
+      const eaMarked = filteredData.filter((s) => eaIds.has(s.id));
+      if (eaMarked.length > 0) {
+        result.push({
+          x: eaMarked.map((s) => xField.accessor(s) as number),
+          y: eaMarked.map((s) => yField.accessor(s) as number),
+          mode: 'markers', type: 'scatter',
+          name: t('mark.eaSearchName'),
+          marker: { symbol: 'star', size: 14, color: '#FFD700', line: { width: 1, color: 'white' } },
+          hoverinfo: 'skip',
+          customdata: eaMarked.map((s) => s.id),
+          showlegend: true,
+        });
+      }
+    }
+    return result;
+  }, [filteredData, xField, yField, markActiveTags, markEaInput, allTags, t]);
+
   const axisStyle = {
     tickfont: { size: 11, color: '#64748b' },
     gridcolor: '#e2e8f0',
@@ -228,9 +273,11 @@ export function ExplorerPage() {
         </span>
       </div>
 
+      <MarkPanel />
+
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <Plot
-          data={traces}
+          data={[...traces, ...overlayTraces]}
           layout={layout}
           config={{ responsive: true, displayModeBar: true }}
           style={{ width: '100%', height: 550 }}

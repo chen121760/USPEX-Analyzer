@@ -4,6 +4,8 @@ import { useProjectStore } from '@/store/useProjectStore';
 import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import { useUIStore } from '@/store/useUIStore';
 import { formulaToHtml } from '@/parsers/compositionUtils';
+import { parseEaIds } from '@/lib/parseEaIds';
+import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyData = any;
 
@@ -11,9 +13,12 @@ const FRONT_COLORS = ['#dc2626', '#f59e0b', '#16a34a', '#2563eb', '#8b5cf6', '#e
 
 export function ParetoPage() {
   const { t } = useTranslation();
-  const openViewer = useUIStore((s) => s.openViewer);
-  const structures = useProjectStore((s) => s.structures);
-  const systemInfo = useProjectStore((s) => s.systemInfo);
+  const openViewer      = useUIStore((s) => s.openViewer);
+  const markActiveTags  = useUIStore((s) => s.markActiveTags);
+  const markEaInput     = useUIStore((s) => s.markEaInput);
+  const allTags         = useProjectStore((s) => s.tags);
+  const structures      = useProjectStore((s) => s.structures);
+  const systemInfo      = useProjectStore((s) => s.systemInfo);
 
   const isMulti = systemInfo?.optimizationType === 'multi';
   const objName = systemInfo?.secondObjectiveName || 'Second Objective';
@@ -96,6 +101,47 @@ export function ParetoPage() {
     });
   }
 
+  // --- Mark overlay traces ---
+  if (paretoKey != null) {
+    const allParetoVisible = structures.filter(
+      (s) => s.paretoFront != null && s.extraProps?.[paretoKey] != null,
+    );
+
+    for (const tagId of markActiveTags) {
+      const tagDef = allTags.find((tg) => tg.id === tagId);
+      if (!tagDef) continue;
+      const tagged = allParetoVisible.filter((s) => s.tags.includes(tagId));
+      if (tagged.length === 0) continue;
+      traces.push({
+        x: tagged.map((s) => s.fitness),
+        y: tagged.map((s) => s.extraProps![paretoKey]),
+        mode: 'markers', type: 'scatter',
+        name: `★ ${t(tagDef.nameKey)}`,
+        marker: { symbol: 'star', size: 14, color: tagDef.color, line: { width: 1, color: 'white' } },
+        hoverinfo: 'skip',
+        customdata: tagged.map((s) => s.id),
+        showlegend: true,
+      });
+    }
+
+    const eaIds = parseEaIds(markEaInput);
+    if (eaIds.size > 0) {
+      const eaMarked = allParetoVisible.filter((s) => eaIds.has(s.id));
+      if (eaMarked.length > 0) {
+        traces.push({
+          x: eaMarked.map((s) => s.fitness),
+          y: eaMarked.map((s) => s.extraProps![paretoKey]),
+          mode: 'markers', type: 'scatter',
+          name: t('mark.eaSearchName'),
+          marker: { symbol: 'star', size: 14, color: '#FFD700', line: { width: 1, color: 'white' } },
+          hoverinfo: 'skip',
+          customdata: eaMarked.map((s) => s.id),
+          showlegend: true,
+        });
+      }
+    }
+  }
+
   const axisStyle = {
     tickfont: { size: 11, color: '#64748b' },
     gridcolor: '#e2e8f0',
@@ -121,6 +167,8 @@ export function ParetoPage() {
   return (
     <div className="fade-in">
       <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>{t('pareto.title')}</h2>
+
+      <MarkPanel />
 
       <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
         <Plot
