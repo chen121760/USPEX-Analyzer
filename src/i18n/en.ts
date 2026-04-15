@@ -295,6 +295,16 @@ const en = {
   'op.in': 'is one of',
   'op.contains': 'contains',
 
+  // ---- Mark panel ----
+  'mark.title': 'Mark on Chart',
+  'mark.byTag': 'By Tag',
+  'mark.byEaId': 'By EA ID',
+  'mark.eaPlaceholder': 'e.g. EA1, EA5, EA10 or 1 5 10',
+  'mark.matched': '{{count}} structures matched',
+  'mark.noMatch': 'No structures matched',
+  'mark.clearAll': 'Clear All Marks',
+  'mark.eaSearchName': '★ EA Search',
+
   // ---- Generic ----
   'search': 'Search...',
   'loading': 'Loading...',

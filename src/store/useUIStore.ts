@@ -18,7 +18,7 @@ import { create } from 'zustand';
 // persist 是 Zustand 提供的"持久化中间件"
 // 它会自动把 store 的数据存到 localStorage，并在页面加载时恢复
 import { persist } from 'zustand/middleware';
-import type { FilterCondition } from '@/types/structure';
+import type { FilterCondition, UnifiedCondition, TableFilterCondition } from '@/types/structure';
 
 // -------------------------------------------------------
 // 类型定义：描述整个 UI store 里有哪些数据和操作
@@ -58,9 +58,13 @@ interface UIState {
   // ============================================================
 
   // --- Filter 页面 ---
-  // 用户设置的数值筛选条件列表
+  // 用户设置的数值筛选条件列表（旧，保留兼容）
   filterConditions: FilterCondition[];
   setFilterConditions: (conditions: FilterCondition[]) => void;
+
+  // FilterPage 统一条件列表（持久化）
+  filterUnifiedConditions: UnifiedCondition[];
+  setFilterUnifiedConditions: (conditions: UnifiedCondition[]) => void;
 
   // 标签三态状态：key 是标签 id，value 是 'include'（绿）或 'exclude'（红）
   filterTagStates: Record<string, 'include' | 'exclude'>;
@@ -101,6 +105,19 @@ interface UIState {
   // 表格排序状态：[{ id: '列名', desc: true/false }]
   tableSorting: { id: string; desc: boolean }[];
   setTableSorting: (sorting: { id: string; desc: boolean }[]) => void;
+  // 表格筛选条件（持久化）
+  tableFilters: TableFilterCondition[];
+  setTableFilters: (filters: TableFilterCondition[]) => void;
+
+  // 切换项目时清空所有项目相关的临时筛选状态
+  clearProjectFilters: () => void;
+
+  // --- Mark 标记（图表五角星覆盖层） ---
+  markActiveTags: string[];
+  markEaInput: string;
+  setMarkActiveTags: (tags: string[]) => void;
+  setMarkEaInput: (input: string) => void;
+  clearMarks: () => void;
 }
 
 // -------------------------------------------------------
@@ -159,6 +176,9 @@ export const useUIStore = create<UIState>()(
       filterConditions: [{ field: 'fitness', operator: 'lte', value: 0.1 }],
       setFilterConditions: (conditions) => set({ filterConditions: conditions }),
 
+      filterUnifiedConditions: [],
+      setFilterUnifiedConditions: (conditions) => set({ filterUnifiedConditions: conditions }),
+
       filterTagStates: {},
       setFilterTagStates: (states) => set({ filterTagStates: states }),
 
@@ -194,6 +214,22 @@ export const useUIStore = create<UIState>()(
       // --- DataTable 页面状态 ---
       tableSorting: [],
       setTableSorting: (sorting) => set({ tableSorting: sorting }),
+
+      tableFilters: [],
+      setTableFilters: (filters) => set({ tableFilters: filters }),
+
+      clearProjectFilters: () => set({
+        tableFilters: [],
+        filterUnifiedConditions: [],
+        filterTagStates: {},
+      }),
+
+      // --- Mark 标记 ---
+      markActiveTags: [],
+      markEaInput: '',
+      setMarkActiveTags: (tags) => set({ markActiveTags: tags }),
+      setMarkEaInput: (input) => set({ markEaInput: input }),
+      clearMarks: () => set({ markActiveTags: [], markEaInput: '' }),
     }),
     {
       // localStorage 里存储用的 key 名，要唯一，不能和其他应用冲突
@@ -209,6 +245,7 @@ export const useUIStore = create<UIState>()(
         theme: state.theme,
         compareIds: state.compareIds,
         filterConditions: state.filterConditions,
+        // filterUnifiedConditions 和 tableFilters 不持久化：属于当前项目的临时状态
         filterTagStates: state.filterTagStates,
         filterExportFormat: state.filterExportFormat,
         filterNameParts: state.filterNameParts,
@@ -220,6 +257,9 @@ export const useUIStore = create<UIState>()(
         paretoSelectedFronts: state.paretoSelectedFronts,
         paretoShowLines: state.paretoShowLines,
         tableSorting: state.tableSorting,
+        // tableFilters 不持久化
+        markActiveTags: state.markActiveTags,
+        markEaInput: state.markEaInput,
       }),
     }
   )

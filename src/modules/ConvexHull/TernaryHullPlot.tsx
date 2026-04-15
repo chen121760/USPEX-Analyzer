@@ -17,8 +17,11 @@ import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import type { Structure, SystemInfo } from '@/types/structure';
 import { ternaryToCartesian, formulaToHtml } from '@/parsers/compositionUtils';
 import { useUIStore } from '@/store/useUIStore';
+import { useProjectStore } from '@/store/useProjectStore';
 import { computeTernaryHullEdges, uniqueHullPoints, type TernaryHullInput } from '@/lib/ternaryHull';
 import { StructureViewerModal } from '@/components/StructureViewer/StructureViewerModal';
+import { parseEaIds } from '@/lib/parseEaIds';
+import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
 
 /** Structure with computed cartesian coordinates */
 interface StructureWithCoords extends Structure {
@@ -34,6 +37,9 @@ interface Props {
 export function TernaryHullPlot({ structures, systemInfo }: Props) {
   const { t } = useTranslation();
   const openViewer = useUIStore((s) => s.openViewer);
+  const markActiveTags  = useUIStore((s) => s.markActiveTags);
+  const markEaInput     = useUIStore((s) => s.markEaInput);
+  const allTags         = useProjectStore((s) => s.tags);
 
   const maxFitness = useMemo(() => {
     const vals = structures.filter((s) => s.fitness > 0 && s.enthalpy < 900).map((s) => s.fitness);
@@ -81,6 +87,54 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
   }, [structures, systemInfo, fitnessMax]);
 
   const { unstableWithCoords, uniqueStableFull, edges, elements } = plotData;
+
+  // Build coord lookup map for overlay traces
+  const coordMap = useMemo(() => {
+    const map = new Map<number, { cartX: number; cartY: number }>();
+    for (const s of unstableWithCoords) map.set(s.id, { cartX: s.cartX, cartY: s.cartY });
+    for (const p of uniqueStableFull) map.set(p.id, { cartX: p.cartX, cartY: p.cartY });
+    return map;
+  }, [unstableWithCoords, uniqueStableFull]);
+
+  // --- Mark overlay traces ---
+  const overlayTraces = useMemo(() => {
+    const result: PlotlyData[] = [];
+
+    for (const tagId of markActiveTags) {
+      const tagDef = allTags.find((tg) => tg.id === tagId);
+      if (!tagDef) continue;
+      const tagged = structures.filter((s) => s.tags.includes(tagId) && coordMap.has(s.id));
+      if (tagged.length === 0) continue;
+      result.push({
+        x: tagged.map((s) => coordMap.get(s.id)!.cartX),
+        y: tagged.map((s) => coordMap.get(s.id)!.cartY),
+        mode: 'markers', type: 'scatter',
+        name: `★ ${t(tagDef.nameKey)}`,
+        marker: { symbol: 'star', size: 14, color: tagDef.color, line: { width: 1, color: 'white' } },
+        hoverinfo: 'skip',
+        customdata: tagged.map((s) => s.id),
+        showlegend: true,
+      });
+    }
+
+    const eaIds = parseEaIds(markEaInput);
+    if (eaIds.size > 0) {
+      const eaMarked = structures.filter((s) => eaIds.has(s.id) && coordMap.has(s.id));
+      if (eaMarked.length > 0) {
+        result.push({
+          x: eaMarked.map((s) => coordMap.get(s.id)!.cartX),
+          y: eaMarked.map((s) => coordMap.get(s.id)!.cartY),
+          mode: 'markers', type: 'scatter',
+          name: t('mark.eaSearchName'),
+          marker: { symbol: 'star', size: 14, color: '#FFD700', line: { width: 1, color: 'white' } },
+          hoverinfo: 'skip',
+          customdata: eaMarked.map((s) => s.id),
+          showlegend: true,
+        });
+      }
+    }
+    return result;
+  }, [structures, coordMap, markActiveTags, markEaInput, allTags, t]);
 
   // Triangle vertices
   const triVerts = [[0, 0], [0.5, Math.sqrt(3) / 2], [1, 0], [0, 0]];
@@ -176,6 +230,7 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
       hoverinfo: 'text' as const,
       customdata: uniqueStableFull.map((p) => p.id),
     },
+    ...overlayTraces,
   ];
 
   // Element labels at triangle corners
@@ -217,6 +272,7 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
 
   return (
     <>
+      <MarkPanel />
       {/* Fitness filter slider */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
         <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
