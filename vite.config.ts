@@ -18,7 +18,7 @@ export default defineConfig({
       },
     },
   ],
-  base: '/uspex-analyzer/',
+  base: '/USPEX-Analyzer/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
