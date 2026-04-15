@@ -442,13 +442,13 @@ export function DataTablePage() {
         id: 'spaceGroup',
         accessorKey: 'spaceGroup',
         header: t('col.spaceGroup'),
-        size: 60,
+        size: 100,
       },
       {
         id: 'generation',
         accessorKey: 'generation',
         header: t('col.generation'),
-        size: 60,
+        size: 100,
       },
       {
         id: 'enthalpy',
@@ -479,14 +479,14 @@ export function DataTablePage() {
         id: 'volume',
         accessorKey: 'volume',
         header: t('col.volume'),
-        size: 100,
+        size: 120,
         cell: ({ getValue }) => getValue<number>().toFixed(3),
       },
       {
         id: 'density',
         accessorKey: 'density',
         header: t('col.density'),
-        size: 90,
+        size: 100,
         cell: ({ getValue }) => {
           const v = getValue<number>();
           return v > 0 ? v.toFixed(3) : '—';
