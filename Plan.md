@@ -1,6 +1,21 @@
 # USPEX Analyzer 
 
 ## 版本更新记录
+### V1.0.3
+
+上传页面
+- 项目命名改为自动生成：格式为 `元素-calculationType-压强GPa[-后缀]`，例如 `Li-H-300-100GPa-Tc`
+- 输入框由"项目名称"改为可选后缀，不填则自动生成不带后缀的名称，不再强制要求用户命名
+- 强制要求上传全部 4 个核心文件（Individuals、origin、Parameters.txt、gatheredPOSCARS）才能开始分析
+
+解析器
+- `parametersParser` 新增解析 `ExternalPressure` 字段（单位 GPa）
+- `SystemInfo` 新增 `calculationType` 和 `externalPressure` 字段
+- 移除无 Parameters.txt 时的元素占位符 fallback 逻辑（`Elem1`, `Elem2`...）
+
+修复
+- 修复新建项目后不出现在"最近的项目"列表的 bug：`setProjectName` 现在会在设置名称后触发一次自动保存
+
 ### V1.0.2
 Filter 页面
 筛选字段动态生成：根据当前项目实际数据决定显示哪些字段（多目标参数、弹性模量、指纹等），不再硬编码全量列表

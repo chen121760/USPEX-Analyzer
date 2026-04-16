@@ -97,6 +97,8 @@ export interface SystemInfo {
   maxFitness: number;
   /** Which file was used as the primary data source for totalStructures */
   totalStructuresSource: string;
+  calculationType: number;         // 3-digit code from Parameters.txt
+  externalPressure: number | null; // GPa, null if not specified
 }
 
 /** Tag definition */
@@ -193,6 +195,7 @@ export interface ParsedParameters {
   optType: number[];             // [1]=single-obj enthalpy, [1,1201]=multi-obj
   isVarcomp: boolean;            // derived: calculationType % 10 === 1
   numComponents: number;         // from atomType count: 2=binary, 3=ternary
+  externalPressure: number | null; // GPa, from "100 : ExternalPressure"
 }
 
 export interface ParsedExtendedHull {

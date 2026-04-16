@@ -100,12 +100,6 @@ export function parseAllFiles(
   const indContent = fileContents.get('individuals');
   if (indContent) {
     individualsResult = parseIndividuals(indContent);
-    // Infer elements from Individuals if Parameters.txt not provided
-    if (elements.length === 0 && individualsResult.data.length > 0) {
-      const compLen = individualsResult.data[0].composition.length;
-      elements = Array.from({ length: compLen }, (_, i) => `Elem${i + 1}`);
-      warnings.push('Parameters.txt not found — using placeholder element names');
-    }
   }
 
   // Pareto ranking
@@ -214,14 +208,6 @@ export function parseAllFiles(
     }));
   } else if (hullData.length === 0 && !individualsResult) {
     warnings.push('No extended_convex_hull or Individuals file found — very limited functionality');
-  }
-
-  // Infer elements from POSCAR if still unknown
-  if (elements.length === 0 && poscarMap.size > 0) {
-    const firstPoscar = poscarMap.values().next().value;
-    if (firstPoscar && firstPoscar.elements.length > 0) {
-      elements = firstPoscar.elements;
-    }
   }
 
   // Override systemType from actual composition data if Parameters.txt was wrong/missing
@@ -444,6 +430,8 @@ export function parseAllFiles(
     stableCount: structures.filter((s) => s.fitness === 0).length,
     minEnthalpy: enthalpyValues.length > 0 ? Math.min(...enthalpyValues) : 0,
     maxFitness: fitnessValues.length > 0 ? Math.max(...fitnessValues) : 0,
+    calculationType: paramsResult?.calculationType ?? 0,
+    externalPressure: paramsResult?.externalPressure ?? null,
   };
 
   return {
