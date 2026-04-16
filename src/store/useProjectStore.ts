@@ -124,7 +124,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   isDataLoaded: false,
 
   setDetectedFiles: (files) => set({ detectedFiles: files }),
-  setProjectName: (name) => set({ projectName: name }),
+  setProjectName: (name) => {
+    set({ projectName: name });
+    autoSave(get);
+  },
 
   processFiles: (detectedFiles, fileContents) => {
     set({ isLoading: true });

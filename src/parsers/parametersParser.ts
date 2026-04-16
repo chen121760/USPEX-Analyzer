@@ -31,6 +31,15 @@ function parseCalculationType(content: string): number {
   return match ? parseInt(match[1], 10) : 0;
 }
 
+/**
+ * Extract ExternalPressure from a line like "100   : ExternalPressure"
+ * Returns value in GPa, or null if not found.
+ */
+function parseExternalPressure(content: string): number | null {
+  const match = content.match(/([\d.]+)\s*:\s*ExternalPressure\b/i);
+  return match ? parseFloat(match[1]) : null;
+}
+
 export function parseParameters(content: string): ParsedParameters {
   // Extract element names
   const atomMatch = content.match(
@@ -46,6 +55,7 @@ export function parseParameters(content: string): ParsedParameters {
     ? (calculationType % 10) === 1
     : false;
   const numComponents = elements.length;
+  const externalPressure = parseExternalPressure(content);
 
   return {
     elements,
@@ -53,5 +63,6 @@ export function parseParameters(content: string): ParsedParameters {
     optType,
     isVarcomp,
     numComponents,
+    externalPressure,
   };
 }

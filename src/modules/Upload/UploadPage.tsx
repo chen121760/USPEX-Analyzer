@@ -10,6 +10,21 @@ import { loadRecentProjects, deleteProject, saveProject, type StoredProject } fr
 import { Clock, Trash2 } from 'lucide-react';
 import logoImg from '@/assets/logo.jpg';
 
+/** Build auto project name: Elements-calculationType-PressureGPa[-suffix] */
+function buildAutoName(
+  elements: string[],
+  calculationType: number,
+  externalPressure: number | null,
+  suffix: string,
+): string {
+  const parts: string[] = [];
+  if (elements.length > 0) parts.push(elements.join('-'));
+  if (calculationType > 0) parts.push(String(calculationType));
+  if (externalPressure !== null) parts.push(`${externalPressure}GPa`);
+  if (suffix.trim()) parts.push(suffix.trim());
+  return parts.join('-');
+}
+
 export function UploadPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -20,7 +35,7 @@ export function UploadPage() {
   const [detectedFiles, setDetectedFiles] = useState<DetectedFile[]>([]);
   const [fileContents, setFileContents] = useState<Map<USPEXFileType, string>>(new Map());
   const [isDragging, setIsDragging] = useState(false);
-  const [projectName, setProjectNameLocal] = useState('');
+  const [suffix, setSuffix] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
   const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
 
@@ -126,13 +141,20 @@ export function UploadPage() {
   };
 
   const canStart =
-    fileContents.has('extended_convex_hull') || fileContents.has('individuals');
+    fileContents.has('individuals') &&
+    fileContents.has('origin') &&
+    fileContents.has('parameters') &&
+    fileContents.has('gathered_poscars');
 
   const startAnalysis = () => {
     if (!canStart) return;
-    if (!projectName.trim()) return;  // 没起名字不让开始
-    setProjectName(projectName.trim()); // ← 加这一行，存入 store
     processFiles(detectedFiles, fileContents);
+    // Build auto name from parsed systemInfo (processFiles is synchronous)
+    const si = useProjectStore.getState().systemInfo;
+    const autoName = si
+      ? buildAutoName(si.elements, si.calculationType, si.externalPressure, suffix)
+      : suffix.trim() || 'project';
+    setProjectName(autoName);
     navigate('/dashboard');
   };
 
@@ -188,16 +210,19 @@ export function UploadPage() {
         {/* Left: naming + drop zone + start button */}
         <div style={{ flex: recentProjects.length > 0 ? '0 0 560px' : undefined, width: recentProjects.length > 0 ? undefined : '100%' }}>
 
-          {/* Project name — above dropzone */}
+          {/* Suffix input — optional, above dropzone */}
           <div style={{ marginBottom: 10 }}>
-            <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 6 }}>
-              {t('upload.nameProject')}
+            <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 4 }}>
+              {t('upload.suffixLabel')}
             </label>
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '0 0 6px' }}>
+              {t('upload.suffixHint')}
+            </p>
             <input
               type="text"
-              value={projectName}
-              onChange={(e) => setProjectNameLocal(e.target.value)}
-              placeholder={t('upload.namePlaceholder')}
+              value={suffix}
+              onChange={(e) => setSuffix(e.target.value)}
+              placeholder={t('upload.suffixPlaceholder')}
               onClick={(e) => e.stopPropagation()}
               style={{
                 width: '100%', padding: '8px 12px', borderRadius: 6,
@@ -293,11 +318,11 @@ export function UploadPage() {
             <button
               className="btn btn-primary"
               onClick={startAnalysis}
-              disabled={!canStart || !projectName.trim()}
+              disabled={!canStart}
               style={{
                 padding: '10px 32px', fontSize: 15,
-                opacity: canStart && projectName.trim() ? 1 : 0.4,
-                cursor: canStart && projectName.trim() ? 'pointer' : 'not-allowed',
+                opacity: canStart ? 1 : 0.4,
+                cursor: canStart ? 'pointer' : 'not-allowed',
               }}
             >
               {t('btn.startAnalysis')} →
@@ -305,11 +330,6 @@ export function UploadPage() {
             {!canStart && (
               <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 8 }}>
                 {t('upload.requiredFilesHint')}
-              </p>
-            )}
-            {canStart && !projectName.trim() && (
-              <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 8 }}>
-                {t('upload.nameFirst')}
               </p>
             )}
           </div>
