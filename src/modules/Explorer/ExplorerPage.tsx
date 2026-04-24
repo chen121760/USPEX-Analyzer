@@ -423,45 +423,29 @@ function DualRangeSlider({ label, dataMin, dataMax, low, high, onChange }: {
   onChange: (low: number, high: number) => void;
 }) {
   const step = (dataMax - dataMin) / 200 || 1;
-  const lowPct  = dataMax === dataMin ? 0 : ((low  - dataMin) / (dataMax - dataMin)) * 100;
-  const highPct = dataMax === dataMin ? 0 : ((high - dataMin) / (dataMax - dataMin)) * 100;
   const fmt = (v: number) => v.toPrecision(4);
 
-  const trackStyle: React.CSSProperties = {
-    position: 'absolute', inset: 0,
-    WebkitAppearance: 'none', appearance: 'none',
-    width: '100%', height: '100%',
-    background: 'transparent', pointerEvents: 'none',
-    cursor: 'ew-resize',
-  };
-
   return (
-    <div style={{ fontSize: 11, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div style={{ fontSize: 11, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <span style={{ whiteSpace: 'nowrap' }}>{label}:</span>
-      <span style={{ whiteSpace: 'nowrap', minWidth: 60, textAlign: 'right', color: 'var(--color-text)' }}>{fmt(low)}</span>
-      <div style={{ position: 'relative', width: 200, height: 20, flexShrink: 0 }}>
-        {/* filled range bar */}
-        <div style={{
-          position: 'absolute', top: '50%', transform: 'translateY(-50%)',
-          left: `${lowPct}%`, width: `${highPct - lowPct}%`,
-          height: 4, background: '#6366f1', borderRadius: 2, pointerEvents: 'none',
-        }} />
-        {/* track background */}
-        <div style={{
-          position: 'absolute', top: '50%', transform: 'translateY(-50%)',
-          left: 0, right: 0, height: 4, background: '#e2e8f0', borderRadius: 2,
-          zIndex: 0, pointerEvents: 'none',
-        }} />
-        <input type="range" min={dataMin} max={dataMax} step={step} value={low}
-          onChange={(e) => onChange(Math.min(Number(e.target.value), high), high)}
-          style={{ ...trackStyle, zIndex: low > dataMin + (dataMax - dataMin) * 0.9 ? 5 : 3, pointerEvents: 'auto' }}
-        />
-        <input type="range" min={dataMin} max={dataMax} step={step} value={high}
-          onChange={(e) => onChange(low, Math.max(Number(e.target.value), low))}
-          style={{ ...trackStyle, zIndex: 4, pointerEvents: 'auto' }}
-        />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 20, textAlign: 'right' }}>▼</span>
+          <input type="range" min={dataMin} max={dataMax} step={step} value={low}
+            onChange={(e) => onChange(Math.min(Number(e.target.value), high), high)}
+            style={{ width: 200 }}
+          />
+          <span style={{ minWidth: 60, color: 'var(--color-text)' }}>{fmt(low)}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 20, textAlign: 'right' }}>▲</span>
+          <input type="range" min={dataMin} max={dataMax} step={step} value={high}
+            onChange={(e) => onChange(low, Math.max(Number(e.target.value), low))}
+            style={{ width: 200 }}
+          />
+          <span style={{ minWidth: 60, color: 'var(--color-text)' }}>{fmt(high)}</span>
+        </div>
       </div>
-      <span style={{ whiteSpace: 'nowrap', minWidth: 60, color: 'var(--color-text)' }}>{fmt(high)}</span>
       <button
         onClick={() => onChange(dataMin, dataMax)}
         style={{ fontSize: 10, padding: '1px 6px', border: '1px solid var(--color-border)', borderRadius: 4, background: 'transparent', cursor: 'pointer', color: 'var(--color-text-muted)' }}
