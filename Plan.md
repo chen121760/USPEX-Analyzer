@@ -1,6 +1,16 @@
 # USPEX Analyzer 
 
 ## 版本更新记录
+### V1.0.5
+
+全局
+- 英文与数字字体改为 Times New Roman
+
+Explorer 页面
+- Color 滑块新增自动播放：上限从当前位置步进至 dataMax，下限固定不动
+- 播放参数可调：步进量（step）和帧率（fps）均可在滑块旁实时修改
+- 新增 GIF 导出：将播放过程逐帧截图并合成动图下载，绕开 React 状态异步问题，直接用 `Plotly.react()` 强制渲染每帧
+
 ### V1.0.4
 
 Explorer 页面
@@ -81,7 +91,7 @@ Explorer 轴选择、Pareto 前沿选择、表格排序状态切换页面后均�
 18.Table标签和Filter没有持久化，换了页面后就消失了。 √
 19.加入ΔE和ΔObj √
 20.加入滑块调节explorer的color √
-20.1 调节滑块还是有问题，
-21.滑块加入自动播放输出动图gif输出功能
+20.1 调节滑块还是有问题， √
+21.滑块加入自动播放输出动图gif输出功能 √
 22.图直接导出对应的csv（有多少数据就输出多少数据）
-23.英文和数字字体改为Times new roman
+23.英文和数字字体改为Times new roman √

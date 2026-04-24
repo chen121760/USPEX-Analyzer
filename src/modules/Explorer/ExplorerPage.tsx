@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useUIStore } from '@/store/useUIStore';
@@ -6,6 +6,8 @@ import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
+import { PLOTLY_FONT } from '@/lib/constants';
+import GIF from 'gif.js';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyData = any;
 import type { Structure } from '@/types/structure';
@@ -161,6 +163,144 @@ export function ExplorerPage() {
     return { min: Math.min(...vals), max: Math.max(...vals) };
   }, [structures, colorField]);
 
+  // --- Autoplay & GIF export ---
+  const plotRef = useRef<HTMLDivElement>(null);
+  const layoutRef = useRef<any>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [playStep, setPlayStep] = useState(1);       // step size per frame
+  const [playFps, setPlayFps] = useState(10);        // frames per second
+  const playTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Play: only high moves, low is fixed. high steps by playStep until dataMax, then stops.
+  const handlePlay = useCallback(() => {
+    if (!colorDataRange) return;
+    const fixedLow = cMin ?? colorDataRange.min;
+    let curHigh = cMax ?? colorDataRange.max;
+    const delay = 1000 / playFps;
+    setIsPlaying(true);
+    const step = () => {
+      curHigh += playStep;
+      if (curHigh > colorDataRange.max) {
+        setCMax(colorDataRange.max);
+        setIsPlaying(false);
+        return;
+      }
+      setCMin(fixedLow);
+      setCMax(curHigh);
+      playTimerRef.current = setTimeout(step, delay);
+    };
+    playTimerRef.current = setTimeout(step, delay);
+  }, [colorDataRange, cMin, cMax, playStep, playFps]);
+
+  const handleStop = useCallback(() => {
+    if (playTimerRef.current) clearTimeout(playTimerRef.current);
+    setIsPlaying(false);
+  }, []);
+
+  // GIF export: bypass React state — compute each frame directly and force-render via Plotly.react()
+  const handleExportGif = useCallback(async () => {
+    if (!colorDataRange || !plotRef.current) return;
+    const fixedLow  = cMin ?? colorDataRange.min;
+    const startHigh = cMax ?? colorDataRange.max;
+    const frameDelay = Math.round(1000 / playFps);
+
+    const frames: number[] = [];
+    for (let h = startHigh; h <= colorDataRange.max + playStep * 0.5; h += playStep) {
+      frames.push(Math.min(h, colorDataRange.max));
+    }
+    if (frames.length === 0) return;
+
+    setIsExporting(true);
+    const PlotlyModule = await import('plotly.js-dist-min');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Plotly = (PlotlyModule as any).default ?? PlotlyModule;
+    const graphDiv = plotRef.current.querySelector('.js-plotly-plot') as HTMLElement;
+    if (!graphDiv) { setIsExporting(false); return; }
+
+    const baseLayout = { ...layoutRef.current };
+
+    const gif = new GIF({
+      workers: 2,
+      quality: 10,
+      workerScript: `${import.meta.env.BASE_URL}gif.worker.js`,
+    });
+
+    for (const hi of frames) {
+      // Compute filtered data for this frame directly (no React state)
+      const frameData = structures.filter((s) => {
+        const xv = xField.accessor(s);
+        const yv = yField.accessor(s);
+        if (xv == null || yv == null || s.enthalpy >= 900) return false;
+        if (colorField && colorField.type === 'numeric') {
+          const cv = colorField.accessor(s) as number;
+          if (cv == null || !isFinite(cv)) return false;
+          if (cv < fixedLow || cv > hi) return false;
+        }
+        return true;
+      });
+
+      // Build trace for this frame
+      let frameTraces: PlotlyData[];
+      if (!colorField || colorField.type === 'numeric') {
+        frameTraces = [{
+          x: frameData.map((s) => xField.accessor(s) as number),
+          y: frameData.map((s) => yField.accessor(s) as number),
+          mode: 'markers', type: 'scatter',
+          marker: {
+            color: colorField ? frameData.map((s) => (colorField.accessor(s) as number) ?? 0) : '#6366f1',
+            colorscale: 'Viridis',
+            cmin: colorDataRange.min,
+            cmax: colorDataRange.max,
+            colorbar: colorField ? { title: colorField.label, thickness: 15 } : undefined,
+            size: 6, opacity: 0.7,
+          },
+          hoverinfo: 'none',
+        }];
+      } else {
+        const groups = new Map<string, typeof frameData>();
+        for (const s of frameData) {
+          const cat = String(colorField.accessor(s) ?? 'Unknown');
+          if (!groups.has(cat)) groups.set(cat, []);
+          groups.get(cat)!.push(s);
+        }
+        const COLORS = ['#6366f1', '#ec4899', '#f97316', '#14b8a6', '#8b5cf6', '#eab308', '#06b6d4', '#6b7280', '#dc2626', '#16a34a'];
+        frameTraces = Array.from(groups.entries()).map(([cat, pts], i) => ({
+          x: pts.map((s) => xField.accessor(s) as number),
+          y: pts.map((s) => yField.accessor(s) as number),
+          mode: 'markers', type: 'scatter', name: cat,
+          marker: { color: COLORS[i % COLORS.length], size: 6, opacity: 0.7 },
+          hoverinfo: 'none',
+        }));
+      }
+
+      await Plotly.react(graphDiv, frameTraces, baseLayout);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+
+      const dataUrl: string = await Plotly.toImage(graphDiv, {
+        format: 'png',
+        width: graphDiv.offsetWidth,
+        height: graphDiv.offsetHeight,
+      });
+      const img = new Image();
+      await new Promise<void>((resolve) => { img.onload = () => resolve(); img.src = dataUrl; });
+      gif.addFrame(img, { delay: frameDelay });
+    }
+
+    gif.on('finished', (blob: Blob) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'explorer.gif';
+      a.click();
+      URL.revokeObjectURL(url);
+      setIsExporting(false);
+    });
+    gif.render();
+  }, [colorDataRange, cMin, cMax, playStep, playFps, structures, xField, yField, colorField]);
+
+  useEffect(() => () => { if (playTimerRef.current) clearTimeout(playTimerRef.current); }, []);
+
   const filteredData = useMemo(() => {
     return structures.filter((s) => {
       const xv = xField.accessor(s);
@@ -295,6 +435,7 @@ export function ExplorerPage() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const layout: any = {
+    font: PLOTLY_FONT,
     title: { text: `${xField.label} vs ${yField.label}`, font: { size: 15, color: '#0f172a' } },
     xaxis: {
       title: { text: xField.label, font: titleFont },
@@ -314,6 +455,7 @@ export function ExplorerPage() {
     plot_bgcolor: '#ffffff',
     paper_bgcolor: '#ffffff',
   };
+  layoutRef.current = layout;
 
   const selectStyle: React.CSSProperties = {
     padding: '5px 8px',
@@ -367,11 +509,20 @@ export function ExplorerPage() {
             low={cMin ?? colorDataRange.min}
             high={cMax ?? colorDataRange.max}
             onChange={(lo, hi) => { setCMin(lo); setCMax(hi); }}
+            isPlaying={isPlaying}
+            isExporting={isExporting}
+            onPlay={handlePlay}
+            onStop={handleStop}
+            onExportGif={handleExportGif}
+            playStep={playStep}
+            playFps={playFps}
+            onPlayStepChange={setPlayStep}
+            onPlayFpsChange={setPlayFps}
           />
         </div>
       )}
 
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="card" ref={plotRef} style={{ padding: 0, overflow: 'hidden' }}>
         <Plot
           data={[...traces, ...overlayTraces]}
           layout={layout}
@@ -414,16 +565,29 @@ function RangeInputs({ label, min, max, onMin, onMax, inputStyle }: {
   );
 }
 
-function DualRangeSlider({ label, dataMin, dataMax, low, high, onChange }: {
+function DualRangeSlider({ label, dataMin, dataMax, low, high, onChange, isPlaying, isExporting, onPlay, onStop, onExportGif, playStep, playFps, onPlayStepChange, onPlayFpsChange }: {
   label: string;
   dataMin: number;
   dataMax: number;
   low: number;
   high: number;
   onChange: (low: number, high: number) => void;
+  isPlaying?: boolean;
+  isExporting?: boolean;
+  onPlay?: () => void;
+  onStop?: () => void;
+  onExportGif?: () => void;
+  playStep?: number;
+  playFps?: number;
+  onPlayStepChange?: (v: number) => void;
+  onPlayFpsChange?: (v: number) => void;
 }) {
   const step = (dataMax - dataMin) / 200 || 1;
   const fmt = (v: number) => v.toPrecision(4);
+  const numInputStyle: React.CSSProperties = {
+    width: 48, padding: '1px 4px', border: '1px solid var(--color-border)',
+    borderRadius: 4, fontSize: 10, background: 'var(--color-bg)', color: 'var(--color-text)',
+  };
 
   return (
     <div style={{ fontSize: 11, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -452,6 +616,42 @@ function DualRangeSlider({ label, dataMin, dataMax, low, high, onChange }: {
       >
         reset
       </button>
+      {onPlayStepChange && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          step
+          <input type="number" min={0.001} step={0.1} value={playStep}
+            onChange={(e) => onPlayStepChange(Number(e.target.value))}
+            style={numInputStyle}
+          />
+        </label>
+      )}
+      {onPlayFpsChange && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          fps
+          <input type="number" min={1} max={60} step={1} value={playFps}
+            onChange={(e) => onPlayFpsChange(Number(e.target.value))}
+            style={numInputStyle}
+          />
+        </label>
+      )}
+      {onPlay && onStop && (
+        <button
+          onClick={isPlaying ? onStop : onPlay}
+          disabled={isExporting}
+          style={{ fontSize: 10, padding: '1px 6px', border: '1px solid var(--color-border)', borderRadius: 4, background: 'transparent', cursor: 'pointer', color: 'var(--color-text-muted)' }}
+        >
+          {isPlaying ? '⏹ stop' : '▶ play'}
+        </button>
+      )}
+      {onExportGif && (
+        <button
+          onClick={onExportGif}
+          disabled={isPlaying || isExporting}
+          style={{ fontSize: 10, padding: '1px 6px', border: '1px solid var(--color-border)', borderRadius: 4, background: 'transparent', cursor: isPlaying || isExporting ? 'not-allowed' : 'pointer', color: 'var(--color-text-muted)' }}
+        >
+          {isExporting ? '⏳ exporting…' : '🎞 export GIF'}
+        </button>
+      )}
     </div>
   );
 }
