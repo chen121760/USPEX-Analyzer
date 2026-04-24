@@ -22,6 +22,7 @@ import { computeTernaryHullEdges, uniqueHullPoints, type TernaryHullInput } from
 import { StructureViewerModal } from '@/components/StructureViewer/StructureViewerModal';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
+import { PLOTLY_FONT } from '@/lib/constants';
 
 /** Structure with computed cartesian coordinates */
 interface StructureWithCoords extends Structure {
@@ -242,6 +243,7 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
   ];
 
   const layout: PlotlyLayout = {
+    font: PLOTLY_FONT,
     title: { text: `${elements.join('-')} ${t('hull.ternaryTitle', 'Ternary Phase Diagram')}`, font: { size: 15, color: '#0f172a' } },
     xaxis: {
       range: [-0.12, 1.12],

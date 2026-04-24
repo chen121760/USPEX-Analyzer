@@ -1,4 +1,4 @@
-# USPEX Analyzer —— v1.0.4
+# USPEX Analyzer —— v1.0.5
 
 A browser-based analysis tool for USPEX crystal structure prediction outputs. Upload your USPEX output files and interactively explore, visualize, filter, and export your results — all without installing anything.
 
@@ -9,11 +9,12 @@ A browser-based analysis tool for USPEX crystal structure prediction outputs. Up
 - Data Table — Sortable, searchable table with all structure properties merged from multiple files
 - Convex Hull — Interactive 2D/3D convex hull visualization with hover details
 - Pareto Front — Multi-objective Pareto front visualization (auto-detected)
-- Explorer — Universal scatter plot: pick any two properties as axes, with a third as color mapping
+- Explorer — Universal scatter plot with color mapping, dual-range slider filter, autoplay, and GIF export
 - Genealogy — View the parent and offspring relationships of any structure
 - Tags — Label structures as Candidate / To Verify / Excluded / custom tags
 - Filter & Export — Query builder with AND conditions, export as .zip / seeds / .csv
 - Project Save/Load — Save all data + annotations as .json, reload anytime
+- Times New Roman typography for all Latin text and numbers across the UI and charts
 
 ## Supported USPEX Files
 

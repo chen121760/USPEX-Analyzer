@@ -16,6 +16,7 @@ import { useProjectStore } from '@/store/useProjectStore';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
+import { PLOTLY_FONT } from '@/lib/constants';
 
 /**
  * Compute 2D lower convex hull (Andrew's monotone chain).
@@ -187,6 +188,7 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
   const titleFont = { size: 13, color: '#334155' };
 
   const layout: PlotlyLayout = {
+    font: PLOTLY_FONT,
     title: { text: `${elements.join('-')} ${t('hull.title')}`, font: { size: 15, color: '#0f172a' } },
     xaxis: { title: { text: `x(${elements[1] || 'B'}) = ${elements[1] || 'B'}/(${elements[0] || 'A'}+${elements[1] || 'B'})`, font: titleFont }, ...axisStyle },
     yaxis: { title: { text: t('hull.formationEnergy'), font: titleFont }, range: [-0.001, undefined], ...axisStyle },

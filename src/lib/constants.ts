@@ -62,6 +62,12 @@ export const ORIGIN_COLORS: Record<string, string> = {
   Unknown: '#9ca3af',
 };
 
+/** Shared Plotly font — Times New Roman for Latin/numbers, fallback for CJK */
+export const PLOTLY_FONT = {
+  family: "'Times New Roman', Times, serif",
+  size: 13,
+};
+
 /** Colorscale options for charts */
 export const COLORSCALES = [
   'Viridis', 'Plasma', 'Inferno', 'Magma', 'Cividis',

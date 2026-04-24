@@ -50,9 +50,16 @@
   box-sizing: border-box;
 }
 
+/* Latin letters and digits use Times New Roman; CJK falls through to system fonts */
+@font-face {
+  font-family: 'TNR-Latin';
+  src: local('Times New Roman'), local('TimesNewRoman');
+  unicode-range: U+0020-007E, U+00A0-00FF;
+}
+
 body {
   margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'TNR-Latin', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background-color: var(--color-bg);
   color: var(--color-text);
   -webkit-font-smoothing: antialiased;

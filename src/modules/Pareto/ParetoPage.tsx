@@ -6,6 +6,7 @@ import { useUIStore } from '@/store/useUIStore';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
+import { PLOTLY_FONT } from '@/lib/constants';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyData = any;
 
@@ -153,6 +154,7 @@ export function ParetoPage() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const layout: any = {
+    font: PLOTLY_FONT,
     title: { text: `${systemInfo?.elements.join('-')} ${t('pareto.title')}`, font: { size: 15, color: '#0f172a' } },
     xaxis: { title: { text: t('pareto.xAxis'), font: titleFont }, ...axisStyle },
     yaxis: { title: { text: objName, font: titleFont }, ...axisStyle },

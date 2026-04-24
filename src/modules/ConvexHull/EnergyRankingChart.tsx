@@ -18,6 +18,7 @@ import { useProjectStore } from '@/store/useProjectStore';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
+import { PLOTLY_FONT } from '@/lib/constants';
 
 
 /** Palette for auto-assigning colors to any origin method */
@@ -143,6 +144,7 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
 
 
   const layout: PlotlyLayout = {
+    font: PLOTLY_FONT,
     title: {
       text: `${systemInfo.elements.join('-')} ${t('hull.energyRanking', 'Energy Ranking')}`,
       font: { size: 15, color: '#0f172a' },
