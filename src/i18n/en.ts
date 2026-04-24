@@ -152,6 +152,8 @@ const en = {
   'col.qEntropy': 'Q Entropy',
   'col.aOrder': 'A Order',
   'col.sOrder': 'S Order',
+  'col.deltaE': 'ΔE (eV/atom)',
+  'col.deltaObj': 'ΔObj',
   'col.tags': 'Tags',
   'col.notes': 'Notes',
   'col.actions': 'Actions',

@@ -200,7 +200,6 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
 
   return (
     <>
-      <MarkPanel />
       {/* Fitness filter slider */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
         <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
@@ -233,6 +232,8 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
           }}
         />
       </div>
+
+      <MarkPanel />
 
       {/* Stable phases list */}
       <div className="card" style={{ marginTop: 16 }}>

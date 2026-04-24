@@ -1,6 +1,17 @@
 # USPEX Analyzer 
 
 ## 版本更新记录
+### V1.0.4
+
+Explorer 页面
+- 新增 ΔE 字段：`E_child - parentEnthalpy`，无父母的结构自动隐藏
+- 新增 ΔObj 字段：对每个 extraProps 键各生成一个，采用双亲均值方案 `obj_child - avg(obj_parent1, obj_parent2)`
+- Color By 数值字段时，新增双滑块过滤器：拖动范围排除区间外的点，色带本身固定不变
+- X/Y 轴范围输入框、Mark on Chart 移至图表下方
+
+凸包图 / Pareto / Energy Ranking
+- Mark on Chart 面板统一移至图表下方
+
 ### V1.0.3
 
 上传页面
@@ -68,3 +79,6 @@ Explorer 轴选择、Pareto 前沿选择、表格排序状态切换页面后均�
 16.数据探索器加上元素含量√
 17.Filter内，非多目标优化内，有多目标优化的参数（有什么筛什么，不要“写死了”） √
 18.Table标签和Filter没有持久化，换了页面后就消失了。 √
+19.加入ΔE和ΔObj √
+20.加入滑块调节explorer的color √
+21.图直接导出对应的csv
