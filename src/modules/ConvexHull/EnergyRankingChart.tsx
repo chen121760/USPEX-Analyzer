@@ -170,7 +170,6 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
 
   return (
     <>
-      <MarkPanel />
       {/* Slider to control how many structures to display */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
         <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
@@ -207,6 +206,8 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
           }}
         />
       </div>
+
+      <MarkPanel />
 
       {/* Legend for origin colors */}
       <div className="card" style={{ marginTop: 16 }}>

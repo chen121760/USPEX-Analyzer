@@ -152,6 +152,8 @@ const zh = {
   'col.qEntropy': 'Q 熵',
   'col.aOrder': 'A 序参量',
   'col.sOrder': 'S 序参量',
+  'col.deltaE': 'ΔE (eV/atom)',
+  'col.deltaObj': 'ΔObj',
   'col.tags': '标签',
   'col.notes': '备注',
   'col.actions': '操作',

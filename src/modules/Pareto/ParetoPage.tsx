@@ -168,8 +168,6 @@ export function ParetoPage() {
     <div className="fade-in">
       <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>{t('pareto.title')}</h2>
 
-      <MarkPanel />
-
       <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
         <Plot
           data={traces}
@@ -184,6 +182,8 @@ export function ParetoPage() {
           }}
         />
       </div>
+
+      <MarkPanel />
 
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>

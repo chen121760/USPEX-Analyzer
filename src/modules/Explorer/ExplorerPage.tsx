@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useUIStore } from '@/store/useUIStore';
@@ -17,7 +17,7 @@ interface FieldOption {
   type: 'numeric' | 'categorical';
 }
 
-function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: boolean, extraPropKeys: string[], elements: string[]): FieldOption[] {
+function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: boolean, extraPropKeys: string[], elements: string[], structureMap: Map<number, Structure>): FieldOption[] {
   const opts: FieldOption[] = [
     { key: 'enthalpy', label: t('col.enthalpy'), accessor: (s) => s.enthalpy, type: 'numeric' },
     { key: 'fitness', label: t('col.fitness'), accessor: (s) => s.fitness >= 0 ? s.fitness : undefined, type: 'numeric' },
@@ -32,7 +32,6 @@ function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: bo
     { key: 'formula', label: t('col.formula'), accessor: (s) => s.formula, type: 'categorical' },
   ];
 
-  // 每个元素的摩尔分数 x(El)
   for (const [i, el] of elements.entries()) {
     opts.push({
       key: `xfrac_${el}`,
@@ -65,6 +64,36 @@ function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: bo
     opts.push({ key: `extra_${key}`, label: key, accessor: (s) => s.extraProps?.[key], type: 'numeric' });
   }
 
+  opts.push({
+    key: 'deltaE',
+    label: t('col.deltaE'),
+    accessor: (s) => {
+      if (s.parentIds.length === 0) return undefined;
+      const delta = s.enthalpy - s.parentEnthalpy;
+      return isFinite(delta) ? delta : undefined;
+    },
+    type: 'numeric',
+  });
+
+  for (const key of extraPropKeys) {
+    opts.push({
+      key: `deltaObj_${key}`,
+      label: `${t('col.deltaObj')} (${key})`,
+      accessor: (s) => {
+        if (s.parentIds.length === 0) return undefined;
+        const childVal = s.extraProps?.[key];
+        if (childVal == null) return undefined;
+        const parentVals = s.parentIds
+          .map((pid) => structureMap.get(pid)?.extraProps?.[key])
+          .filter((v): v is number => v != null);
+        if (parentVals.length === 0) return undefined;
+        const avg = parentVals.reduce((a, b) => a + b, 0) / parentVals.length;
+        return childVal - avg;
+      },
+      type: 'numeric',
+    });
+  }
+
   return opts;
 }
 
@@ -86,12 +115,17 @@ export function ExplorerPage() {
     return Array.from(keys).sort();
   }, [structures]);
 
+  const structureMap = useMemo(() => {
+    const m = new Map<number, Structure>();
+    structures.forEach((s) => m.set(s.id, s));
+    return m;
+  }, [structures]);
+
   const fields = useMemo(
-    () => getFieldOptions(t, hasML, hasPareto, extraPropKeys, systemInfo?.elements ?? []),
-    [t, hasML, hasPareto, extraPropKeys, systemInfo],
+    () => getFieldOptions(t, hasML, hasPareto, extraPropKeys, systemInfo?.elements ?? [], structureMap),
+    [t, hasML, hasPareto, extraPropKeys, systemInfo, structureMap],
   );
 
-  // 从 UIStore 读取轴选择，切换页面后不会丢失
   const xKey      = useUIStore((s) => s.explorerXKey);
   const setXKey   = useUIStore((s) => s.setExplorerXKey);
   const yKey      = useUIStore((s) => s.explorerYKey);
@@ -103,18 +137,49 @@ export function ExplorerPage() {
   const yField = fields.find((f) => f.key === yKey) ?? fields[1];
   const colorField = fields.find((f) => f.key === colorKey);
 
+  // X/Y axis range — string inputs
+  const [xMin, setXMin] = useState('');
+  const [xMax, setXMax] = useState('');
+  const [yMin, setYMin] = useState('');
+  const [yMax, setYMax] = useState('');
+
+  // Color range — numbers (null = use data extent)
+  const [cMin, setCMin] = useState<number | null>(null);
+  const [cMax, setCMax] = useState<number | null>(null);
+
+  useEffect(() => { setXMin(''); setXMax(''); }, [xKey]);
+  useEffect(() => { setYMin(''); setYMax(''); }, [yKey]);
+  useEffect(() => { setCMin(null); setCMax(null); }, [colorKey]);
+
+  // Compute color data range from all structures (not filtered), so slider range is stable
+  const colorDataRange = useMemo(() => {
+    if (!colorField || colorField.type !== 'numeric') return null;
+    const vals = structures
+      .map((s) => colorField.accessor(s) as number)
+      .filter((v) => v != null && isFinite(v) && v < 900);
+    if (vals.length === 0) return null;
+    return { min: Math.min(...vals), max: Math.max(...vals) };
+  }, [structures, colorField]);
+
   const filteredData = useMemo(() => {
     return structures.filter((s) => {
       const xv = xField.accessor(s);
       const yv = yField.accessor(s);
-      return xv != null && yv != null && s.enthalpy < 900;
+      if (xv == null || yv == null || s.enthalpy >= 900) return false;
+      // color range filter
+      if (colorField && colorField.type === 'numeric' && (cMin !== null || cMax !== null)) {
+        const cv = colorField.accessor(s) as number;
+        if (cv == null || !isFinite(cv)) return false;
+        if (cMin !== null && cv < cMin) return false;
+        if (cMax !== null && cv > cMax) return false;
+      }
+      return true;
     });
-  }, [structures, xField, yField]);
+  }, [structures, xField, yField, colorField, cMin, cMax]);
 
   // Build traces
   const traces: PlotlyData[] = useMemo(() => {
     if (!colorField || colorField.type === 'numeric') {
-      // Single trace with color mapping
       return [{
         x: filteredData.map((s) => xField.accessor(s) as number),
         y: filteredData.map((s) => yField.accessor(s) as number),
@@ -123,6 +188,8 @@ export function ExplorerPage() {
         marker: {
           color: colorField ? filteredData.map((s) => (colorField.accessor(s) as number) ?? 0) : '#6366f1',
           colorscale: 'Viridis',
+          cmin: colorField && colorDataRange ? colorDataRange.min : undefined,
+          cmax: colorField && colorDataRange ? colorDataRange.max : undefined,
           colorbar: colorField ? { title: colorField.label, thickness: 15 } : undefined,
           size: 6,
           opacity: 0.7,
@@ -135,11 +202,10 @@ export function ExplorerPage() {
             `SG: ${s.spaceGroup} | Origin: ${s.origin}`,
         ),
         hoverinfo: 'text' as const,
-        customdata: filteredData.map((s) => s.id)
+        customdata: filteredData.map((s) => s.id),
       }];
     }
 
-    // Categorical color — one trace per category
     const groups = new Map<string, Structure[]>();
     for (const s of filteredData) {
       const cat = String(colorField.accessor(s) ?? 'Unknown');
@@ -157,8 +223,8 @@ export function ExplorerPage() {
       name: cat,
       marker: { color: COLORS[i % COLORS.length], size: 6, opacity: 0.7 },
       text: pts.map(
-          (s) =>
-            `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
+        (s) =>
+          `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
           `${xField.label}: ${xField.accessor(s)}<br>` +
           `${yField.label}: ${yField.accessor(s)}<br>` +
           `SG: ${s.spaceGroup} | Origin: ${s.origin}`,
@@ -166,9 +232,9 @@ export function ExplorerPage() {
       hoverinfo: 'text' as const,
       customdata: pts.map((s) => s.id),
     }));
-  }, [filteredData, xField, yField, colorField]);
+  }, [filteredData, xField, yField, colorField, colorDataRange]);
 
-  // --- Mark overlay traces ---
+  // Mark overlay traces
   const overlayTraces: PlotlyData[] = useMemo(() => {
     const result: PlotlyData[] = [];
 
@@ -217,11 +283,29 @@ export function ExplorerPage() {
 
   const titleFont = { size: 13, color: '#334155' };
 
+  const inputStyle: React.CSSProperties = {
+    width: 72,
+    padding: '3px 6px',
+    border: '1px solid var(--color-border)',
+    borderRadius: 4,
+    fontSize: 11,
+    background: 'var(--color-bg)',
+    color: 'var(--color-text)',
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const layout: any = {
     title: { text: `${xField.label} vs ${yField.label}`, font: { size: 15, color: '#0f172a' } },
-    xaxis: { title: { text: xField.label, font: titleFont }, ...axisStyle },
-    yaxis: { title: { text: yField.label, font: titleFont }, ...axisStyle },
+    xaxis: {
+      title: { text: xField.label, font: titleFont },
+      ...(xMin !== '' || xMax !== '' ? { range: [xMin !== '' ? parseFloat(xMin) : undefined, xMax !== '' ? parseFloat(xMax) : undefined] } : {}),
+      ...axisStyle,
+    },
+    yaxis: {
+      title: { text: yField.label, font: titleFont },
+      ...(yMin !== '' || yMax !== '' ? { range: [yMin !== '' ? parseFloat(yMin) : undefined, yMax !== '' ? parseFloat(yMax) : undefined] } : {}),
+      ...axisStyle,
+    },
     hovermode: 'closest' as const,
     showlegend: true,
     legend: { font: { size: 11, color: '#334155' } },
@@ -273,7 +357,19 @@ export function ExplorerPage() {
         </span>
       </div>
 
-      <MarkPanel />
+      {/* Color range dual slider */}
+      {colorField && colorField.type === 'numeric' && colorDataRange && (
+        <div style={{ marginBottom: 12 }}>
+          <DualRangeSlider
+            label={`Color: ${colorField.label}`}
+            dataMin={colorDataRange.min}
+            dataMax={colorDataRange.max}
+            low={cMin ?? colorDataRange.min}
+            high={cMax ?? colorDataRange.max}
+            onChange={(lo, hi) => { setCMin(lo); setCMax(hi); }}
+          />
+        </div>
+      )}
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <Plot
@@ -289,6 +385,89 @@ export function ExplorerPage() {
           }}
         />
       </div>
+
+      {/* X/Y axis range inputs */}
+      <div style={{ display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <RangeInputs label={`X: ${xField.label}`} min={xMin} max={xMax} onMin={setXMin} onMax={setXMax} inputStyle={inputStyle} />
+        <RangeInputs label={`Y: ${yField.label}`} min={yMin} max={yMax} onMin={setYMin} onMax={setYMax} inputStyle={inputStyle} />
+      </div>
+
+      <MarkPanel />
+    </div>
+  );
+}
+
+function RangeInputs({ label, min, max, onMin, onMax, inputStyle }: {
+  label: string;
+  min: string; max: string;
+  onMin: (v: string) => void;
+  onMax: (v: string) => void;
+  inputStyle: React.CSSProperties;
+}) {
+  return (
+    <span style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--color-text-muted)' }}>
+      {label}:
+      <input type="number" placeholder="min" value={min} onChange={(e) => onMin(e.target.value)} style={inputStyle} />
+      –
+      <input type="number" placeholder="max" value={max} onChange={(e) => onMax(e.target.value)} style={inputStyle} />
+    </span>
+  );
+}
+
+function DualRangeSlider({ label, dataMin, dataMax, low, high, onChange }: {
+  label: string;
+  dataMin: number;
+  dataMax: number;
+  low: number;
+  high: number;
+  onChange: (low: number, high: number) => void;
+}) {
+  const step = (dataMax - dataMin) / 200 || 1;
+  const lowPct  = dataMax === dataMin ? 0 : ((low  - dataMin) / (dataMax - dataMin)) * 100;
+  const highPct = dataMax === dataMin ? 0 : ((high - dataMin) / (dataMax - dataMin)) * 100;
+  const fmt = (v: number) => v.toPrecision(4);
+
+  const trackStyle: React.CSSProperties = {
+    position: 'absolute', inset: 0,
+    WebkitAppearance: 'none', appearance: 'none',
+    width: '100%', height: '100%',
+    background: 'transparent', pointerEvents: 'none',
+    cursor: 'ew-resize',
+  };
+
+  return (
+    <div style={{ fontSize: 11, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ whiteSpace: 'nowrap' }}>{label}:</span>
+      <span style={{ whiteSpace: 'nowrap', minWidth: 60, textAlign: 'right', color: 'var(--color-text)' }}>{fmt(low)}</span>
+      <div style={{ position: 'relative', width: 200, height: 20, flexShrink: 0 }}>
+        {/* filled range bar */}
+        <div style={{
+          position: 'absolute', top: '50%', transform: 'translateY(-50%)',
+          left: `${lowPct}%`, width: `${highPct - lowPct}%`,
+          height: 4, background: '#6366f1', borderRadius: 2, pointerEvents: 'none',
+        }} />
+        {/* track background */}
+        <div style={{
+          position: 'absolute', top: '50%', transform: 'translateY(-50%)',
+          left: 0, right: 0, height: 4, background: '#e2e8f0', borderRadius: 2,
+          zIndex: 0, pointerEvents: 'none',
+        }} />
+        <input type="range" min={dataMin} max={dataMax} step={step} value={low}
+          onChange={(e) => onChange(Math.min(Number(e.target.value), high), high)}
+          style={{ ...trackStyle, zIndex: low > dataMin + (dataMax - dataMin) * 0.9 ? 5 : 3, pointerEvents: 'auto' }}
+        />
+        <input type="range" min={dataMin} max={dataMax} step={step} value={high}
+          onChange={(e) => onChange(low, Math.max(Number(e.target.value), low))}
+          style={{ ...trackStyle, zIndex: 4, pointerEvents: 'auto' }}
+        />
+      </div>
+      <span style={{ whiteSpace: 'nowrap', minWidth: 60, color: 'var(--color-text)' }}>{fmt(high)}</span>
+      <button
+        onClick={() => onChange(dataMin, dataMax)}
+        style={{ fontSize: 10, padding: '1px 6px', border: '1px solid var(--color-border)', borderRadius: 4, background: 'transparent', cursor: 'pointer', color: 'var(--color-text-muted)' }}
+      >
+        reset
+      </button>
     </div>
   );
 }
