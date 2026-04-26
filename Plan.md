@@ -1,6 +1,11 @@
 # USPEX Analyzer 
 
 ## 版本更新记录
+### V1.0.6
+
+修复
+- 修复同一计算跑多次时，新项目覆盖 Recent Projects 中已有记录的 bug
+
 ### V1.0.5
 
 全局

@@ -274,6 +274,7 @@ export interface ParsedPoscar {
 
 export interface ProjectFile {
   version: string;
+  projectId?: string;   // stable unique ID, generated once at creation
   created: string;
   projectName?: string;
   lastModified: string;
