@@ -5,7 +5,7 @@ import { useUIStore } from '@/store/useUIStore';
 import { X, Plus, Download } from 'lucide-react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { buildSeedsFile } from '@/lib/poscarWriter';
+import { buildSeedsFile, structuresToCSV } from '@/lib/poscarWriter';
 import { FormulaDisplay } from '@/components/FormulaDisplay';
 import type { Structure, UnifiedCondition, NumericOperator, CompOperator } from '@/types/structure';
 
@@ -206,12 +206,7 @@ export function FilterPage() {
     } else if (exportFormat === 'seeds') {
       saveAs(new Blob([buildSeedsFile(sortedStructures)], { type: 'text/plain' }), 'seeds.txt');
     } else if (exportFormat === 'csv') {
-      const fmtVal = (v: number) => v < 900 ? v.toFixed(4) : '';
-      const headers = ['ID', 'Formula', 'SpaceGroup', 'Generation', 'Enthalpy', 'Volume', 'Fitness', 'Density', 'Origin'];
-      const rows = sortedStructures.map((s) =>
-        [s.id, s.formula, s.spaceGroup, s.generation, fmtVal(s.enthalpy), fmtVal(s.volume), fmtVal(s.fitness), fmtVal(s.density), s.origin].join(','),
-      );
-      saveAs(new Blob([[headers.join(','), ...rows].join('\n')], { type: 'text/csv' }), 'structures.csv');
+      saveAs(new Blob([structuresToCSV(sortedStructures, { hasPareto, hasML, hasFingerprint })], { type: 'text/csv' }), 'structures.csv');
     } else if (exportFormat === 'json') {
       const project = useProjectStore.getState().exportProjectFile();
       saveAs(new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' }), `uspex-project-${systemInfo?.elements.join('-') ?? 'data'}.json`);

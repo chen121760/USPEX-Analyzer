@@ -11,6 +11,10 @@ Explorer 页面
 - 播放参数可调：步进量（step）和帧率（fps）均可在滑块旁实时修改
 - 新增 GIF 导出：将播放过程逐帧截图并合成动图下载，绕开 React 状态异步问题，直接用 `Plotly.react()` 强制渲染每帧
 
+Filter 页面
+- CSV 导出从 9 列扩展为完整字段：新增 Composition、ParentIDs、Tags、Notes
+- CSV 列动态生成：与 Table 页保持一致，仅当数据中实际存在时才输出 Pareto（ParetoFront、ExtraProps）、ML 弹性模量（Bulk/Shear/Young/Poisson/Pugh/Vickers/FractureToughness）、指纹参数（Q_Entropy/A_Order/S_Order）列
+
 ### V1.0.4
 
 Explorer 页面
@@ -95,3 +99,5 @@ Explorer 轴选择、Pareto 前沿选择、表格排序状态切换页面后均�
 21.滑块加入自动播放输出动图gif输出功能 √
 22.图直接导出对应的csv（有多少数据就输出多少数据）
 23.英文和数字字体改为Times new roman √
+24.导出文件命名时，用户自定义
+25.导出csv时保存所有已知信息 √
