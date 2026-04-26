@@ -25,19 +25,15 @@ export interface StoredProject {
   project: ProjectFile;
 }
 
-// 换成这个：
-export function makeProjectId(projectName: string): string {
-  // 用用户起的名字 + 时间戳，保证永远不会相互覆盖
-  //const time = new Date().toISOString().replace(/[:.]/g, '-');
-  //return `${projectName}_${time}`;
-  return `project_${projectName}`;
+export function makeProjectId(): string {
+  return `project_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
 /** 保存或覆盖一个项目 */
-// 改成这样（加了 projectName 参数）：
 export async function saveProject(project: ProjectFile, projectName: string): Promise<void> {
   const db = await getDB();
-  const id = makeProjectId(projectName);
+  // Use the stable projectId embedded in the file; fall back to generating one
+  const id = project.projectId ?? makeProjectId();
   const record: StoredProject = {
     id,
     name: projectName,  // 直接用用户起的名字

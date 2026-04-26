@@ -1,4 +1,4 @@
-# USPEX Analyzer —— v1.0.5
+# USPEX Analyzer —— v1.0.6
 
 A browser-based analysis tool for USPEX crystal structure prediction outputs. Upload your USPEX output files and interactively explore, visualize, filter, and export your results — all without installing anything.
 

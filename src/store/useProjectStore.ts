@@ -16,7 +16,7 @@ import type {
   ProjectFile,
 } from '@/types/structure';
 import { parseAllFiles, type ParseResult } from '@/parsers';
-import { saveProject } from '@/lib/projectStorage';
+import { saveProject, makeProjectId } from '@/lib/projectStorage';
 import { useUIStore } from '@/store/useUIStore';
 
 // 这个函数负责把当前 store 的数据导出并存入 IndexedDB
@@ -62,6 +62,7 @@ interface ProjectState {
   // ---- Loading state ----
   isLoading: boolean;
   isDataLoaded: boolean;
+  projectId: string;   // stable unique ID, never changes after creation
  // ---- Actions ----
   setDetectedFiles: (files: DetectedFile[]) => void;
   processFiles: (detectedFiles: DetectedFile[], fileContents: Map<USPEXFileType, string>) => void;
@@ -112,6 +113,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   // Initial state
   systemInfo: null,
   projectName: '',
+  projectId: '',
   structures: [],
   userStructures: [],
   hullGenerations: [],
@@ -152,6 +154,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         parseWarnings: result.warnings,
         isLoading: false,
         isDataLoaded: true,
+        projectId: makeProjectId(),   // generate once at creation
       });
       useUIStore.getState().clearProjectFilters();
       autoSave(get);
@@ -188,6 +191,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       isLoading: false,
       isDataLoaded: true,
       parseWarnings: [],
+      projectId: project.projectId ?? makeProjectId(),  // reuse existing ID or mint one for old files
     });
     useUIStore.getState().clearProjectFilters();
   },
@@ -199,7 +203,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
     return {
       version: '1.0.0',
-      projectName: state.projectName, 
+      projectId: state.projectId,
+      projectName: state.projectName,
       created: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       systemInfo: state.systemInfo,
@@ -290,6 +295,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       systemInfo: null,
       structures: [],
       projectName: '',
+      projectId: '',
       userStructures: [],
       hullGenerations: [],
       tags: [...DEFAULT_TAGS],
