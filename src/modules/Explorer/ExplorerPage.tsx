@@ -99,6 +99,15 @@ function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: bo
   return opts;
 }
 
+const AXIS_STYLE = {
+  tickfont: { size: 11, color: '#64748b' },
+  gridcolor: '#e2e8f0',
+  zerolinecolor: '#cbd5e1',
+  linecolor: '#94a3b8',
+};
+
+const TITLE_FONT = { size: 13, color: '#334155' };
+
 export function ExplorerPage() {
   const { t } = useTranslation();
   const openViewer      = useUIStore((s) => s.openViewer);
@@ -134,6 +143,12 @@ export function ExplorerPage() {
   const setYKey   = useUIStore((s) => s.setExplorerYKey);
   const colorKey  = useUIStore((s) => s.explorerColorKey);
   const setColorKey = useUIStore((s) => s.setExplorerColorKey);
+  const showXMarginal    = useUIStore((s) => s.explorerShowXMarginal);
+  const setShowXMarginal = useUIStore((s) => s.setExplorerShowXMarginal);
+  const showYMarginal    = useUIStore((s) => s.explorerShowYMarginal);
+  const setShowYMarginal = useUIStore((s) => s.setExplorerShowYMarginal);
+  const marginalBins     = useUIStore((s) => s.explorerMarginalBins);
+  const setMarginalBins  = useUIStore((s) => s.setExplorerMarginalBins);
 
   const xField = fields.find((f) => f.key === xKey) ?? fields[0];
   const yField = fields.find((f) => f.key === yKey) ?? fields[1];
@@ -274,6 +289,16 @@ export function ExplorerPage() {
         }));
       }
 
+      // Add marginal traces for this frame
+      if (showXMarginal) {
+        const xVals = frameData.map((s) => xField.accessor(s) as number).filter((v) => v != null && isFinite(v));
+        frameTraces = [...frameTraces, ...buildXMarginalTraces(xVals, marginalBins, xField.label)];
+      }
+      if (showYMarginal) {
+        const yVals = frameData.map((s) => yField.accessor(s) as number).filter((v) => v != null && isFinite(v));
+        frameTraces = [...frameTraces, ...buildYMarginalTraces(yVals, marginalBins, yField.label)];
+      }
+
       await Plotly.react(graphDiv, frameTraces, baseLayout);
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 
@@ -297,7 +322,7 @@ export function ExplorerPage() {
       setIsExporting(false);
     });
     gif.render();
-  }, [colorDataRange, cMin, cMax, playStep, playFps, structures, xField, yField, colorField]);
+  }, [colorDataRange, cMin, cMax, playStep, playFps, structures, xField, yField, colorField, showXMarginal, showYMarginal, marginalBins]);
 
   useEffect(() => () => { if (playTimerRef.current) clearTimeout(playTimerRef.current); }, []);
 
@@ -414,14 +439,19 @@ export function ExplorerPage() {
     return result;
   }, [filteredData, xField, yField, markActiveTags, markEaInput, allTags, t]);
 
-  const axisStyle = {
-    tickfont: { size: 11, color: '#64748b' },
-    gridcolor: '#e2e8f0',
-    zerolinecolor: '#cbd5e1',
-    linecolor: '#94a3b8',
-  };
-
-  const titleFont = { size: 13, color: '#334155' };
+  // Marginal distribution traces (histogram + KDE)
+  const marginalTraces: PlotlyData[] = useMemo(() => {
+    const result: PlotlyData[] = [];
+    if (showXMarginal) {
+      const xVals = filteredData.map((s) => xField.accessor(s) as number).filter((v) => v != null && isFinite(v));
+      result.push(...buildXMarginalTraces(xVals, marginalBins, xField.label));
+    }
+    if (showYMarginal) {
+      const yVals = filteredData.map((s) => yField.accessor(s) as number).filter((v) => v != null && isFinite(v));
+      result.push(...buildYMarginalTraces(yVals, marginalBins, yField.label));
+    }
+    return result;
+  }, [filteredData, xField, yField, showXMarginal, showYMarginal, marginalBins]);
 
   const inputStyle: React.CSSProperties = {
     width: 72,
@@ -434,27 +464,76 @@ export function ExplorerPage() {
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const layout: any = {
-    font: PLOTLY_FONT,
-    title: { text: `${xField.label} vs ${yField.label}`, font: { size: 15, color: '#0f172a' } },
-    xaxis: {
-      title: { text: xField.label, font: titleFont },
-      ...(xMin !== '' || xMax !== '' ? { range: [xMin !== '' ? parseFloat(xMin) : undefined, xMax !== '' ? parseFloat(xMax) : undefined] } : {}),
-      ...axisStyle,
-    },
-    yaxis: {
-      title: { text: yField.label, font: titleFont },
-      ...(yMin !== '' || yMax !== '' ? { range: [yMin !== '' ? parseFloat(yMin) : undefined, yMax !== '' ? parseFloat(yMax) : undefined] } : {}),
-      ...axisStyle,
-    },
-    hovermode: 'closest' as const,
-    showlegend: true,
-    legend: { font: { size: 11, color: '#334155' } },
-    dragmode: 'lasso' as const,
-    margin: { t: 50, l: 60, b: 60 },
-    plot_bgcolor: '#ffffff',
-    paper_bgcolor: '#ffffff',
-  };
+  const layout: any = useMemo(() => {
+    const xRange = (xMin !== '' || xMax !== '')
+      ? [xMin !== '' ? parseFloat(xMin) : undefined, xMax !== '' ? parseFloat(xMax) : undefined]
+      : undefined;
+    const yRange = (yMin !== '' || yMax !== '')
+      ? [yMin !== '' ? parseFloat(yMin) : undefined, yMax !== '' ? parseFloat(yMax) : undefined]
+      : undefined;
+
+    const hasMarginal = showXMarginal || showYMarginal;
+
+    // Main plot domain shrinks to make room for marginal panels
+    const mainXDomain: [number, number] = showYMarginal ? [0, 0.80] : [0, 1];
+    const mainYDomain: [number, number] = showXMarginal ? [0, 0.80] : [0, 1];
+
+    const base: any = {
+      font: PLOTLY_FONT,
+      title: hasMarginal ? undefined : { text: `${xField.label} vs ${yField.label}`, font: { size: 15, color: '#0f172a' } },
+      xaxis: {
+        title: { text: xField.label, font: TITLE_FONT },
+        ...(xRange ? { range: xRange } : {}),
+        domain: mainXDomain,
+        ...AXIS_STYLE,
+      },
+      yaxis: {
+        title: { text: yField.label, font: TITLE_FONT },
+        ...(yRange ? { range: yRange } : {}),
+        domain: mainYDomain,
+        ...AXIS_STYLE,
+      },
+      hovermode: 'closest' as const,
+      showlegend: true,
+      legend: { font: { size: 11, color: '#334155' } },
+      dragmode: 'lasso' as const,
+      margin: { t: showXMarginal ? 10 : 50, r: showYMarginal ? 10 : 20, l: 60, b: 60 },
+      plot_bgcolor: '#ffffff',
+      paper_bgcolor: '#ffffff',
+    };
+
+    if (showXMarginal) {
+      base.xaxis2 = {
+        domain: mainXDomain,
+        matches: 'x',
+        showticklabels: false,
+        ...AXIS_STYLE,
+      };
+      base.yaxis2 = {
+        domain: [0.83, 1],
+        title: { text: 'density', font: { size: 10, color: '#94a3b8' } },
+        ...AXIS_STYLE,
+      };
+    }
+
+    if (showYMarginal) {
+      base.xaxis3 = {
+        domain: [0.83, 1],
+        title: { text: 'density', font: { size: 10, color: '#94a3b8' } },
+        ...AXIS_STYLE,
+      };
+      base.yaxis3 = {
+        domain: mainYDomain,
+        matches: 'y',
+        showticklabels: false,
+        ...AXIS_STYLE,
+      };
+    }
+
+    return base;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [xField, yField, xMin, xMax, yMin, yMax, showXMarginal, showYMarginal]);
+
   layoutRef.current = layout;
 
   const selectStyle: React.CSSProperties = {
@@ -477,6 +556,16 @@ export function ExplorerPage() {
           <select value={xKey} onChange={(e) => setXKey(e.target.value)} style={selectStyle}>
             {fields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
           </select>
+          <button
+            onClick={() => setShowXMarginal(!showXMarginal)}
+            title="Toggle X distribution"
+            style={{
+              fontSize: 11, padding: '2px 7px', borderRadius: 4, cursor: 'pointer',
+              border: '1px solid var(--color-border)',
+              background: showXMarginal ? 'var(--color-primary)' : 'transparent',
+              color: showXMarginal ? '#fff' : 'var(--color-text-muted)',
+            }}
+          >∫ dist</button>
         </label>
 
         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -484,6 +573,16 @@ export function ExplorerPage() {
           <select value={yKey} onChange={(e) => setYKey(e.target.value)} style={selectStyle}>
             {fields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
           </select>
+          <button
+            onClick={() => setShowYMarginal(!showYMarginal)}
+            title="Toggle Y distribution"
+            style={{
+              fontSize: 11, padding: '2px 7px', borderRadius: 4, cursor: 'pointer',
+              border: '1px solid var(--color-border)',
+              background: showYMarginal ? 'var(--color-primary)' : 'transparent',
+              color: showYMarginal ? '#fff' : 'var(--color-text-muted)',
+            }}
+          >∫ dist</button>
         </label>
 
         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -493,6 +592,17 @@ export function ExplorerPage() {
             {fields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
           </select>
         </label>
+
+        {(showXMarginal || showYMarginal) && (
+          <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--color-text-muted)' }}>
+            bins
+            <input
+              type="number" min={5} max={200} step={1} value={marginalBins}
+              onChange={(e) => setMarginalBins(Math.max(5, Math.min(200, Number(e.target.value))))}
+              style={{ width: 48, padding: '2px 4px', border: '1px solid var(--color-border)', borderRadius: 4, fontSize: 11, background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            />
+          </label>
+        )}
 
         <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
           {filteredData.length} pts
@@ -524,10 +634,10 @@ export function ExplorerPage() {
 
       <div className="card" ref={plotRef} style={{ padding: 0, overflow: 'hidden' }}>
         <Plot
-          data={[...traces, ...overlayTraces]}
+          data={[...traces, ...overlayTraces, ...marginalTraces]}
           layout={layout}
           config={{ responsive: true, displayModeBar: true }}
-          style={{ width: '100%', height: 550 }}
+          style={{ width: '100%', height: (showXMarginal || showYMarginal) ? 620 : 550 }}
           onClick={(event: PlotMouseEvent) => {
             const point = event.points?.[0];
             if (point?.customdata) {
@@ -547,6 +657,104 @@ export function ExplorerPage() {
     </div>
   );
 }
+
+// ── KDE helpers ──────────────────────────────────────────────────────────────
+
+function silvermanBandwidth(values: number[]): number {
+  const n = values.length;
+  if (n < 2) return 1;
+  const mean = values.reduce((a, b) => a + b, 0) / n;
+  const std = Math.sqrt(values.reduce((a, v) => a + (v - mean) ** 2, 0) / (n - 1));
+  return 0.9 * std * Math.pow(n, -0.2);
+}
+
+function evalKDE(values: number[], bw: number, pts: number[]): number[] {
+  const inv = 1 / (values.length * bw * Math.sqrt(2 * Math.PI));
+  return pts.map((x) =>
+    inv * values.reduce((acc, v) => acc + Math.exp(-0.5 * ((x - v) / bw) ** 2), 0),
+  );
+}
+
+function linspace(lo: number, hi: number, n: number): number[] {
+  const step = (hi - lo) / (n - 1);
+  return Array.from({ length: n }, (_, i) => lo + i * step);
+}
+
+/** Build X-marginal traces (histogram + KDE) for subplot xaxis2/yaxis2 */
+function buildXMarginalTraces(xVals: number[], bins: number, label: string): PlotlyData[] {
+  if (xVals.length < 2) return [];
+  const bw = silvermanBandwidth(xVals);
+  const lo = Math.min(...xVals);
+  const hi = Math.max(...xVals);
+  const pts = linspace(lo, hi, 200);
+  const density = evalKDE(xVals, bw, pts);
+
+  return [
+    {
+      x: xVals,
+      type: 'histogram',
+      nbinsx: bins,
+      histnorm: 'probability density',
+      marker: { color: 'rgba(99,102,241,0.45)', line: { color: 'rgba(99,102,241,0.8)', width: 1 } },
+      name: `${label} dist`,
+      showlegend: false,
+      xaxis: 'x',
+      yaxis: 'y2',
+      hoverinfo: 'skip',
+    },
+    {
+      x: pts,
+      y: density,
+      type: 'scatter',
+      mode: 'lines',
+      line: { color: '#6366f1', width: 2 },
+      name: `${label} KDE`,
+      showlegend: false,
+      xaxis: 'x',
+      yaxis: 'y2',
+      hoverinfo: 'skip',
+    },
+  ];
+}
+
+/** Build Y-marginal traces (horizontal histogram + KDE) for subplot xaxis3/yaxis3 */
+function buildYMarginalTraces(yVals: number[], bins: number, label: string): PlotlyData[] {
+  if (yVals.length < 2) return [];
+  const bw = silvermanBandwidth(yVals);
+  const lo = Math.min(...yVals);
+  const hi = Math.max(...yVals);
+  const pts = linspace(lo, hi, 200);
+  const density = evalKDE(yVals, bw, pts);
+
+  return [
+    {
+      y: yVals,
+      type: 'histogram',
+      nbinsy: bins,
+      histnorm: 'probability density',
+      orientation: 'h',
+      marker: { color: 'rgba(236,72,153,0.45)', line: { color: 'rgba(236,72,153,0.8)', width: 1 } },
+      name: `${label} dist`,
+      showlegend: false,
+      xaxis: 'x3',
+      yaxis: 'y',
+      hoverinfo: 'skip',
+    },
+    {
+      x: density,
+      y: pts,
+      type: 'scatter',
+      mode: 'lines',
+      line: { color: '#ec4899', width: 2 },
+      name: `${label} KDE`,
+      showlegend: false,
+      xaxis: 'x3',
+      yaxis: 'y',
+      hoverinfo: 'skip',
+    },
+  ];
+}
+
 
 function RangeInputs({ label, min, max, onMin, onMax, inputStyle }: {
   label: string;
