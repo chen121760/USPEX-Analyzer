@@ -92,6 +92,13 @@ interface UIState {
   setExplorerYKey: (key: string) => void;
   explorerColorKey: string;
   setExplorerColorKey: (key: string) => void;
+  // 边际分布图开关
+  explorerShowXMarginal: boolean;
+  setExplorerShowXMarginal: (v: boolean) => void;
+  explorerShowYMarginal: boolean;
+  setExplorerShowYMarginal: (v: boolean) => void;
+  explorerMarginalBins: number;
+  setExplorerMarginalBins: (v: number) => void;
 
   // --- Pareto 页面 ---
   // 选中显示哪些 Pareto 前沿（用数组存，因为 Set 不能直接被 JSON 序列化）
@@ -204,6 +211,13 @@ export const useUIStore = create<UIState>()(
       explorerColorKey: 'origin',
       setExplorerColorKey: (key) => set({ explorerColorKey: key }),
 
+      explorerShowXMarginal: false,
+      setExplorerShowXMarginal: (v) => set({ explorerShowXMarginal: v }),
+      explorerShowYMarginal: false,
+      setExplorerShowYMarginal: (v) => set({ explorerShowYMarginal: v }),
+      explorerMarginalBins: 30,
+      setExplorerMarginalBins: (v) => set({ explorerMarginalBins: v }),
+
       // --- Pareto 页面状态 ---
       paretoSelectedFronts: [],
       setParetoSelectedFronts: (fronts) => set({ paretoSelectedFronts: fronts }),
@@ -254,6 +268,9 @@ export const useUIStore = create<UIState>()(
         explorerXKey: state.explorerXKey,
         explorerYKey: state.explorerYKey,
         explorerColorKey: state.explorerColorKey,
+        explorerShowXMarginal: state.explorerShowXMarginal,
+        explorerShowYMarginal: state.explorerShowYMarginal,
+        explorerMarginalBins: state.explorerMarginalBins,
         paretoSelectedFronts: state.paretoSelectedFronts,
         paretoShowLines: state.paretoShowLines,
         tableSorting: state.tableSorting,

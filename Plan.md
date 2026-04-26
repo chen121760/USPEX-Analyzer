@@ -3,8 +3,16 @@
 ## 版本更新记录
 ### V1.0.6
 
+Explorer 页面
+- 新增边际分布图（Marginal Histogram + KDE）：X/Y 轴各有独立开关（`∫ dist` 按钮），挂在对应轴选择器后面
+- X 轴分布图出现在主图上方，Y 轴分布图出现在主图右侧，坐标轴通过 Plotly subplot `matches` 机制天然对齐
+- 直方图叠加 KDE 曲线（Silverman bandwidth 自动计算），`histnorm: 'probability density'` 保证单位一致
+- bins 数量可调（5–200，默认 30），任意一个边际图开启时显示
+- GIF 导出时边际图随每帧数据同步更新
+- 开关状态持久化，切换页面不丢失
+
 修复
-- 修复同一计算跑多次时，新项目覆盖 Recent Projects 中已有记录的 bug
+- 修复同一计算跑多次时，新项目覆盖 Recent Projects 中已有记录的 bug：项目 ID 改为首次创建时生成的唯一值（timestamp + 随机串），后续自动保存复用同一 ID
 
 ### V1.0.5
 
@@ -106,3 +114,4 @@ Explorer 轴选择、Pareto 前沿选择、表格排序状态切换页面后均�
 23.英文和数字字体改为Times new roman √
 24.导出文件命名时，用户自定义
 25.导出csv时保存所有已知信息 √
+26.explorer 加上X，Y轴数据分步统计（加上一个按钮）。主要是导出GIF图能看数据分布变化情况。
