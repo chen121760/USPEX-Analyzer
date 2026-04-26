@@ -56,18 +56,28 @@ export function buildExportFilename(
   return segments.join('-') + '.vasp';
 }
 
+export interface CSVOptions {
+  hasPareto?: boolean;
+  hasML?: boolean;
+  hasFingerprint?: boolean;
+}
+
 /**
  * Generate a CSV string from structures.
+ * Optional flags mirror the DataTable column visibility logic:
+ * columns for Pareto, ML elastic properties, and fingerprint are only
+ * included when the corresponding data is actually present.
  */
-export function structuresToCSV(structures: Structure[]): string {
+export function structuresToCSV(structures: Structure[], opts: CSVOptions = {}): string {
+  const { hasPareto = false, hasML = false, hasFingerprint = false } = opts;
+
   const headers = [
     'ID', 'Formula', 'Composition', 'SpaceGroup', 'Generation',
     'Enthalpy_eV_atom', 'Volume_A3_atom', 'Fitness_eV_block',
     'Density_g_cm3', 'Origin', 'ParentIDs',
-    'ParetoFront', 'ExtraProps',
-    'BulkModulus_GPa', 'ShearModulus_GPa', 'YoungModulus_GPa',
-    'PoissonRatio', 'PughRatio', 'VickersHardness_GPa', 'FractureToughness',
-    'Q_Entropy', 'A_Order', 'S_Order',
+    ...(hasPareto ? ['ParetoFront', 'ExtraProps'] : []),
+    ...(hasML ? ['BulkModulus_GPa', 'ShearModulus_GPa', 'YoungModulus_GPa', 'PoissonRatio', 'PughRatio', 'VickersHardness_GPa', 'FractureToughness'] : []),
+    ...(hasFingerprint ? ['Q_Entropy', 'A_Order', 'S_Order'] : []),
     'Tags', 'Notes',
   ];
 
@@ -83,18 +93,20 @@ export function structuresToCSV(structures: Structure[]): string {
     s.density,
     s.origin,
     `"${s.parentIds.join(' ')}"`,
-    s.paretoFront ?? '',
-    Object.entries(s.extraProps ?? {}).map(([k, v]) => `${k}:${v}`).join(';') || '',
-    s.bulkModulus ?? '',
-    s.shearModulus ?? '',
-    s.youngModulus ?? '',
-    s.poissonRatio ?? '',
-    s.pughRatio ?? '',
-    s.vickersHardness ?? '',
-    s.fractureToughness ?? '',
-    s.qEntropy ?? '',
-    s.aOrder ?? '',
-    s.sOrder ?? '',
+    ...(hasPareto ? [
+      s.paretoFront ?? '',
+      Object.entries(s.extraProps ?? {}).map(([k, v]) => `${k}:${v}`).join(';') || '',
+    ] : []),
+    ...(hasML ? [
+      s.bulkModulus ?? '',
+      s.shearModulus ?? '',
+      s.youngModulus ?? '',
+      s.poissonRatio ?? '',
+      s.pughRatio ?? '',
+      s.vickersHardness ?? '',
+      s.fractureToughness ?? '',
+    ] : []),
+    ...(hasFingerprint ? [s.qEntropy ?? '', s.aOrder ?? '', s.sOrder ?? ''] : []),
     `"${s.tags.join(', ')}"`,
     `"${s.notes.replace(/"/g, '""')}"`,
   ].join(','));
