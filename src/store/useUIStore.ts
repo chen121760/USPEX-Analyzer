@@ -99,6 +99,10 @@ interface UIState {
   setExplorerShowYMarginal: (v: boolean) => void;
   explorerMarginalBins: number;
   setExplorerMarginalBins: (v: number) => void;
+  explorerXMarginalExcludeZero: boolean;
+  setExplorerXMarginalExcludeZero: (v: boolean) => void;
+  explorerYMarginalExcludeZero: boolean;
+  setExplorerYMarginalExcludeZero: (v: boolean) => void;
 
   // --- Pareto 页面 ---
   // 选中显示哪些 Pareto 前沿（用数组存，因为 Set 不能直接被 JSON 序列化）
@@ -217,6 +221,10 @@ export const useUIStore = create<UIState>()(
       setExplorerShowYMarginal: (v) => set({ explorerShowYMarginal: v }),
       explorerMarginalBins: 30,
       setExplorerMarginalBins: (v) => set({ explorerMarginalBins: v }),
+      explorerXMarginalExcludeZero: false,
+      setExplorerXMarginalExcludeZero: (v) => set({ explorerXMarginalExcludeZero: v }),
+      explorerYMarginalExcludeZero: false,
+      setExplorerYMarginalExcludeZero: (v) => set({ explorerYMarginalExcludeZero: v }),
 
       // --- Pareto 页面状态 ---
       paretoSelectedFronts: [],
@@ -271,6 +279,8 @@ export const useUIStore = create<UIState>()(
         explorerShowXMarginal: state.explorerShowXMarginal,
         explorerShowYMarginal: state.explorerShowYMarginal,
         explorerMarginalBins: state.explorerMarginalBins,
+        explorerXMarginalExcludeZero: state.explorerXMarginalExcludeZero,
+        explorerYMarginalExcludeZero: state.explorerYMarginalExcludeZero,
         paretoSelectedFronts: state.paretoSelectedFronts,
         paretoShowLines: state.paretoShowLines,
         tableSorting: state.tableSorting,

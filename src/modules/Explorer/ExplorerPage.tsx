@@ -149,6 +149,10 @@ export function ExplorerPage() {
   const setShowYMarginal = useUIStore((s) => s.setExplorerShowYMarginal);
   const marginalBins     = useUIStore((s) => s.explorerMarginalBins);
   const setMarginalBins  = useUIStore((s) => s.setExplorerMarginalBins);
+  const xExcludeZero     = useUIStore((s) => s.explorerXMarginalExcludeZero);
+  const setXExcludeZero  = useUIStore((s) => s.setExplorerXMarginalExcludeZero);
+  const yExcludeZero     = useUIStore((s) => s.explorerYMarginalExcludeZero);
+  const setYExcludeZero  = useUIStore((s) => s.setExplorerYMarginalExcludeZero);
 
   const xField = fields.find((f) => f.key === xKey) ?? fields[0];
   const yField = fields.find((f) => f.key === yKey) ?? fields[1];
@@ -291,11 +295,27 @@ export function ExplorerPage() {
 
       // Add marginal traces for this frame
       if (showXMarginal) {
-        const xVals = frameData.map((s) => xField.accessor(s) as number).filter((v) => v != null && isFinite(v));
+        const xRangeMin = xMin !== '' ? parseFloat(xMin) : null;
+        const xRangeMax = xMax !== '' ? parseFloat(xMax) : null;
+        const xVals = frameData.map((s) => xField.accessor(s) as number).filter((v) => {
+          if (v == null || !isFinite(v)) return false;
+          if (xExcludeZero && v === 0) return false;
+          if (xRangeMin !== null && v < xRangeMin) return false;
+          if (xRangeMax !== null && v > xRangeMax) return false;
+          return true;
+        });
         frameTraces = [...frameTraces, ...buildXMarginalTraces(xVals, marginalBins, xField.label)];
       }
       if (showYMarginal) {
-        const yVals = frameData.map((s) => yField.accessor(s) as number).filter((v) => v != null && isFinite(v));
+        const yRangeMin = yMin !== '' ? parseFloat(yMin) : null;
+        const yRangeMax = yMax !== '' ? parseFloat(yMax) : null;
+        const yVals = frameData.map((s) => yField.accessor(s) as number).filter((v) => {
+          if (v == null || !isFinite(v)) return false;
+          if (yExcludeZero && v === 0) return false;
+          if (yRangeMin !== null && v < yRangeMin) return false;
+          if (yRangeMax !== null && v > yRangeMax) return false;
+          return true;
+        });
         frameTraces = [...frameTraces, ...buildYMarginalTraces(yVals, marginalBins, yField.label)];
       }
 
@@ -322,7 +342,7 @@ export function ExplorerPage() {
       setIsExporting(false);
     });
     gif.render();
-  }, [colorDataRange, cMin, cMax, playStep, playFps, structures, xField, yField, colorField, showXMarginal, showYMarginal, marginalBins]);
+  }, [colorDataRange, cMin, cMax, playStep, playFps, structures, xField, yField, colorField, showXMarginal, showYMarginal, marginalBins, xExcludeZero, yExcludeZero, xMin, xMax, yMin, yMax]);
 
   useEffect(() => () => { if (playTimerRef.current) clearTimeout(playTimerRef.current); }, []);
 
@@ -441,17 +461,38 @@ export function ExplorerPage() {
 
   // Marginal distribution traces (histogram + KDE)
   const marginalTraces: PlotlyData[] = useMemo(() => {
+    const xRangeMin = xMin !== '' ? parseFloat(xMin) : null;
+    const xRangeMax = xMax !== '' ? parseFloat(xMax) : null;
+    const yRangeMin = yMin !== '' ? parseFloat(yMin) : null;
+    const yRangeMax = yMax !== '' ? parseFloat(yMax) : null;
+
     const result: PlotlyData[] = [];
     if (showXMarginal) {
-      const xVals = filteredData.map((s) => xField.accessor(s) as number).filter((v) => v != null && isFinite(v));
+      const xVals = filteredData
+        .map((s) => xField.accessor(s) as number)
+        .filter((v) => {
+          if (v == null || !isFinite(v)) return false;
+          if (xExcludeZero && v === 0) return false;
+          if (xRangeMin !== null && v < xRangeMin) return false;
+          if (xRangeMax !== null && v > xRangeMax) return false;
+          return true;
+        });
       result.push(...buildXMarginalTraces(xVals, marginalBins, xField.label));
     }
     if (showYMarginal) {
-      const yVals = filteredData.map((s) => yField.accessor(s) as number).filter((v) => v != null && isFinite(v));
+      const yVals = filteredData
+        .map((s) => yField.accessor(s) as number)
+        .filter((v) => {
+          if (v == null || !isFinite(v)) return false;
+          if (yExcludeZero && v === 0) return false;
+          if (yRangeMin !== null && v < yRangeMin) return false;
+          if (yRangeMax !== null && v > yRangeMax) return false;
+          return true;
+        });
       result.push(...buildYMarginalTraces(yVals, marginalBins, yField.label));
     }
     return result;
-  }, [filteredData, xField, yField, showXMarginal, showYMarginal, marginalBins]);
+  }, [filteredData, xField, yField, showXMarginal, showYMarginal, marginalBins, xExcludeZero, yExcludeZero, xMin, xMax, yMin, yMax]);
 
   const inputStyle: React.CSSProperties = {
     width: 72,
@@ -566,6 +607,18 @@ export function ExplorerPage() {
               color: showXMarginal ? '#fff' : 'var(--color-text-muted)',
             }}
           >∫ dist</button>
+          {showXMarginal && (
+            <button
+              onClick={() => setXExcludeZero(!xExcludeZero)}
+              title="Exclude zero values from X distribution"
+              style={{
+                fontSize: 11, padding: '2px 7px', borderRadius: 4, cursor: 'pointer',
+                border: '1px solid var(--color-border)',
+                background: xExcludeZero ? '#f59e0b' : 'transparent',
+                color: xExcludeZero ? '#fff' : 'var(--color-text-muted)',
+              }}
+            >≠0</button>
+          )}
         </label>
 
         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -583,6 +636,18 @@ export function ExplorerPage() {
               color: showYMarginal ? '#fff' : 'var(--color-text-muted)',
             }}
           >∫ dist</button>
+          {showYMarginal && (
+            <button
+              onClick={() => setYExcludeZero(!yExcludeZero)}
+              title="Exclude zero values from Y distribution"
+              style={{
+                fontSize: 11, padding: '2px 7px', borderRadius: 4, cursor: 'pointer',
+                border: '1px solid var(--color-border)',
+                background: yExcludeZero ? '#f59e0b' : 'transparent',
+                color: yExcludeZero ? '#fff' : 'var(--color-text-muted)',
+              }}
+            >≠0</button>
+          )}
         </label>
 
         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -601,6 +666,30 @@ export function ExplorerPage() {
               onChange={(e) => setMarginalBins(Math.max(5, Math.min(200, Number(e.target.value))))}
               style={{ width: 48, padding: '2px 4px', border: '1px solid var(--color-border)', borderRadius: 4, fontSize: 11, background: 'var(--color-bg)', color: 'var(--color-text)' }}
             />
+            {showXMarginal && (() => {
+              const xRangeMin = xMin !== '' ? parseFloat(xMin) : null;
+              const xRangeMax = xMax !== '' ? parseFloat(xMax) : null;
+              const n = filteredData.map((s) => xField.accessor(s) as number).filter((v) => {
+                if (v == null || !isFinite(v)) return false;
+                if (xExcludeZero && v === 0) return false;
+                if (xRangeMin !== null && v < xRangeMin) return false;
+                if (xRangeMax !== null && v > xRangeMax) return false;
+                return true;
+              }).length;
+              return <span style={{ color: 'var(--color-text-muted)' }}>X: n={n}</span>;
+            })()}
+            {showYMarginal && (() => {
+              const yRangeMin = yMin !== '' ? parseFloat(yMin) : null;
+              const yRangeMax = yMax !== '' ? parseFloat(yMax) : null;
+              const n = filteredData.map((s) => yField.accessor(s) as number).filter((v) => {
+                if (v == null || !isFinite(v)) return false;
+                if (yExcludeZero && v === 0) return false;
+                if (yRangeMin !== null && v < yRangeMin) return false;
+                if (yRangeMax !== null && v > yRangeMax) return false;
+                return true;
+              }).length;
+              return <span style={{ color: 'var(--color-text-muted)' }}>Y: n={n}</span>;
+            })()}
           </label>
         )}
 
