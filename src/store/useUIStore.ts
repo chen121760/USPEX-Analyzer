@@ -18,7 +18,7 @@ import { create } from 'zustand';
 // persist 是 Zustand 提供的"持久化中间件"
 // 它会自动把 store 的数据存到 localStorage，并在页面加载时恢复
 import { persist } from 'zustand/middleware';
-import type { FilterCondition, UnifiedCondition, TableFilterCondition } from '@/types/structure';
+import type { FilterCondition, UnifiedCondition, TableFilterCondition, UnifiedConditionGroup, TableFilterGroup } from '@/types/structure';
 
 // -------------------------------------------------------
 // 类型定义：描述整个 UI store 里有哪些数据和操作
@@ -65,6 +65,10 @@ interface UIState {
   // FilterPage 统一条件列表（持久化）
   filterUnifiedConditions: UnifiedCondition[];
   setFilterUnifiedConditions: (conditions: UnifiedCondition[]) => void;
+
+  // FilterPage 条件组（组内 AND，组间 OR）
+  filterConditionGroups: UnifiedConditionGroup[];
+  setFilterConditionGroups: (groups: UnifiedConditionGroup[]) => void;
 
   // 标签三态状态：key 是标签 id，value 是 'include'（绿）或 'exclude'（红）
   filterTagStates: Record<string, 'include' | 'exclude'>;
@@ -151,6 +155,9 @@ interface UIState {
   // 表格筛选条件（持久化）
   tableFilters: TableFilterCondition[];
   setTableFilters: (filters: TableFilterCondition[]) => void;
+  // 表格筛选条件组（组内 AND，组间 OR）
+  tableFilterGroups: TableFilterGroup[];
+  setTableFilterGroups: (groups: TableFilterGroup[]) => void;
 
   // 切换项目时清空所有项目相关的临时筛选状态
   clearProjectFilters: () => void;
@@ -221,6 +228,9 @@ export const useUIStore = create<UIState>()(
 
       filterUnifiedConditions: [],
       setFilterUnifiedConditions: (conditions) => set({ filterUnifiedConditions: conditions }),
+
+      filterConditionGroups: [],
+      setFilterConditionGroups: (groups) => set({ filterConditionGroups: groups }),
 
       filterTagStates: {},
       setFilterTagStates: (states) => set({ filterTagStates: states }),
@@ -304,9 +314,14 @@ export const useUIStore = create<UIState>()(
       tableFilters: [],
       setTableFilters: (filters) => set({ tableFilters: filters }),
 
+      tableFilterGroups: [],
+      setTableFilterGroups: (groups) => set({ tableFilterGroups: groups }),
+
       clearProjectFilters: () => set({
         tableFilters: [],
+        tableFilterGroups: [],
         filterUnifiedConditions: [],
+        filterConditionGroups: [],
         filterTagStates: {},
       }),
 

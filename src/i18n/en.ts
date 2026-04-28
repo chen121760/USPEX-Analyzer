@@ -41,6 +41,9 @@ const en = {
   'btn.deselectAll': 'Deselect All',
   'btn.addFilter': 'Add',
   'btn.resetFilter': 'Reset',
+  'btn.newOrGroup': '+ OR',
+  'btn.appendToGroup': 'Append to group',
+  'btn.cancelAppend': 'Cancel',
   'btn.all': 'All',
 
   // ---- DataTable toolbar ----

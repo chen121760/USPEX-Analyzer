@@ -7,7 +7,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { buildSeedsFile, structuresToCSV } from '@/lib/poscarWriter';
 import { FormulaDisplay } from '@/components/FormulaDisplay';
-import type { Structure, UnifiedCondition, NumericOperator, CompOperator } from '@/types/structure';
+import type { Structure, UnifiedCondition, NumericOperator, CompOperator, UnifiedConditionGroup } from '@/types/structure';
 
 
 const NUMERIC_OPS: NumericOperator[] = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'];
@@ -124,9 +124,12 @@ export function FilterPage() {
     return base;
   }, [hasPareto, hasML, hasFingerprint]);
 
-  // 统一条件列表 — 接入 UIStore 持久化
-  const conditions    = useUIStore((s) => s.filterUnifiedConditions);
-  const setConditions = useUIStore((s) => s.setFilterUnifiedConditions);
+  // 条件组 — 接入 UIStore
+  const groups    = useUIStore((s) => s.filterConditionGroups);
+  const setGroups = useUIStore((s) => s.setFilterConditionGroups);
+
+  // 当前追加目标组 ID（null = 追加到最后一组，或新建）
+  const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
 
   // 条件构建器的临时状态
   const [condKind, setCondKind] = useState<'numeric' | 'nComponents' | 'elementFraction'>('numeric');
@@ -152,22 +155,46 @@ export function FilterPage() {
     }
   };
 
-  // 添加条件
-  const addCondition = () => {
+  // 添加条件：追加到 targetGroupId 指定的组，或最后一组，或新建第一组
+  const addCondition = (forceNewGroup = false) => {
+    let newCond: UnifiedCondition | null = null;
     if (condKind === 'numeric') {
       if (numVal === '') return;
-      setConditions([...conditions, { kind: 'numeric', field: numField, operator: numOp, value: Number(numVal) }]);
+      newCond = { kind: 'numeric', field: numField, operator: numOp, value: Number(numVal) };
       setNumVal('');
     } else if (condKind === 'nComponents') {
-      setConditions([...conditions, { kind: 'nComponents', value: nComp }]);
+      newCond = { kind: 'nComponents', value: nComp };
     } else {
       if (!elemEl || elemVal === '') return;
-      setConditions([...conditions, { kind: 'elementFraction', element: elemEl, operator: elemOp, value: Number(elemVal) }]);
+      newCond = { kind: 'elementFraction', element: elemEl, operator: elemOp, value: Number(elemVal) };
       setElemVal('');
+    }
+    if (!newCond) return;
+
+    if (forceNewGroup) {
+      // 明确新建 OR 组
+      const newGroup: UnifiedConditionGroup = { id: crypto.randomUUID(), conditions: [newCond] };
+      setGroups([...groups, newGroup]);
+      setTargetGroupId(null);
+    } else if (targetGroupId !== null) {
+      // 追加到指定组
+      setGroups(groups.map((g) =>
+        g.id === targetGroupId ? { ...g, conditions: [...g.conditions, newCond!] } : g
+      ));
+    } else if (groups.length > 0) {
+      // 追加到最后一组
+      const last = groups[groups.length - 1];
+      setGroups(groups.map((g) =>
+        g.id === last.id ? { ...g, conditions: [...g.conditions, newCond!] } : g
+      ));
+    } else {
+      // 没有任何组，新建第一组
+      const newGroup: UnifiedConditionGroup = { id: crypto.randomUUID(), conditions: [newCond] };
+      setGroups([newGroup]);
     }
   };
 
-  // 过滤逻辑
+  // 过滤逻辑：组间 OR，组内 AND
   const filteredStructures = useMemo(() => {
     let result = structures;
 
@@ -176,11 +203,15 @@ export function FilterPage() {
     if (includedTagIds.length > 0) result = result.filter((s) => includedTagIds.every((id) => s.tags.includes(id)));
     if (excludedTagIds.length > 0) result = result.filter((s) => excludedTagIds.every((id) => !s.tags.includes(id)));
 
-    for (const cond of conditions) {
-      result = result.filter((s) => applyCondition(s, cond, elements));
+    if (groups.length > 0) {
+      result = result.filter((s) =>
+        groups.some((group) =>
+          group.conditions.every((cond) => applyCondition(s, cond, elements))
+        )
+      );
     }
     return result;
-  }, [structures, tagStates, conditions, elements]);
+  }, [structures, tagStates, groups, elements]);
 
   // 排序
   const sortedStructures = useMemo(() => {
@@ -317,28 +348,77 @@ export function FilterPage() {
                   style={{ ...inputStyle, width: 70 }} />
               </>}
 
-              <button className="btn btn-sm btn-primary" style={{ fontSize: 11, padding: '3px 10px' }} onClick={addCondition}>
+              <button className="btn btn-sm btn-primary" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => addCondition(false)}>
                 <Plus size={12} /> {t('btn.addFilter')}
               </button>
+              {groups.length > 0 && (
+                <button className="btn btn-sm btn-outline" style={{ fontSize: 11, padding: '3px 10px', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }} onClick={() => addCondition(true)}>
+                  {t('btn.newOrGroup')}
+                </button>
+              )}
             </div>
           </div>
 
-          {/* 已激活条件标签 */}
-          {conditions.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-              {conditions.map((cond, i) => (
-                <span key={i} style={{
-                  fontSize: 11, padding: '2px 8px', borderRadius: 12,
-                  background: 'var(--color-primary)', color: '#fff',
-                  display: 'flex', alignItems: 'center', gap: 4,
-                }}>
-                  {conditionLabel(cond, t)}
-                  <X size={12} style={{ cursor: 'pointer' }}
-                    onClick={() => setConditions(conditions.filter((_, idx) => idx !== i))} />
-                </span>
+          {/* 条件组展示：组内 AND，组间 OR */}
+          {groups.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+              {groups.map((group, gi) => (
+                <div key={group.id}>
+                  {gi > 0 && (
+                    <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 700,
+                      color: 'var(--color-primary)', margin: '2px 0', letterSpacing: 2 }}>
+                      OR
+                    </div>
+                  )}
+                  <div style={{
+                    display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center',
+                    padding: '6px 8px', borderRadius: 6,
+                    border: `1px solid ${targetGroupId === group.id ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                    background: 'var(--color-bg)',
+                  }}>
+                    {group.conditions.map((cond, ci) => (
+                      <span key={ci} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        {ci > 0 && <span style={{ fontSize: 10, color: 'var(--color-text-muted)', margin: '0 2px' }}>AND</span>}
+                        <span style={{
+                          fontSize: 11, padding: '2px 7px', borderRadius: 10,
+                          background: 'var(--color-primary)', color: '#fff',
+                          display: 'flex', alignItems: 'center', gap: 3,
+                        }}>
+                          {conditionLabel(cond, t)}
+                          <X size={11} style={{ cursor: 'pointer' }}
+                            onClick={() => {
+                              const newConds = group.conditions.filter((_, idx) => idx !== ci);
+                              if (newConds.length === 0) {
+                                setGroups(groups.filter((g) => g.id !== group.id));
+                                if (targetGroupId === group.id) setTargetGroupId(null);
+                              } else {
+                                setGroups(groups.map((g) => g.id === group.id ? { ...g, conditions: newConds } : g));
+                              }
+                            }}
+                          />
+                        </span>
+                      </span>
+                    ))}
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+                      <button
+                        className={`btn btn-sm ${targetGroupId === group.id ? 'btn-primary' : 'btn-ghost'}`}
+                        style={{ fontSize: 10, padding: '1px 6px' }}
+                        onClick={() => setTargetGroupId(targetGroupId === group.id ? null : group.id)}
+                      >
+                        {targetGroupId === group.id ? t('btn.cancelAppend') : t('btn.appendToGroup')}
+                      </button>
+                      <X size={13} style={{ cursor: 'pointer', color: 'var(--color-text-muted)' }}
+                        onClick={() => {
+                          setGroups(groups.filter((g) => g.id !== group.id));
+                          if (targetGroupId === group.id) setTargetGroupId(null);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
               ))}
-              <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }}
-                onClick={() => setConditions([])}>
+              <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, alignSelf: 'flex-start' }}
+                onClick={() => { setGroups([]); setTargetGroupId(null); }}>
                 {t('btn.resetFilter')}
               </button>
             </div>
@@ -424,9 +504,10 @@ export function FilterPage() {
                 <th>{t('col.enthalpy')}</th>
                 <th>{t('col.fitness')}</th>
                 <th>{t('col.origin')}</th>
-                {conditions
-                  .filter((c) => c.kind === 'numeric')
-                  .map((c) => (c as { kind: 'numeric'; field: string }).field)
+                {groups
+                  .flatMap((g) => g.conditions)
+                  .filter((c): c is { kind: 'numeric'; field: string; operator: NumericOperator; value: number } => c.kind === 'numeric')
+                  .map((c) => c.field)
                   .filter((f, i, arr) => arr.indexOf(f) === i && !['enthalpy', 'fitness', 'spaceGroup'].includes(f))
                   .map((f) => (
                     <th key={f} style={{ color: 'var(--color-primary)', fontStyle: 'italic' }}>
@@ -437,9 +518,10 @@ export function FilterPage() {
             </thead>
             <tbody>
               {sortedStructures.slice(0, 50).map((s, i) => {
-                const extraFields = conditions
-                  .filter((c) => c.kind === 'numeric')
-                  .map((c) => (c as { kind: 'numeric'; field: string }).field)
+                const extraFields = groups
+                  .flatMap((g) => g.conditions)
+                  .filter((c): c is { kind: 'numeric'; field: string; operator: NumericOperator; value: number } => c.kind === 'numeric')
+                  .map((c) => c.field)
                   .filter((f, idx, arr) => arr.indexOf(f) === idx && !['enthalpy', 'fitness', 'spaceGroup'].includes(f));
                 return (
                   <tr key={s.id}>

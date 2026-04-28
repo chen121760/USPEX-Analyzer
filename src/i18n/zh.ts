@@ -41,6 +41,9 @@ const zh = {
   'btn.deselectAll': '取消全选',
   'btn.addFilter': '添加',
   'btn.resetFilter': '重置',
+  'btn.newOrGroup': '+ OR 新组',
+  'btn.appendToGroup': '追加到此组',
+  'btn.cancelAppend': '取消',
   'btn.all': '全部',
 
   // ---- DataTable toolbar ----
