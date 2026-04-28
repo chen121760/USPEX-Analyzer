@@ -9,6 +9,7 @@ import {
   TrendingDown,
   Target,
   ScatterChart,
+  FlaskConical,
   Filter,
   ChevronLeft,
   ChevronRight,
@@ -106,6 +107,7 @@ export function Sidebar() {
         <NavItem to="/convex-hull" icon={<TrendingDown size={iconSize} />} label={isFixed ? t('nav.energyRanking', 'Energy Ranking') : t('nav.hull')} />
         <NavItem to="/pareto" icon={<Target size={iconSize} />} label={t('nav.pareto')} hidden={!isMulti} />
         <NavItem to="/explorer" icon={<ScatterChart size={iconSize} />} label={t('nav.explorer')} />
+        <NavItem to="/beta-explorer" icon={<FlaskConical size={iconSize} />} label={t('nav.betaExplorer')} />
         <NavItem to="/filter" icon={<Filter size={iconSize} />} label={t('nav.filter')} />
       </nav>
 

@@ -104,6 +104,38 @@ interface UIState {
   explorerYMarginalExcludeZero: boolean;
   setExplorerYMarginalExcludeZero: (v: boolean) => void;
 
+  // --- Beta Explorer 页面 ---
+  betaXKey: string;
+  setBetaXKey: (key: string) => void;
+  betaYKey: string;
+  setBetaYKey: (key: string) => void;
+  betaColorKey: string;
+  setBetaColorKey: (key: string) => void;
+  betaXMinimize: boolean;
+  setBetaXMinimize: (v: boolean) => void;
+  betaYMinimize: boolean;
+  setBetaYMinimize: (v: boolean) => void;
+  betaColorByFront: boolean;
+  setBetaColorByFront: (v: boolean) => void;
+  betaNumFronts: number;
+  setBetaNumFronts: (v: number) => void;
+  betaRefMode: 'auto' | 'manual';
+  setBetaRefMode: (v: 'auto' | 'manual') => void;
+  betaRefX: number | null;
+  setBetaRefX: (v: number | null) => void;
+  betaRefY: number | null;
+  setBetaRefY: (v: number | null) => void;
+  betaShowXMarginal: boolean;
+  setBetaShowXMarginal: (v: boolean) => void;
+  betaShowYMarginal: boolean;
+  setBetaShowYMarginal: (v: boolean) => void;
+  betaMarginalBins: number;
+  setBetaMarginalBins: (v: number) => void;
+  betaXMarginalExcludeZero: boolean;
+  setBetaXMarginalExcludeZero: (v: boolean) => void;
+  betaYMarginalExcludeZero: boolean;
+  setBetaYMarginalExcludeZero: (v: boolean) => void;
+
   // --- Pareto 页面 ---
   // 选中显示哪些 Pareto 前沿（用数组存，因为 Set 不能直接被 JSON 序列化）
   paretoSelectedFronts: number[];
@@ -226,6 +258,38 @@ export const useUIStore = create<UIState>()(
       explorerYMarginalExcludeZero: false,
       setExplorerYMarginalExcludeZero: (v) => set({ explorerYMarginalExcludeZero: v }),
 
+      // --- Beta Explorer 页面状态 ---
+      betaXKey: 'fitness',
+      setBetaXKey: (key) => set({ betaXKey: key }),
+      betaYKey: 'enthalpy',
+      setBetaYKey: (key) => set({ betaYKey: key }),
+      betaColorKey: '',
+      setBetaColorKey: (key) => set({ betaColorKey: key }),
+      betaXMinimize: true,
+      setBetaXMinimize: (v) => set({ betaXMinimize: v }),
+      betaYMinimize: true,
+      setBetaYMinimize: (v) => set({ betaYMinimize: v }),
+      betaColorByFront: true,
+      setBetaColorByFront: (v) => set({ betaColorByFront: v }),
+      betaNumFronts: 3,
+      setBetaNumFronts: (v) => set({ betaNumFronts: v }),
+      betaRefMode: 'auto',
+      setBetaRefMode: (v) => set({ betaRefMode: v }),
+      betaRefX: null,
+      setBetaRefX: (v) => set({ betaRefX: v }),
+      betaRefY: null,
+      setBetaRefY: (v) => set({ betaRefY: v }),
+      betaShowXMarginal: false,
+      setBetaShowXMarginal: (v) => set({ betaShowXMarginal: v }),
+      betaShowYMarginal: false,
+      setBetaShowYMarginal: (v) => set({ betaShowYMarginal: v }),
+      betaMarginalBins: 30,
+      setBetaMarginalBins: (v) => set({ betaMarginalBins: v }),
+      betaXMarginalExcludeZero: false,
+      setBetaXMarginalExcludeZero: (v) => set({ betaXMarginalExcludeZero: v }),
+      betaYMarginalExcludeZero: false,
+      setBetaYMarginalExcludeZero: (v) => set({ betaYMarginalExcludeZero: v }),
+
       // --- Pareto 页面状态 ---
       paretoSelectedFronts: [],
       setParetoSelectedFronts: (fronts) => set({ paretoSelectedFronts: fronts }),
@@ -283,6 +347,21 @@ export const useUIStore = create<UIState>()(
         explorerYMarginalExcludeZero: state.explorerYMarginalExcludeZero,
         paretoSelectedFronts: state.paretoSelectedFronts,
         paretoShowLines: state.paretoShowLines,
+        betaXKey: state.betaXKey,
+        betaYKey: state.betaYKey,
+        betaColorKey: state.betaColorKey,
+        betaXMinimize: state.betaXMinimize,
+        betaYMinimize: state.betaYMinimize,
+        betaColorByFront: state.betaColorByFront,
+        betaNumFronts: state.betaNumFronts,
+        betaRefMode: state.betaRefMode,
+        betaRefX: state.betaRefX,
+        betaRefY: state.betaRefY,
+        betaShowXMarginal: state.betaShowXMarginal,
+        betaShowYMarginal: state.betaShowYMarginal,
+        betaMarginalBins: state.betaMarginalBins,
+        betaXMarginalExcludeZero: state.betaXMarginalExcludeZero,
+        betaYMarginalExcludeZero: state.betaYMarginalExcludeZero,
         tableSorting: state.tableSorting,
         // tableFilters 不持久化
         markActiveTags: state.markActiveTags,

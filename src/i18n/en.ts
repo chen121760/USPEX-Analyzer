@@ -10,6 +10,7 @@ const en = {
   'nav.hull': 'Convex Hull',
   'nav.energyRanking': 'Energy Ranking',
   'nav.pareto': 'Pareto Front',
+  'nav.betaExplorer': 'HV Tracker',
   'nav.explorer': 'Explorer',
   'nav.genealogy': 'Genealogy',
   'nav.compare': 'Compare',
@@ -203,6 +204,19 @@ const en = {
   'pareto.connectLine': 'Show front lines',
   'pareto.selectFronts': 'Select fronts to display',
   'pareto.singleObjectiveHint': 'No data — Single-objective optimization does not have Pareto fronts.',
+
+  // ---- Beta Explorer ----
+  'beta.title': 'HV Tracker',
+  'beta.xMinimize': 'Min',
+  'beta.xMaximize': 'Max',
+  'beta.colorByFront': 'Color by front',
+  'beta.numFronts': 'Fronts',
+  'beta.refPoint': 'Ref point',
+  'beta.refAuto': 'Auto',
+  'beta.refManual': 'Manual',
+  'beta.hvTitle': 'Hypervolume vs Generation',
+  'beta.hvYAxis': 'Hypervolume',
+  'beta.front': 'Front',
 
   // ---- Explorer ----
   'explorer.title': 'Data Explorer',
