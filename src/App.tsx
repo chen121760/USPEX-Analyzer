@@ -8,6 +8,7 @@ import { DataTablePage } from '@/modules/DataTable/DataTablePage';
 import { ConvexHullPage } from '@/modules/ConvexHull/ConvexHullPage';
 import { ParetoPage } from '@/modules/Pareto/ParetoPage';
 import { ExplorerPage } from '@/modules/Explorer/ExplorerPage';
+import { BetaExplorerPage } from '@/modules/BetaExplorer/BetaExplorerPage';
 import { FilterPage } from '@/modules/Filter/FilterPage';
 import { ComparePage } from '@/modules/Compare/ComparePage';
 import { StructureViewerModal } from '@/components/StructureViewer/StructureViewerModal';
@@ -53,6 +54,7 @@ function App() {
             <Route path="/convex-hull" element={<ConvexHullPage />} />
             <Route path="/pareto" element={<ParetoPage />} />
             <Route path="/explorer" element={<ExplorerPage />} />
+            <Route path="/beta-explorer" element={<BetaExplorerPage />} />
             <Route path="/filter" element={<FilterPage />} />
             <Route path="/compare" element={<ComparePage />} />
           </Route>

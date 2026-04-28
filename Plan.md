@@ -1,8 +1,17 @@
 # USPEX Analyzer 
 
 ## 版本更新记录
-### V1.0.6
+### V1.1.0
 
+新增 HV Tracker 模块（侧边栏 → HV Tracker）
+
+- 在任意两个数值轴上自动计算 Pareto front（Layer Classification 算法，与 USPEX 内部一致）
+- 每个轴独立设置优化方向（最小化 / 最大化）
+- 散点图按 Pareto front 编号着色，只显示前 N 层（N 可调），各层连线并用对应颜色高透明填充标准 2D hypervolume staircase 区域
+- 参考点（Reference Point）默认自动计算（nadir + 10% range，对负值正确处理），支持手动覆盖
+- HV vs Generation 图（上方）：对 cumulative archive（generation ≤ g）做 Layer Classification，分别绘制各 Pareto front 的 hypervolume 随代数的变化曲线，每条 front 独立一根线
+
+### V1.0.6
 Explorer 页面
 - 新增边际分布图（Marginal Histogram + KDE）：X/Y 轴各有独立开关（`∫ dist` 按钮），挂在对应轴选择器后面
 - X 轴分布图出现在主图上方，Y 轴分布图出现在主图右侧，坐标轴通过 Plotly subplot `matches` 机制天然对齐
@@ -11,7 +20,6 @@ Explorer 页面
 - 新增 `≠0` 按钮：开启后边际图自动排除零值（适用于"无关数据记录为 0"的字段）
 - 轴范围输入框同步作用于边际图统计：设置 X/Y 范围后，分布图只统计范围内的数据
 - 两种过滤可叠加使用，`n=xxx` 实时显示参与统计的数据量
-- 修复：GIF 导出时 `≠0` 和轴范围过滤未生效的 bug，现与交互图完全一致
 
 修复
 - 修复同一计算跑多次时，新项目覆盖 Recent Projects 中已有记录的 bug：项目 ID 改为首次创建时生成的唯一值（timestamp + 随机串），后续自动保存复用同一 ID
@@ -117,3 +125,4 @@ Explorer 轴选择、Pareto 前沿选择、表格排序状态切换页面后均�
 24.导出文件命名时，用户自定义
 25.导出csv时保存所有已知信息 √
 26.explorer 加上X，Y轴数据分步统计（加上一个按钮）。主要是导出GIF图能看数据分布变化情况。
+27.exploror 中加入 Pareto-Front

@@ -10,6 +10,7 @@ const zh = {
   'nav.hull': '凸包图',
   'nav.energyRanking': '能量排序',
   'nav.pareto': 'Pareto 前沿',
+  'nav.betaExplorer': 'HV Tracker',
   'nav.explorer': '数据探索',
   'nav.genealogy': '谱系追溯',
   'nav.compare': '结构对比',
@@ -203,6 +204,19 @@ const zh = {
   'pareto.connectLine': '显示前沿连线',
   'pareto.selectFronts': '选择显示的前沿',
   'pareto.singleObjectiveHint': '暂无数据 — 单目标优化没有 Pareto 前沿。',
+
+  // ---- Beta Explorer ----
+  'beta.title': 'HV Tracker',
+  'beta.xMinimize': '最小化',
+  'beta.xMaximize': '最大化',
+  'beta.colorByFront': '按前沿着色',
+  'beta.numFronts': '前沿数',
+  'beta.refPoint': '参考点',
+  'beta.refAuto': '自动',
+  'beta.refManual': '手动',
+  'beta.hvTitle': 'Hypervolume vs 代数',
+  'beta.hvYAxis': 'Hypervolume',
+  'beta.front': '前沿',
 
   // ---- Explorer ----
   'explorer.title': '数据探索器',
