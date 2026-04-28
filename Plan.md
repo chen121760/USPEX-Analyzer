@@ -11,7 +11,7 @@
 - 参考点（Reference Point）默认自动计算（nadir + 10% range，对负值正确处理），支持手动覆盖
 - HV vs Generation 图（上方）：对 cumulative archive（generation ≤ g）做 Layer Classification，分别绘制各 Pareto front 的 hypervolume 随代数的变化曲线，每条 front 独立一根线
 
-
+### V1.0.6
 Explorer 页面
 - 新增边际分布图（Marginal Histogram + KDE）：X/Y 轴各有独立开关（`∫ dist` 按钮），挂在对应轴选择器后面
 - X 轴分布图出现在主图上方，Y 轴分布图出现在主图右侧，坐标轴通过 Plotly subplot `matches` 机制天然对齐
