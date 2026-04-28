@@ -160,6 +160,18 @@ export type UnifiedCondition =
   | { kind: 'nComponents'; value: 1 | 2 | 3 }
   | { kind: 'elementFraction'; element: string; operator: CompOperator; value: number };
 
+/** A group of UnifiedConditions joined by AND; groups are joined by OR */
+export interface UnifiedConditionGroup {
+  id: string;
+  conditions: UnifiedCondition[];
+}
+
+/** A group of TableFilterConditions joined by AND; groups are joined by OR */
+export interface TableFilterGroup {
+  id: string;
+  conditions: TableFilterCondition[];
+}
+
 /** Filter condition for advanced querying */
 export interface FilterCondition {
   field: string;

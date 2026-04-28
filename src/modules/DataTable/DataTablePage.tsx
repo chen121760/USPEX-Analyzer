@@ -26,6 +26,7 @@ import type {
   NComponentsFilterCondition,
   ElementFractionFilterCondition,
   TableFilterCondition,
+  TableFilterGroup,
 } from '@/types/structure';
 
 // 本地别名，保持组件内部代码不变
@@ -297,9 +298,11 @@ export function DataTablePage() {
   const [lineageId, setLineageId] = useState<number | null>(null);
   const [selectedTag, setSelectedTag] = useState<string>('');
 
-  // 筛选条件接入 UIStore，切换页面后不丢失
-  const filters    = useUIStore((s) => s.tableFilters) as FilterCondition[];
-  const setFilters = useUIStore((s) => s.setTableFilters) as (f: FilterCondition[]) => void;
+  // 筛选条件组接入 UIStore，切换页面后不丢失
+  const filterGroups    = useUIStore((s) => s.tableFilterGroups);
+  const setFilterGroups = useUIStore((s) => s.setTableFilterGroups);
+  // 当前追加目标组（null = 新建组）
+  const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
 
   const [pageIndex, setPageIndex] = useState(0);
   const pageSize = 50;
@@ -624,62 +627,76 @@ export function DataTablePage() {
       data = data.filter((s) => s.tags.includes(selectedTag));
     }
 
-    // 遍历所有筛选条件，逐一过滤
-    for (const f of filters) {
-      if (f.kind === 'numeric') {
-        data = data.filter((s) => {
-          const val = (s as unknown as Record<string, number>)[f.column];
-          if (val == null) return false;
-          switch (f.operator) {
-            case '>':  return val > f.value;
-            case '<':  return val < f.value;
-            case '>=': return val >= f.value;
-            case '<=': return val <= f.value;
-            case '=':  return Math.abs(val - f.value) < 0.0001;
-            default:   return true;
-          }
-        });
-      } else if (f.kind === 'text') {
-        data = data.filter((s) => {
-          const val = String((s as unknown as Record<string, unknown>)[f.column] ?? '').toLowerCase();
-          const matchesAny = f.values.some((v) => {
-            const target = v.toLowerCase();
-            if (f.operator === 'contains' || f.operator === 'notContains') {
-              return val.includes(target);
-            } else {
-              return val === target;
+    // 条件组：组间 OR，组内 AND
+    if (filterGroups.length > 0) {
+      data = data.filter((s) =>
+        filterGroups.some((group) =>
+          group.conditions.every((f) => {
+            if (f.kind === 'numeric') {
+              const val = (s as unknown as Record<string, number>)[f.column];
+              if (val == null) return false;
+              switch (f.operator) {
+                case '>':  return val > f.value;
+                case '<':  return val < f.value;
+                case '>=': return val >= f.value;
+                case '<=': return val <= f.value;
+                case '=':  return Math.abs(val - f.value) < 0.0001;
+                default:   return true;
+              }
+            } else if (f.kind === 'text') {
+              const val = String((s as unknown as Record<string, unknown>)[f.column] ?? '').toLowerCase();
+              const matchesAny = f.values.some((v) => {
+                const target = v.toLowerCase();
+                return (f.operator === 'contains' || f.operator === 'notContains')
+                  ? val.includes(target) : val === target;
+              });
+              return (f.operator === 'contains' || f.operator === 'equals') ? matchesAny : !matchesAny;
+            } else if (f.kind === 'nComponents') {
+              return s.composition.filter((c) => c > 0).length === f.value;
+            } else if (f.kind === 'elementFraction') {
+              const elIdx = systemInfo?.elements.indexOf(f.element) ?? -1;
+              if (elIdx === -1) return true;
+              const total = s.composition.reduce((a, b) => a + b, 0);
+              if (total === 0) return false;
+              const frac = s.composition[elIdx] / total;
+              switch (f.operator) {
+                case '>':  return frac > f.value;
+                case '<':  return frac < f.value;
+                case '>=': return frac >= f.value;
+                case '<=': return frac <= f.value;
+                case '=':  return Math.abs(frac - f.value) < 0.001;
+                default:   return true;
+              }
             }
-          });
-          return (f.operator === 'contains' || f.operator === 'equals') ? matchesAny : !matchesAny;
-        });
-      } else if (f.kind === 'nComponents') {
-        // 体系类型：composition 数组中非零元素的个数
-        data = data.filter((s) => {
-          const n = s.composition.filter((c) => c > 0).length;
-          return n === f.value;
-        });
-      } else if (f.kind === 'elementFraction') {
-        // 元素摩尔分数：先找到该元素在 systemInfo.elements 里的下标
-        const elIdx = systemInfo?.elements.indexOf(f.element) ?? -1;
-        if (elIdx === -1) continue;
-        data = data.filter((s) => {
-          const total = s.composition.reduce((a, b) => a + b, 0);
-          if (total === 0) return false;
-          const frac = s.composition[elIdx] / total;
-          switch (f.operator) {
-            case '>':  return frac > f.value;
-            case '<':  return frac < f.value;
-            case '>=': return frac >= f.value;
-            case '<=': return frac <= f.value;
-            case '=':  return Math.abs(frac - f.value) < 0.001;
-            default:   return true;
-          }
-        });
-      }
+            return true;
+          })
+        )
+      );
     }
 
     return data;
-  }, [structures, selectedTag, filters, systemInfo]);
+  }, [structures, selectedTag, filterGroups, systemInfo]);
+
+  // 把一个条件追加到目标组（null = 追加到最后一组，或新建）
+  const addToGroup = (cond: FilterCondition, forceNewGroup = false) => {
+    if (forceNewGroup) {
+      const newGroup: TableFilterGroup = { id: crypto.randomUUID(), conditions: [cond] };
+      setFilterGroups([...filterGroups, newGroup]);
+      setTargetGroupId(null);
+    } else if (targetGroupId !== null) {
+      setFilterGroups(filterGroups.map((g) =>
+        g.id === targetGroupId ? { ...g, conditions: [...g.conditions, cond] } : g
+      ));
+    } else if (filterGroups.length > 0) {
+      const last = filterGroups[filterGroups.length - 1];
+      setFilterGroups(filterGroups.map((g) =>
+        g.id === last.id ? { ...g, conditions: [...g.conditions, cond] } : g
+      ));
+    } else {
+      const newGroup: TableFilterGroup = { id: crypto.randomUUID(), conditions: [cond] };
+      setFilterGroups([newGroup]);
+    }
+  };
 
   const table = useReactTable({
     data: tableData,
@@ -825,19 +842,40 @@ export function DataTablePage() {
               onClick={() => {
                 if (filterNumVal === '') return;
                 const col = numericFilterColumns.find((c) => c.key === filterNumCol);
-                setFilters([...filters, {
+                addToGroup({
                   kind: 'numeric',
                   column: filterNumCol,
                   label: col?.label || filterNumCol,
                   operator: filterNumOp,
                   value: Number(filterNumVal),
-                }]);
+                });
                 setFilterNumVal('');
                 setPageIndex(0);
               }}
             >
               {t('btn.addFilter')}
             </button>
+            {filterGroups.length > 0 && (
+              <button
+                className="btn btn-sm btn-outline"
+                style={{ fontSize: 11, padding: '3px 10px', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
+                onClick={() => {
+                  if (filterNumVal === '') return;
+                  const col = numericFilterColumns.find((c) => c.key === filterNumCol);
+                  addToGroup({
+                    kind: 'numeric',
+                    column: filterNumCol,
+                    label: col?.label || filterNumCol,
+                    operator: filterNumOp,
+                    value: Number(filterNumVal),
+                  }, true);
+                  setFilterNumVal('');
+                  setPageIndex(0);
+                }}
+              >
+                {t('btn.newOrGroup')}
+              </button>
+            )}
           </>
         ) : colKind === 'text' ? (
           <>
@@ -889,19 +927,41 @@ export function DataTablePage() {
                 const values = filterTextInput.split(',').filter(Boolean);
                 if (values.length === 0) return;
                 const col = textFilterColumns.find((c) => c.key === filterTextCol);
-                setFilters([...filters, {
+                addToGroup({
                   kind: 'text',
                   column: filterTextCol,
                   label: col?.label || filterTextCol,
                   operator: filterTextOp,
                   values,
-                }]);
+                });
                 setFilterTextInput('');
                 setPageIndex(0);
               }}
             >
               {t('btn.addFilter')}
             </button>
+            {filterGroups.length > 0 && (
+              <button
+                className="btn btn-sm btn-outline"
+                style={{ fontSize: 11, padding: '3px 10px', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
+                onClick={() => {
+                  const values = filterTextInput.split(',').filter(Boolean);
+                  if (values.length === 0) return;
+                  const col = textFilterColumns.find((c) => c.key === filterTextCol);
+                  addToGroup({
+                    kind: 'text',
+                    column: filterTextCol,
+                    label: col?.label || filterTextCol,
+                    operator: filterTextOp,
+                    values,
+                  }, true);
+                  setFilterTextInput('');
+                  setPageIndex(0);
+                }}
+              >
+                {t('btn.newOrGroup')}
+              </button>
+            )}
           </>
         ) : colKind === 'nComponents' ? (
           <>
@@ -920,16 +980,29 @@ export function DataTablePage() {
               style={{ fontSize: 11, padding: '3px 10px' }}
               onClick={() => {
                 const labelMap: Record<number, string> = { 1: t('table.filterUnary'), 2: t('table.filterBinary'), 3: t('table.filterTernary') };
-                setFilters([...filters, {
+                addToGroup({
                   kind: 'nComponents',
                   label: labelMap[filterNComp],
                   value: filterNComp,
-                }]);
+                });
                 setPageIndex(0);
               }}
             >
               {t('btn.addFilter')}
             </button>
+            {filterGroups.length > 0 && (
+              <button
+                className="btn btn-sm btn-outline"
+                style={{ fontSize: 11, padding: '3px 10px', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
+                onClick={() => {
+                  const labelMap: Record<number, string> = { 1: t('table.filterUnary'), 2: t('table.filterBinary'), 3: t('table.filterTernary') };
+                  addToGroup({ kind: 'nComponents', label: labelMap[filterNComp], value: filterNComp }, true);
+                  setPageIndex(0);
+                }}
+              >
+                {t('btn.newOrGroup')}
+              </button>
+            )}
           </>
         ) : (
           <>
@@ -970,60 +1043,120 @@ export function DataTablePage() {
               style={{ fontSize: 11, padding: '3px 10px' }}
               onClick={() => {
                 if (!filterElemEl || filterElemVal === '') return;
-                setFilters([...filters, {
+                addToGroup({
                   kind: 'elementFraction',
                   label: `x(${filterElemEl})`,
                   element: filterElemEl,
                   operator: filterElemOp,
                   value: Number(filterElemVal),
-                }]);
+                });
                 setFilterElemVal('');
                 setPageIndex(0);
               }}
             >
               {t('btn.addFilter')}
             </button>
+            {filterGroups.length > 0 && (
+              <button
+                className="btn btn-sm btn-outline"
+                style={{ fontSize: 11, padding: '3px 10px', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
+                onClick={() => {
+                  if (!filterElemEl || filterElemVal === '') return;
+                  addToGroup({
+                    kind: 'elementFraction',
+                    label: `x(${filterElemEl})`,
+                    element: filterElemEl,
+                    operator: filterElemOp,
+                    value: Number(filterElemVal),
+                  }, true);
+                  setFilterElemVal('');
+                  setPageIndex(0);
+                }}
+              >
+                {t('btn.newOrGroup')}
+              </button>
+            )}
           </>
         )}
 
         {/* 重置按钮：有任何筛选条件时才显示 */}
-        {filters.length > 0 && (
+        {filterGroups.length > 0 && (
           <button
             className="btn btn-sm btn-outline"
             style={{ fontSize: 11, padding: '3px 10px' }}
-            onClick={() => { setFilters([]); setSelectedTag(''); setGlobalFilter(''); setPageIndex(0); }}
+            onClick={() => { setFilterGroups([]); setTargetGroupId(null); setSelectedTag(''); setGlobalFilter(''); setPageIndex(0); }}
           >
             {t('btn.resetFilter')}
           </button>
         )}
       </div>
 
-      {/* 已激活的筛选条件（小标签，点 × 可单独删除） */}
-      {filters.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {filters.map((f, i) => (
-            <span
-              key={i}
-              style={{
-                fontSize: 11, padding: '2px 8px', borderRadius: 12,
-                background: 'var(--color-primary)', color: '#fff',
-                display: 'flex', alignItems: 'center', gap: 4,
-              }}
-            >
-              {f.kind === 'numeric'
-                ? `${f.label} ${f.operator} ${f.value}`
-                : f.kind === 'nComponents'
-                  ? f.label
-                  : f.kind === 'elementFraction'
-                    ? `x(${f.element}) ${f.operator} ${f.value}`
-                    : `${f.label} ${t(`table.filter${f.operator.charAt(0).toUpperCase() + f.operator.slice(1)}`)} [${f.values.join(', ')}]`
-              }
-              <X
-                size={12}
-                style={{ cursor: 'pointer' }}
-                onClick={() => { setFilters(filters.filter((_, idx) => idx !== i)); setPageIndex(0); }}
-              />
-            </span>
+      {/* 已激活的筛选条件组（组内 AND，组间 OR） */}
+      {filterGroups.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {filterGroups.map((group, gi) => (
+            <div key={group.id}>
+              {gi > 0 && (
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-primary)',
+                  letterSpacing: 2, margin: '1px 0', paddingLeft: 4 }}>
+                  OR
+                </div>
+              )}
+              <div style={{
+                display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center',
+                padding: '4px 6px', borderRadius: 6,
+                border: `1px solid ${targetGroupId === group.id ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                background: 'transparent',
+              }}>
+                {group.conditions.map((f, ci) => (
+                  <span key={ci} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    {ci > 0 && <span style={{ fontSize: 10, color: 'var(--color-text-muted)', margin: '0 2px' }}>AND</span>}
+                    <span style={{
+                      fontSize: 11, padding: '2px 7px', borderRadius: 10,
+                      background: 'var(--color-primary)', color: '#fff',
+                      display: 'flex', alignItems: 'center', gap: 3,
+                    }}>
+                      {f.kind === 'numeric'
+                        ? `${f.label} ${f.operator} ${f.value}`
+                        : f.kind === 'nComponents'
+                          ? f.label
+                          : f.kind === 'elementFraction'
+                            ? `x(${f.element}) ${f.operator} ${f.value}`
+                            : `${f.label} [${f.values.join(', ')}]`
+                      }
+                      <X size={11} style={{ cursor: 'pointer' }}
+                        onClick={() => {
+                          const newConds = group.conditions.filter((_, idx) => idx !== ci);
+                          if (newConds.length === 0) {
+                            setFilterGroups(filterGroups.filter((g) => g.id !== group.id));
+                            if (targetGroupId === group.id) setTargetGroupId(null);
+                          } else {
+                            setFilterGroups(filterGroups.map((g) => g.id === group.id ? { ...g, conditions: newConds } : g));
+                          }
+                          setPageIndex(0);
+                        }}
+                      />
+                    </span>
+                  </span>
+                ))}
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+                  <button
+                    className={`btn btn-sm ${targetGroupId === group.id ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: 10, padding: '1px 6px' }}
+                    onClick={() => setTargetGroupId(targetGroupId === group.id ? null : group.id)}
+                  >
+                    {targetGroupId === group.id ? t('btn.cancelAppend') : t('btn.appendToGroup')}
+                  </button>
+                  <X size={12} style={{ cursor: 'pointer', color: 'var(--color-text-muted)' }}
+                    onClick={() => {
+                      setFilterGroups(filterGroups.filter((g) => g.id !== group.id));
+                      if (targetGroupId === group.id) setTargetGroupId(null);
+                      setPageIndex(0);
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       )}
