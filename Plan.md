@@ -125,4 +125,5 @@ Explorer 轴选择、Pareto 前沿选择、表格排序状态切换页面后均�
 24.导出文件命名时，用户自定义
 25.导出csv时保存所有已知信息 √
 26.explorer 加上X，Y轴数据分步统计（加上一个按钮）。主要是导出GIF图能看数据分布变化情况。
-27.exploror 中加入 Pareto-Front
+27.exploror 中加入 Pareto-Front √
+28.多条件导出， 加入 “or” 条件 ！
