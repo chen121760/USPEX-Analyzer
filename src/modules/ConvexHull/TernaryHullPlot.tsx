@@ -23,6 +23,8 @@ import { StructureViewerModal } from '@/components/StructureViewer/StructureView
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
 import { PLOTLY_FONT } from '@/lib/constants';
+import { ExportDataButton } from '@/components/ExportDataButton';
+import { downloadCsv } from '@/lib/exportCsv';
 
 /** Structure with computed cartesian coordinates */
 interface StructureWithCoords extends Structure {
@@ -272,6 +274,47 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
     height: 550,
   };
 
+  function handleExport() {
+    const elA = elements[0] || 'A';
+    const elB = elements[1] || 'B';
+    const elC = elements[2] || 'C';
+    const headers = ['EA_ID', 'Formula', `x_${elA}`, `x_${elB}`, `x_${elC}`, 'Enthalpy(eV/atom)', 'Fitness(eV/atom)', 'SpaceGroup', 'Generation', 'Origin', 'Type'];
+    const stableRows = uniqueStableFull.map((p) => {
+      const total = p.composition.reduce((a: number, b: number) => a + b, 0) || 1;
+      return {
+        'EA_ID': p.id,
+        'Formula': p.full?.formula ?? '',
+        [`x_${elA}`]: (p.composition[0] / total).toFixed(6),
+        [`x_${elB}`]: (p.composition[1] / total).toFixed(6),
+        [`x_${elC}`]: (p.composition[2] / total).toFixed(6),
+        'Enthalpy(eV/atom)': p.enthalpy,
+        'Fitness(eV/atom)': 0,
+        'SpaceGroup': p.full?.spaceGroup ?? '',
+        'Generation': p.full?.generation ?? '',
+        'Origin': p.full?.origin ?? '',
+        'Type': 'Stable',
+      };
+    });
+    const unstableRows = unstableWithCoords.map((s) => {
+      const total = s.composition.reduce((a: number, b: number) => a + b, 0) || 1;
+      return {
+        'EA_ID': s.id,
+        'Formula': s.formula,
+        [`x_${elA}`]: (s.composition[0] / total).toFixed(6),
+        [`x_${elB}`]: (s.composition[1] / total).toFixed(6),
+        [`x_${elC}`]: (s.composition[2] / total).toFixed(6),
+        'Enthalpy(eV/atom)': s.enthalpy,
+        'Fitness(eV/atom)': s.fitness,
+        'SpaceGroup': s.spaceGroup,
+        'Generation': s.generation,
+        'Origin': s.origin,
+        'Type': 'Unstable',
+      };
+    });
+    const tag = fitnessMax.toFixed(3).replace('.', 'p');
+    downloadCsv(`${elements.join('-')}_ternary_hull_fitness${tag}`, headers, [...stableRows, ...unstableRows]);
+  }
+
   return (
     <>
       {/* Fitness filter slider */}
@@ -291,6 +334,7 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
         <span style={{ fontSize: 13, fontWeight: 600, minWidth: 70 }}>
           ≤ {fitnessMax.toFixed(3)} eV
         </span>
+        <ExportDataButton onClick={handleExport} style={{ marginLeft: 'auto' }} />
       </div>
       <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
         <Plot

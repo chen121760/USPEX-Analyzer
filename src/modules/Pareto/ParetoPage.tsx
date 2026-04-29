@@ -7,6 +7,8 @@ import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
 import { PLOTLY_FONT } from '@/lib/constants';
+import { ExportDataButton } from '@/components/ExportDataButton';
+import { downloadWideCsv } from '@/lib/exportCsv';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyData = any;
 
@@ -166,9 +168,39 @@ export function ParetoPage() {
     paper_bgcolor: '#ffffff',
   };
 
+  function handleExport() {
+    if (paretoKey == null) return;
+    const selectedSorted = frontNumbers.filter((n) => selectedFronts.has(n));
+    const series = selectedSorted.map((front) => {
+      const pts = structures
+        .filter((s) => s.paretoFront === front && s.extraProps?.[paretoKey] != null)
+        .sort((a, b) => (a.fitness ?? 0) - (b.fitness ?? 0))
+        .map((s) => ({
+          'Fitness': s.fitness,
+          [objName]: s.extraProps![paretoKey],
+          'EA_ID': s.id,
+          'Formula': s.formula,
+          'SpaceGroup': s.spaceGroup,
+          'Origin': s.origin,
+        }));
+      return {
+        label: `Front${front}`,
+        points: pts,
+        xKey: 'Fitness',
+        yKey: objName,
+        metaKeys: ['EA_ID', 'Formula', 'SpaceGroup', 'Origin'],
+      };
+    });
+    const frontTag = selectedSorted.join('-');
+    downloadWideCsv(`${systemInfo?.elements.join('-')}_pareto_front${frontTag}`, series);
+  }
+
   return (
     <div className="fade-in">
-      <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>{t('pareto.title')}</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{t('pareto.title')}</h2>
+        <ExportDataButton onClick={handleExport} />
+      </div>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
         <Plot

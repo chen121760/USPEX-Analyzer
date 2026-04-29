@@ -1,6 +1,23 @@
 # USPEX Analyzer 
 
 ## 版本更新记录
+### V1.1.3
+
+各图表 — 导出数据（Export Data）
+
+- 每张图右上角新增 **Export Data** 按钮，将当前图中可见数据导出为 Origin 兼容的 CSV 文件
+- 导出内容严格遵循当前筛选状态：
+  - **Energy Ranking**：仅导出 Top N 结构（由 slider 控制），按 Rank 排序，含 EA_ID / Formula / SpaceGroup / Generation / Origin / Enthalpy / Fitness
+  - **Binary Hull**：双 section 格式，Section 1 含所有可见点（Stable + Unstable，含 Type 列），Section 2 为凸包折线顶点，均受 Fitness max slider 筛选
+  - **Ternary Hull**：导出组分分数（x_A / x_B / x_C）而非笛卡尔坐标，Origin Ternary Plot 可直接使用，受 Fitness max slider 筛选
+  - **Pareto**：仅导出用户选中的前沿，**Wide Format**（每条 Front 独立两列：`Front1_Fitness / Front1_[ObjName] / ...`），按 Fitness 排序，Origin 可直接选列画多条折线
+  - **Explorer**：导出颜色范围内可见点，列名动态跟随 X / Y / Color 轴选择
+  - **HV Tracker — Scatter**：仅导出 ≤ numFronts 的前沿，**Wide Format**，按 Front 升序、X 轴方向排序
+  - **HV Tracker — HV Convergence**：**Wide Format**（每条 Front 独立两列：`Front1_Generation / Front1_Hypervolume / ...`），Origin 可直接画多条收敛曲线
+- Wide Format 不同 Front 点数不同时，较短的列自动补空格
+- CSV 文件名包含元素、图类型、当前筛选参数等信息（如 `Fe-B_pareto_front1-3.csv`）
+- 所有 CSV 带 UTF-8 BOM，Origin 拖入即可识别
+
 ### V1.1.2
 
 Filter 页面 — 导出文件命名
@@ -141,7 +158,7 @@ Explorer 轴选择、Pareto 前沿选择、表格排序状态切换页面后均�
 21.滑块加入自动播放输出动图gif输出功能 √
 22.图直接导出对应的csv（有多少数据就输出多少数据） O
 23.英文和数字字体改为Times new roman √
-24.导出文件命名时，用户自定义  O
+24.导出文件命名时，用户自定义  √
 25.导出csv时保存所有已知信息 √
 26.explorer 加上X，Y轴数据分步统计（加上一个按钮）。主要是导出GIF图能看数据分布变化情况。 √
 27.exploror 中加入 Pareto-Front √

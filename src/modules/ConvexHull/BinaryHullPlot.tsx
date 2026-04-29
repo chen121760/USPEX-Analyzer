@@ -17,6 +17,8 @@ import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
 import { PLOTLY_FONT } from '@/lib/constants';
+import { ExportDataButton } from '@/components/ExportDataButton';
+import { downloadMultiSectionCsv } from '@/lib/exportCsv';
 
 /**
  * Compute 2D lower convex hull (Andrew's monotone chain).
@@ -120,6 +122,42 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
     return result;
   }, [stable, unstable, markActiveTags, markEaInput, allTags, t]);
 
+  function handleExport() {
+    const pointHeaders = ['EA_ID', 'Formula', `x(${elements[1] || 'B'})`, 'Formation_Energy(eV/atom)', 'Fitness(eV/atom)', 'SpaceGroup', 'Generation', 'Origin', 'Type'];
+    const stableRows = stable.map((s) => ({
+      'EA_ID': s.id,
+      'Formula': s.formula,
+      [`x(${elements[1] || 'B'})`]: s.hullX[0] ?? 0,
+      'Formation_Energy(eV/atom)': s.hullY,
+      'Fitness(eV/atom)': 0,
+      'SpaceGroup': s.spaceGroup,
+      'Generation': s.generation,
+      'Origin': s.origin,
+      'Type': 'Stable',
+    }));
+    const unstableRows = unstable.map((s) => ({
+      'EA_ID': s.id,
+      'Formula': s.formula,
+      [`x(${elements[1] || 'B'})`]: s.hullX[0] ?? 0,
+      'Formation_Energy(eV/atom)': s.hullY,
+      'Fitness(eV/atom)': s.fitness,
+      'SpaceGroup': s.spaceGroup,
+      'Generation': s.generation,
+      'Origin': s.origin,
+      'Type': 'Unstable',
+    }));
+    const hullHeaders = [`x(${elements[1] || 'B'})`, 'Formation_Energy(eV/atom)'];
+    const hullRows = hullLine.map((p) => ({
+      [`x(${elements[1] || 'B'})`]: p.x,
+      'Formation_Energy(eV/atom)': p.y,
+    }));
+    const tag = fitnessMax.toFixed(3).replace('.', 'p');
+    downloadMultiSectionCsv(`${elements.join('-')}_binary_hull_fitness${tag}`, [
+      { title: 'All Points (Stable + Unstable)', headers: pointHeaders, rows: [...stableRows, ...unstableRows] },
+      { title: 'Convex Hull Line', headers: hullHeaders, rows: hullRows },
+    ]);
+  }
+
   const traces: PlotlyData[] = [
     {
       x: unstable.map((s) => s.hullX[0] ?? 0),
@@ -219,6 +257,7 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
         <span style={{ fontSize: 13, fontWeight: 600, minWidth: 70 }}>
           ≤ {fitnessMax.toFixed(3)} eV
         </span>
+        <ExportDataButton onClick={handleExport} style={{ marginLeft: 'auto' }} />
       </div>
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <Plot
