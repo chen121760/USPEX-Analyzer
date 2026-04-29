@@ -328,9 +328,16 @@ export interface DetectedFile {
 //  Export options
 // ============================================================
 
+export interface CustomNamePart {
+  id: string;      // crypto.randomUUID() — stable React key
+  label: string;   // user-typed prefix, e.g. "Gen"
+  field: string;   // numeric field key on Structure, e.g. "generation"
+}
+
 export interface ExportOptions {
   format: 'zip' | 'seeds' | 'csv' | 'json';
   nameParts: number[];          // 1=index, 2=ID, 3=SG, 4=fitness, 5=2nd obj, 6=formula
+  customNameParts: CustomNamePart[];
   sortKey?: string;
   sortReverse?: boolean;
   secondObjPrefix: string;
