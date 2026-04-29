@@ -18,7 +18,7 @@ import { create } from 'zustand';
 // persist 是 Zustand 提供的"持久化中间件"
 // 它会自动把 store 的数据存到 localStorage，并在页面加载时恢复
 import { persist } from 'zustand/middleware';
-import type { FilterCondition, UnifiedCondition, TableFilterCondition, UnifiedConditionGroup, TableFilterGroup } from '@/types/structure';
+import type { FilterCondition, UnifiedCondition, TableFilterCondition, UnifiedConditionGroup, TableFilterGroup, CustomNamePart } from '@/types/structure';
 
 // -------------------------------------------------------
 // 类型定义：描述整个 UI store 里有哪些数据和操作
@@ -81,6 +81,10 @@ interface UIState {
   // 文件命名规则（数字代表哪些部分要包含在文件名里）
   filterNameParts: number[];
   setFilterNameParts: (parts: number[]) => void;
+
+  // 自定义命名段
+  filterCustomNameParts: CustomNamePart[];
+  setFilterCustomNameParts: (parts: CustomNamePart[]) => void;
 
   // 排序字段和方向
   filterSortKey: string;
@@ -241,6 +245,9 @@ export const useUIStore = create<UIState>()(
       filterNameParts: [1, 2, 6, 3],
       setFilterNameParts: (parts) => set({ filterNameParts: parts }),
 
+      filterCustomNameParts: [],
+      setFilterCustomNameParts: (parts) => set({ filterCustomNameParts: parts }),
+
       filterSortKey: 'fitness',
       setFilterSortKey: (key) => set({ filterSortKey: key }),
 
@@ -350,6 +357,7 @@ export const useUIStore = create<UIState>()(
         filterTagStates: state.filterTagStates,
         filterExportFormat: state.filterExportFormat,
         filterNameParts: state.filterNameParts,
+        filterCustomNameParts: state.filterCustomNameParts,
         filterSortKey: state.filterSortKey,
         filterSortReverse: state.filterSortReverse,
         explorerXKey: state.explorerXKey,

@@ -282,6 +282,9 @@ const zh = {
   'export.descending': '降序',
   'export.preview': '文件名预览',
   'export.secondObjPrefix': '第二目标前缀',
+  'export.customNameParts': '自定义命名段',
+  'export.customLabel': '前缀',
+  'export.addCustomPart': '添加自定义段',
   'export.exportCount': '导出 {{count}} 个结构',
 
   // ---- Structure Viewer ----

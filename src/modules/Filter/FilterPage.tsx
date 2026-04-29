@@ -7,7 +7,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { buildSeedsFile, structuresToCSV } from '@/lib/poscarWriter';
 import { FormulaDisplay } from '@/components/FormulaDisplay';
-import type { Structure, UnifiedCondition, NumericOperator, CompOperator, UnifiedConditionGroup } from '@/types/structure';
+import type { Structure, UnifiedCondition, NumericOperator, CompOperator, UnifiedConditionGroup, CustomNamePart } from '@/types/structure';
 
 
 const NUMERIC_OPS: NumericOperator[] = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'];
@@ -69,7 +69,7 @@ function conditionLabel(cond: UnifiedCondition, t: (k: string) => string): strin
   return `x(${cond.element}) ${cond.operator} ${cond.value}`;
 }
 
-function buildFilename(index: number, s: Structure, nameParts: number[], padding: number, prefix: string): string {
+function buildFilename(index: number, s: Structure, nameParts: number[], padding: number, prefix: string, customNameParts: CustomNamePart[] = []): string {
   const segments: string[] = [];
   for (const part of nameParts) {
     switch (part) {
@@ -87,6 +87,15 @@ function buildFilename(index: number, s: Structure, nameParts: number[], padding
       case 6: segments.push(s.formula || 'Unknown'); break;
     }
   }
+  for (const cp of customNameParts) {
+    const raw = (s as unknown as Record<string, unknown>)[cp.field];
+    if (raw == null) continue;
+    const num = Number(raw);
+    if (isNaN(num)) continue;
+    const formatted = Number.isInteger(num) ? String(num) : num.toFixed(3);
+    const p = cp.label.trim();
+    segments.push(p ? `${p}${formatted}` : formatted);
+  }
   return segments.join('-') + '.vasp';
 }
 
@@ -102,9 +111,11 @@ export function FilterPage() {
   const setTagStates    = useUIStore((s) => s.setFilterTagStates);
   const exportFormat    = useUIStore((s) => s.filterExportFormat);
   const setExportFormat = useUIStore((s) => s.setFilterExportFormat);
-  const nameParts       = useUIStore((s) => s.filterNameParts);
-  const setNameParts    = useUIStore((s) => s.setFilterNameParts);
-  const sortKey         = useUIStore((s) => s.filterSortKey);
+  const nameParts          = useUIStore((s) => s.filterNameParts);
+  const setNameParts       = useUIStore((s) => s.setFilterNameParts);
+  const customNameParts    = useUIStore((s) => s.filterCustomNameParts);
+  const setCustomNameParts = useUIStore((s) => s.setFilterCustomNameParts);
+  const sortKey            = useUIStore((s) => s.filterSortKey);
   const setSortKey      = useUIStore((s) => s.setFilterSortKey);
   const sortReverse     = useUIStore((s) => s.filterSortReverse);
   const setSortReverse  = useUIStore((s) => s.setFilterSortReverse);
@@ -231,7 +242,7 @@ export function FilterPage() {
       const zip = new JSZip();
       sortedStructures.forEach((s, i) => {
         if (!s.poscarData) return;
-        zip.file(buildFilename(i, s, nameParts, padding, secondObjPrefix), s.poscarData);
+        zip.file(buildFilename(i, s, nameParts, padding, secondObjPrefix, customNameParts), s.poscarData);
       });
       saveAs(await zip.generateAsync({ type: 'blob' }), `uspex-structures-${sortedStructures.length}.zip`);
     } else if (exportFormat === 'seeds') {
@@ -242,7 +253,7 @@ export function FilterPage() {
       const project = useProjectStore.getState().exportProjectFile();
       saveAs(new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' }), `uspex-project-${systemInfo?.elements.join('-') ?? 'data'}.json`);
     }
-  }, [sortedStructures, exportFormat, nameParts, secondObjPrefix, systemInfo]);
+  }, [sortedStructures, exportFormat, nameParts, customNameParts, secondObjPrefix, systemInfo]);
 
   const toggleNamePart = (part: number) => {
     setNameParts(nameParts.includes(part) ? nameParts.filter((p) => p !== part) : [...nameParts, part].sort());
@@ -255,7 +266,7 @@ export function FilterPage() {
   const inputStyle: React.CSSProperties = { ...selectStyle, width: 100 };
 
   const previewName = sortedStructures.length > 0
-    ? buildFilename(0, sortedStructures[0], nameParts, String(sortedStructures.length).length, secondObjPrefix)
+    ? buildFilename(0, sortedStructures[0], nameParts, String(sortedStructures.length).length, secondObjPrefix, customNameParts)
     : '001-EA2-Ti10H28-SG82.vasp';
 
   return (
@@ -467,6 +478,54 @@ export function FilterPage() {
                   </button>
                 ))}
               </div>
+
+              {/* 自定义命名段 */}
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+                  {t('export.customNameParts')}
+                </div>
+                {customNameParts.map((cp) => (
+                  <div key={cp.id} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 4 }}>
+                    <input
+                      type="text"
+                      value={cp.label}
+                      placeholder={t('export.customLabel')}
+                      style={{ padding: '5px 8px', border: '1px solid var(--color-border)', borderRadius: 6,
+                               fontSize: 12, background: 'var(--color-bg)', color: 'var(--color-text)', width: 70 }}
+                      onChange={(e) => setCustomNameParts(
+                        customNameParts.map((p) => p.id === cp.id ? { ...p, label: e.target.value } : p)
+                      )}
+                    />
+                    <select
+                      value={cp.field}
+                      style={selectStyle}
+                      onChange={(e) => setCustomNameParts(
+                        customNameParts.map((p) => p.id === cp.id ? { ...p, field: e.target.value } : p)
+                      )}
+                    >
+                      {numericFields.map((f) => (
+                        <option key={f} value={f}>{t(`col.${f}`) || f}</option>
+                      ))}
+                    </select>
+                    <button
+                      className="btn btn-sm btn-outline"
+                      style={{ padding: '3px 7px', color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+                      onClick={() => setCustomNameParts(customNameParts.filter((p) => p.id !== cp.id))}
+                    >×</button>
+                  </div>
+                ))}
+                <button
+                  className="btn btn-sm btn-outline"
+                  style={{ fontSize: 11, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}
+                  onClick={() => setCustomNameParts([
+                    ...customNameParts,
+                    { id: crypto.randomUUID(), label: '', field: numericFields[0] ?? 'generation' },
+                  ])}
+                >
+                  <Plus size={12} /> {t('export.addCustomPart')}
+                </button>
+              </div>
+
               <div style={{ fontSize: 12, marginTop: 8, color: 'var(--color-text-muted)' }}>
                 {t('export.preview')}: <code style={{ background: 'var(--color-bg-tertiary)', padding: '2px 6px', borderRadius: 4 }}>{previewName}</code>
               </div>

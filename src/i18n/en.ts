@@ -282,6 +282,9 @@ const en = {
   'export.descending': 'Descending',
   'export.preview': 'Filename Preview',
   'export.secondObjPrefix': 'Second Obj Prefix',
+  'export.customNameParts': 'Custom Name Parts',
+  'export.customLabel': 'Label',
+  'export.addCustomPart': 'Add custom part',
   'export.exportCount': 'Export {{count}} structures',
 
   // ---- Structure Viewer ----

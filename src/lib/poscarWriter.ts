@@ -2,7 +2,7 @@
  * POSCAR writer utilities for exporting structures.
  */
 
-import type { Structure } from '@/types/structure';
+import type { Structure, CustomNamePart } from '@/types/structure';
 
 /**
  * Build a filename for an exported structure.
@@ -21,6 +21,7 @@ export function buildExportFilename(
   nameParts: number[],
   padding: number,
   secondObjPrefix: string = 'Obj',
+  customNameParts: CustomNamePart[] = [],
 ): string {
   const segments: string[] = [];
 
@@ -51,6 +52,16 @@ export function buildExportFilename(
         segments.push(structure.formula || 'Unknown');
         break;
     }
+  }
+
+  for (const cp of customNameParts) {
+    const raw = (structure as unknown as Record<string, unknown>)[cp.field];
+    if (raw == null) continue;
+    const num = Number(raw);
+    if (isNaN(num)) continue;
+    const formatted = Number.isInteger(num) ? String(num) : num.toFixed(3);
+    const prefix = cp.label.trim();
+    segments.push(prefix ? `${prefix}${formatted}` : formatted);
   }
 
   return segments.join('-') + '.vasp';
