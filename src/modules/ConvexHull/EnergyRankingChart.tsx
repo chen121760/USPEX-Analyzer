@@ -19,6 +19,8 @@ import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
 import { PLOTLY_FONT } from '@/lib/constants';
+import { ExportDataButton } from '@/components/ExportDataButton';
+import { downloadCsv } from '@/lib/exportCsv';
 
 
 /** Palette for auto-assigning colors to any origin method */
@@ -170,6 +172,23 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
   };
 
 
+  function handleExport() {
+    const top = allSorted.slice(0, displayCount);
+    const headers = ['Rank', 'EA_ID', 'Formula', 'SpaceGroup', 'Generation', 'Origin', 'Enthalpy(eV/atom)', 'Fitness(eV/atom)'];
+    const rows = top.map((s, i) => ({
+      'Rank': i + 1,
+      'EA_ID': s.id,
+      'Formula': s.formula,
+      'SpaceGroup': s.spaceGroup,
+      'Generation': s.generation,
+      'Origin': s.origin,
+      'Enthalpy(eV/atom)': s.enthalpy,
+      'Fitness(eV/atom)': s.fitness ?? 0,
+    }));
+    const elements = systemInfo.elements.join('-');
+    downloadCsv(`${elements}_energy_ranking_top${displayCount}`, headers, rows);
+  }
+
   return (
     <>
       {/* Slider to control how many structures to display */}
@@ -188,6 +207,7 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
         <span style={{ fontSize: 13, fontWeight: 600, minWidth: 60 }}>
           {displayCount} / {allSorted.length}
         </span>
+        <ExportDataButton onClick={handleExport} style={{ marginLeft: 'auto' }} />
       </div>
 
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 12 }}>

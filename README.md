@@ -1,4 +1,4 @@
-# USPEX Analyzer —— v1.1.2
+# USPEX Analyzer —— v1.1.3
 
 A browser-based analysis tool for USPEX crystal structure prediction outputs. Upload your USPEX output files and interactively explore, visualize, filter, and export your results — all without installing anything.
 
@@ -13,7 +13,8 @@ A browser-based analysis tool for USPEX crystal structure prediction outputs. Up
 - HV Tracker — On-the-fly Pareto front computation on any two axes with hypervolume-vs-generation convergence tracking
 - Genealogy — View the parent and offspring relationships of any structure
 - Tags — Label structures as Candidate / To Verify / Excluded / custom tags
-- Filter & Export — Query builder with AND conditions, export as .zip / seeds / .csv
+- Filter & Export — Query builder with AND/OR conditions, export as .zip / seeds / .csv
+- **Export Data** — Every chart has a one-click Export Data button that downloads the currently visible data as an Origin-compatible CSV, respecting all active filters
 - Project Save/Load — Save all data + annotations as .json, reload anytime
 - Times New Roman typography for all Latin text and numbers across the UI and charts
 

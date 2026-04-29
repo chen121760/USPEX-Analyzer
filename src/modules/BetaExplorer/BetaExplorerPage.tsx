@@ -9,6 +9,8 @@ import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
 import { PLOTLY_FONT } from '@/lib/constants';
 import GIF from 'gif.js';
 import { layerClassification, computeHypervolume2D, autoReferencePoint } from '@/lib/paretoUtils';
+import { ExportDataButton } from '@/components/ExportDataButton';
+import { downloadWideCsv, downloadCsv } from '@/lib/exportCsv';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyData = any;
 import type { Structure } from '@/types/structure';
@@ -635,6 +637,62 @@ export function BetaExplorerPage() {
 
   layoutRef.current = layout;
 
+  function handleExportScatter() {
+    const metaKeys = ['EA_ID', 'Formula', 'SpaceGroup', 'Generation', 'Origin'];
+    const frontGroups = new Map<number, { s: Structure; front: number }[]>();
+    for (const s of filteredData) {
+      const front = frontMap.get(s.id) ?? 999;
+      if (front > numFronts) continue;
+      if (!frontGroups.has(front)) frontGroups.set(front, []);
+      frontGroups.get(front)!.push({ s, front });
+    }
+    const series = Array.from(frontGroups.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([front, items]) => {
+        const sorted = items.sort((a, b) => {
+          const xa = xField.accessor(a.s) as number;
+          const xb = xField.accessor(b.s) as number;
+          return (xMinimize ? 1 : -1) * (xa - xb);
+        });
+        const points = sorted.map(({ s }) => ({
+          [xField.label]: xField.accessor(s) as number,
+          [yField.label]: yField.accessor(s) as number,
+          'EA_ID': s.id,
+          'Formula': s.formula,
+          'SpaceGroup': s.spaceGroup,
+          'Generation': s.generation,
+          'Origin': s.origin,
+        }));
+        return {
+          label: `Front${front}`,
+          points,
+          xKey: xField.label,
+          yKey: yField.label,
+          metaKeys,
+        };
+      });
+    const elements = systemInfo?.elements.join('-') ?? 'data';
+    const xLabel = xField.label.replace(/[^a-zA-Z0-9]/g, '_');
+    const yLabel = yField.label.replace(/[^a-zA-Z0-9]/g, '_');
+    downloadWideCsv(`${elements}_hv_scatter_${xLabel}_vs_${yLabel}_front1-${numFronts}`, series);
+  }
+
+  function handleExportHV() {
+    if (hvTraces.length === 0) return;
+    const series = hvTraces.map((trace: PlotlyData) => ({
+      label: String(trace.name).replace(' ', ''),
+      points: (trace.x as number[]).map((gen: number, i: number) => ({
+        'Generation': gen,
+        'Hypervolume': (trace.y as number[])[i],
+      })),
+      xKey: 'Generation',
+      yKey: 'Hypervolume',
+      metaKeys: [] as string[],
+    }));
+    const elements = systemInfo?.elements.join('-') ?? 'data';
+    downloadWideCsv(`${elements}_hv_convergence`, series);
+  }
+
   const selectStyle: React.CSSProperties = {
     padding: '5px 8px', border: '1px solid var(--color-border)', borderRadius: 6,
     fontSize: 12, background: 'var(--color-bg)', color: 'var(--color-text)',
@@ -649,7 +707,13 @@ export function BetaExplorerPage() {
 
   return (
     <div className="fade-in">
-      <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>{t('beta.title')}</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{t('beta.title')}</h2>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <ExportDataButton onClick={handleExportHV} label="Export HV Data" />
+          <ExportDataButton onClick={handleExportScatter} label="Export Scatter" />
+        </div>
+      </div>
 
       {/* Axis selectors */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -758,23 +822,25 @@ export function BetaExplorerPage() {
 
       {/* Hypervolume vs Generation */}
       {hvTraces.length > 0 && (
-        <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}>
-          <Plot
-            data={hvTraces}
-            layout={{
-              font: PLOTLY_FONT,
-              title: { text: t('beta.hvTitle'), font: { size: 15, color: '#0f172a' } },
-              xaxis: { title: { text: t('col.generation'), font: TITLE_FONT }, ...AXIS_STYLE },
-              yaxis: { title: { text: t('beta.hvYAxis'), font: TITLE_FONT }, ...AXIS_STYLE },
-              hovermode: 'closest' as const,
-              showlegend: true,
-              legend: { font: { size: 11, color: '#334155' } },
-              margin: { t: 50, r: 20, l: 70, b: 60 },
-              plot_bgcolor: '#ffffff', paper_bgcolor: '#ffffff',
-            }}
-            config={{ responsive: true, displayModeBar: true }}
-            style={{ width: '100%', height: 400 }}
-          />
+        <div style={{ marginBottom: 24 }}>
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <Plot
+              data={hvTraces}
+              layout={{
+                font: PLOTLY_FONT,
+                title: { text: t('beta.hvTitle'), font: { size: 15, color: '#0f172a' } },
+                xaxis: { title: { text: t('col.generation'), font: TITLE_FONT }, ...AXIS_STYLE },
+                yaxis: { title: { text: t('beta.hvYAxis'), font: TITLE_FONT }, ...AXIS_STYLE },
+                hovermode: 'closest' as const,
+                showlegend: true,
+                legend: { font: { size: 11, color: '#334155' } },
+                margin: { t: 50, r: 20, l: 70, b: 60 },
+                plot_bgcolor: '#ffffff', paper_bgcolor: '#ffffff',
+              }}
+              config={{ responsive: true, displayModeBar: true }}
+              style={{ width: '100%', height: 400 }}
+            />
+          </div>
         </div>
       )}
 

@@ -8,6 +8,8 @@ import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
 import { PLOTLY_FONT } from '@/lib/constants';
 import GIF from 'gif.js';
+import { ExportDataButton } from '@/components/ExportDataButton';
+import { downloadCsv } from '@/lib/exportCsv';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyData = any;
 import type { Structure } from '@/types/structure';
@@ -577,6 +579,29 @@ export function ExplorerPage() {
 
   layoutRef.current = layout;
 
+  function handleExportData() {
+    const headers = ['EA_ID', 'Formula', xField.label, yField.label];
+    if (colorField) headers.push(colorField.label);
+    headers.push('SpaceGroup', 'Generation', 'Origin');
+    const rows = filteredData.map((s) => {
+      const row: Record<string, string | number | null | undefined> = {
+        'EA_ID': s.id,
+        'Formula': s.formula,
+        [xField.label]: xField.accessor(s) as number,
+        [yField.label]: yField.accessor(s) as number,
+      };
+      if (colorField) row[colorField.label] = colorField.accessor(s) as number | string;
+      row['SpaceGroup'] = s.spaceGroup;
+      row['Generation'] = s.generation;
+      row['Origin'] = s.origin;
+      return row;
+    });
+    const elements = systemInfo?.elements.join('-') ?? 'data';
+    const xLabel = xField.label.replace(/[^a-zA-Z0-9]/g, '_');
+    const yLabel = yField.label.replace(/[^a-zA-Z0-9]/g, '_');
+    downloadCsv(`${elements}_explorer_${xLabel}_vs_${yLabel}`, headers, rows);
+  }
+
   const selectStyle: React.CSSProperties = {
     padding: '5px 8px',
     border: '1px solid var(--color-border)',
@@ -588,7 +613,10 @@ export function ExplorerPage() {
 
   return (
     <div className="fade-in">
-      <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>{t('explorer.title')}</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{t('explorer.title')}</h2>
+        <ExportDataButton onClick={handleExportData} />
+      </div>
 
       {/* Axis selectors */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
