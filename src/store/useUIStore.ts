@@ -163,6 +163,14 @@ interface UIState {
   tableFilterGroups: TableFilterGroup[];
   setTableFilterGroups: (groups: TableFilterGroup[]) => void;
 
+  // 表格搜索框文字
+  tableGlobalFilter: string;
+  setTableGlobalFilter: (filter: string) => void;
+
+  // 表格标签筛选
+  tableSelectedTag: string;
+  setTableSelectedTag: (tagId: string) => void;
+
   // 切换项目时清空所有项目相关的临时筛选状态
   clearProjectFilters: () => void;
 
@@ -172,6 +180,11 @@ interface UIState {
   setMarkActiveTags: (tags: string[]) => void;
   setMarkEaInput: (input: string) => void;
   clearMarks: () => void;
+
+  // --- 帮助抽屉 ---
+  hintPanelOpen: boolean;
+  toggleHintPanel: () => void;
+  setHintPanelOpen: (open: boolean) => void;
 }
 
 // -------------------------------------------------------
@@ -324,9 +337,17 @@ export const useUIStore = create<UIState>()(
       tableFilterGroups: [],
       setTableFilterGroups: (groups) => set({ tableFilterGroups: groups }),
 
+      tableGlobalFilter: '',
+      setTableGlobalFilter: (filter) => set({ tableGlobalFilter: filter }),
+
+      tableSelectedTag: '',
+      setTableSelectedTag: (tagId) => set({ tableSelectedTag: tagId }),
+
       clearProjectFilters: () => set({
         tableFilters: [],
         tableFilterGroups: [],
+        tableGlobalFilter: '',
+        tableSelectedTag: '',
         filterUnifiedConditions: [],
         filterConditionGroups: [],
         filterTagStates: {},
@@ -338,6 +359,11 @@ export const useUIStore = create<UIState>()(
       setMarkActiveTags: (tags) => set({ markActiveTags: tags }),
       setMarkEaInput: (input) => set({ markEaInput: input }),
       clearMarks: () => set({ markActiveTags: [], markEaInput: '' }),
+
+      // --- 帮助抽屉 ---
+      hintPanelOpen: true,
+      toggleHintPanel: () => set((s) => ({ hintPanelOpen: !s.hintPanelOpen })),
+      setHintPanelOpen: (open) => set({ hintPanelOpen: open }),
     }),
     {
       // localStorage 里存储用的 key 名，要唯一，不能和其他应用冲突
@@ -353,7 +379,8 @@ export const useUIStore = create<UIState>()(
         theme: state.theme,
         compareIds: state.compareIds,
         filterConditions: state.filterConditions,
-        // filterUnifiedConditions 和 tableFilters 不持久化：属于当前项目的临时状态
+        filterUnifiedConditions: state.filterUnifiedConditions,
+        filterConditionGroups: state.filterConditionGroups,
         filterTagStates: state.filterTagStates,
         filterExportFormat: state.filterExportFormat,
         filterNameParts: state.filterNameParts,
@@ -386,9 +413,13 @@ export const useUIStore = create<UIState>()(
         betaXMarginalExcludeZero: state.betaXMarginalExcludeZero,
         betaYMarginalExcludeZero: state.betaYMarginalExcludeZero,
         tableSorting: state.tableSorting,
-        // tableFilters 不持久化
+        tableFilters: state.tableFilters,
+        tableFilterGroups: state.tableFilterGroups,
+        tableGlobalFilter: state.tableGlobalFilter,
+        tableSelectedTag: state.tableSelectedTag,
         markActiveTags: state.markActiveTags,
         markEaInput: state.markEaInput,
+        hintPanelOpen: state.hintPanelOpen,
       }),
     }
   )

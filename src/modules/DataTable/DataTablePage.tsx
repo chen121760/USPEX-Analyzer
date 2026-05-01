@@ -294,9 +294,19 @@ export function DataTablePage() {
       setSortingRaw(updaterOrValue);
     }
   };
-  const [globalFilter, setGlobalFilter] = useState('');
+  const globalFilterRaw = useUIStore((s) => s.tableGlobalFilter);
+  const setGlobalFilterRaw = useUIStore((s) => s.setTableGlobalFilter);
+  const globalFilter = globalFilterRaw;
+  const setGlobalFilter = (updaterOrValue: string | ((old: string) => string)) => {
+    if (typeof updaterOrValue === 'function') {
+      setGlobalFilterRaw(updaterOrValue(globalFilterRaw));
+    } else {
+      setGlobalFilterRaw(updaterOrValue);
+    }
+  };
   const [lineageId, setLineageId] = useState<number | null>(null);
-  const [selectedTag, setSelectedTag] = useState<string>('');
+  const selectedTag = useUIStore((s) => s.tableSelectedTag);
+  const setSelectedTag = useUIStore((s) => s.setTableSelectedTag);
 
   // 筛选条件组接入 UIStore，切换页面后不丢失
   const filterGroups    = useUIStore((s) => s.tableFilterGroups);
@@ -736,7 +746,7 @@ export function DataTablePage() {
     {/* ===== 工具栏 ===== */}
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
 
-      {/* 搜索框 + 结果计数 */}
+      {/* 搜索框 + 结果计数 + hint */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ position: 'relative', flex: 1, maxWidth: 300 }}>
           <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)' }} />

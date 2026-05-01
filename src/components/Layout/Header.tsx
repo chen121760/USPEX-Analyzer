@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useUIStore } from '@/store/useUIStore';
 import { useProjectStore } from '@/store/useProjectStore';
-import { Moon, Sun, Globe, UploadCloud } from 'lucide-react';
+import { Moon, Sun, Globe, UploadCloud, HelpCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export function Header() {
@@ -10,6 +10,8 @@ export function Header() {
   const toggleTheme = useUIStore((s) => s.toggleTheme);
   const systemInfo = useProjectStore((s) => s.systemInfo);
   const compareIds = useUIStore((s) => s.compareIds);
+  const hintPanelOpen = useUIStore((s) => s.hintPanelOpen);
+  const toggleHintPanel = useUIStore((s) => s.toggleHintPanel);
   const navigate = useNavigate();
 
   const toggleLang = () => {
@@ -75,6 +77,20 @@ export function Header() {
       {/* Theme toggle */}
       <button className="btn btn-ghost btn-sm" onClick={toggleTheme} title="Toggle theme">
         {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+      </button>
+
+      {/* Help / hint panel toggle */}
+      <button
+        className="btn btn-ghost btn-sm"
+        onClick={toggleHintPanel}
+        title="Page guide"
+        style={{
+          color: hintPanelOpen ? '#68b88e' : undefined,
+          background: hintPanelOpen ? 'rgba(104,184,142,0.12)' : undefined,
+          borderRadius: 6,
+        }}
+      >
+        <HelpCircle size={16} />
       </button>
     </header>
   );

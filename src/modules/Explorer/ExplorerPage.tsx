@@ -194,10 +194,16 @@ export function ExplorerPage() {
   const playTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Play: only high moves, low is fixed. high steps by playStep until dataMax, then stops.
+  // If upper limit is already at max, reset it to min first so the animation is visible.
   const handlePlay = useCallback(() => {
     if (!colorDataRange) return;
     const fixedLow = cMin ?? colorDataRange.min;
     let curHigh = cMax ?? colorDataRange.max;
+    // If already at max, restart from the bottom so the user sees something happen
+    if (curHigh >= colorDataRange.max) {
+      curHigh = colorDataRange.min;
+      setCMax(curHigh);
+    }
     const delay = 1000 / playFps;
     setIsPlaying(true);
     const step = () => {
@@ -220,10 +226,12 @@ export function ExplorerPage() {
   }, []);
 
   // GIF export: bypass React state — compute each frame directly and force-render via Plotly.react()
+  // If upper limit is already at max, start from min so the GIF captures the full animation.
   const handleExportGif = useCallback(async () => {
     if (!colorDataRange || !plotRef.current) return;
     const fixedLow  = cMin ?? colorDataRange.min;
-    const startHigh = cMax ?? colorDataRange.max;
+    const rawHigh   = cMax ?? colorDataRange.max;
+    const startHigh = rawHigh >= colorDataRange.max ? colorDataRange.min : rawHigh;
     const frameDelay = Math.round(1000 / playFps);
 
     const frames: number[] = [];
