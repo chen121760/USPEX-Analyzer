@@ -1,4 +1,4 @@
-# USPEX Analyzer —— v1.1.3
+# USPEX Analyzer —— v1.2.0
 
 A browser-based analysis tool for USPEX crystal structure prediction outputs. Upload your USPEX output files and interactively explore, visualize, filter, and export your results — all without installing anything.
 
@@ -17,6 +17,7 @@ A browser-based analysis tool for USPEX crystal structure prediction outputs. Up
 - **Export Data** — Every chart has a one-click Export Data button that downloads the currently visible data as an Origin-compatible CSV, respecting all active filters
 - Project Save/Load — Save all data + annotations as .json, reload anytime
 - Times New Roman typography for all Latin text and numbers across the UI and charts
+- **Page Guide** — Right-side guide drawer with feature overview and background knowledge for key pages; guide state is project-wide and remembered across pages
 
 ## Supported USPEX Files
 
