@@ -6,7 +6,7 @@ import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT } from '@/lib/constants';
+import { PLOTLY_FONT, getPlotlyTheme } from '@/lib/constants';
 import GIF from 'gif.js';
 import { layerClassification, computeHypervolume2D, autoReferencePoint } from '@/lib/paretoUtils';
 import { ExportDataButton } from '@/components/ExportDataButton';
@@ -107,15 +107,6 @@ function getFieldOptions(
   return opts;
 }
 
-const AXIS_STYLE = {
-  tickfont: { size: 11, color: '#64748b' },
-  gridcolor: '#e2e8f0',
-  zerolinecolor: '#cbd5e1',
-  linecolor: '#94a3b8',
-};
-
-const TITLE_FONT = { size: 13, color: '#334155' };
-
 const FRONT_COLORS = ['#dc2626', '#f59e0b', '#16a34a', '#2563eb', '#8b5cf6', '#ec4899', '#06b6d4', '#6b7280'];
 
 export function BetaExplorerPage() {
@@ -126,6 +117,7 @@ export function BetaExplorerPage() {
   const allTags        = useProjectStore((s) => s.tags);
   const structures     = useProjectStore((s) => s.structures);
   const systemInfo     = useProjectStore((s) => s.systemInfo);
+  const theme          = useUIStore((s) => s.theme);
 
   const hasML     = structures.some((s) => s.youngModulus != null && s.youngModulus! > 0);
   const hasPareto = systemInfo?.optimizationType === 'multi';
@@ -612,28 +604,37 @@ export function BetaExplorerPage() {
     const hasMarginal = showXMarginal || showYMarginal;
     const mainXDomain: [number, number] = showYMarginal ? [0, 0.80] : [0, 1];
     const mainYDomain: [number, number] = showXMarginal ? [0, 0.80] : [0, 1];
+    const pt = getPlotlyTheme(theme);
+    const axisStyle = {
+      tickfont: { size: 11, color: pt.tickColor },
+      gridcolor: pt.gridColor,
+      zerolinecolor: pt.zerolineColor,
+      linecolor: pt.lineColor,
+    };
+    const titleFont = { size: 13, color: pt.axisTitleColor };
+
     const base: any = {
       font: PLOTLY_FONT,
-      title: hasMarginal ? undefined : { text: `${xField.label} vs ${yField.label}`, font: { size: 15, color: '#0f172a' } },
-      xaxis: { title: { text: xField.label, font: TITLE_FONT }, ...(xRange ? { range: xRange } : {}), domain: mainXDomain, ...AXIS_STYLE },
-      yaxis: { title: { text: yField.label, font: TITLE_FONT }, ...(yRange ? { range: yRange } : {}), domain: mainYDomain, ...AXIS_STYLE },
+      title: hasMarginal ? undefined : { text: `${xField.label} vs ${yField.label}`, font: { size: 15, color: pt.titleColor } },
+      xaxis: { title: { text: xField.label, font: titleFont }, ...(xRange ? { range: xRange } : {}), domain: mainXDomain, ...axisStyle },
+      yaxis: { title: { text: yField.label, font: titleFont }, ...(yRange ? { range: yRange } : {}), domain: mainYDomain, ...axisStyle },
       hovermode: 'closest' as const, showlegend: true,
-      legend: { font: { size: 11, color: '#334155' } },
+      legend: { font: { size: 11, color: pt.legendColor } },
       dragmode: 'lasso' as const,
       margin: { t: showXMarginal ? 10 : 50, r: showYMarginal ? 10 : 20, l: 60, b: 60 },
-      plot_bgcolor: '#ffffff', paper_bgcolor: '#ffffff',
+      plot_bgcolor: pt.plotBg, paper_bgcolor: pt.paperBg,
     };
     if (showXMarginal) {
-      base.xaxis2 = { domain: mainXDomain, matches: 'x', showticklabels: false, ...AXIS_STYLE };
-      base.yaxis2 = { domain: [0.83, 1], title: { text: 'density', font: { size: 10, color: '#94a3b8' } }, ...AXIS_STYLE };
+      base.xaxis2 = { domain: mainXDomain, matches: 'x', showticklabels: false, ...axisStyle };
+      base.yaxis2 = { domain: [0.83, 1], title: { text: 'density', font: { size: 10, color: pt.tickColor } }, ...axisStyle };
     }
     if (showYMarginal) {
-      base.xaxis3 = { domain: [0.83, 1], title: { text: 'density', font: { size: 10, color: '#94a3b8' } }, ...AXIS_STYLE };
-      base.yaxis3 = { domain: mainYDomain, matches: 'y', showticklabels: false, ...AXIS_STYLE };
+      base.xaxis3 = { domain: [0.83, 1], title: { text: 'density', font: { size: 10, color: pt.tickColor } }, ...axisStyle };
+      base.yaxis3 = { domain: mainYDomain, matches: 'y', showticklabels: false, ...axisStyle };
     }
     return base;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [xField, yField, xMin, xMax, yMin, yMax, showXMarginal, showYMarginal]);
+  }, [xField, yField, xMin, xMax, yMin, yMax, showXMarginal, showYMarginal, theme]);
 
   layoutRef.current = layout;
 
@@ -828,14 +829,14 @@ export function BetaExplorerPage() {
               data={hvTraces}
               layout={{
                 font: PLOTLY_FONT,
-                title: { text: t('beta.hvTitle'), font: { size: 15, color: '#0f172a' } },
-                xaxis: { title: { text: t('col.generation'), font: TITLE_FONT }, ...AXIS_STYLE },
-                yaxis: { title: { text: t('beta.hvYAxis'), font: TITLE_FONT }, ...AXIS_STYLE },
+                title: { text: t('beta.hvTitle'), font: { size: 15, color: getPlotlyTheme(theme).titleColor } },
+                xaxis: { title: { text: t('col.generation'), font: { size: 13, color: getPlotlyTheme(theme).axisTitleColor } }, tickfont: { size: 11, color: getPlotlyTheme(theme).tickColor }, gridcolor: getPlotlyTheme(theme).gridColor, zerolinecolor: getPlotlyTheme(theme).zerolineColor, linecolor: getPlotlyTheme(theme).lineColor },
+                yaxis: { title: { text: t('beta.hvYAxis'), font: { size: 13, color: getPlotlyTheme(theme).axisTitleColor } }, tickfont: { size: 11, color: getPlotlyTheme(theme).tickColor }, gridcolor: getPlotlyTheme(theme).gridColor, zerolinecolor: getPlotlyTheme(theme).zerolineColor, linecolor: getPlotlyTheme(theme).lineColor },
                 hovermode: 'closest' as const,
                 showlegend: true,
-                legend: { font: { size: 11, color: '#334155' } },
+                legend: { font: { size: 11, color: getPlotlyTheme(theme).legendColor } },
                 margin: { t: 50, r: 20, l: 70, b: 60 },
-                plot_bgcolor: '#ffffff', paper_bgcolor: '#ffffff',
+                plot_bgcolor: getPlotlyTheme(theme).plotBg, paper_bgcolor: getPlotlyTheme(theme).paperBg,
               }}
               config={{ responsive: true, displayModeBar: true }}
               style={{ width: '100%', height: 400 }}

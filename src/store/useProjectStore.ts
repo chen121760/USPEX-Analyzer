@@ -14,6 +14,7 @@ import type {
   TagDefinition,
   FilterPreset,
   ProjectFile,
+  ParsedFileStatus,
 } from '@/types/structure';
 import { parseAllFiles, type ParseResult } from '@/parsers';
 import { saveProject, makeProjectId } from '@/lib/projectStorage';
@@ -31,18 +32,6 @@ function autoSave(get: () => ProjectState) {
   } catch (e) {
     console.warn('Auto-save failed:', e);
   }
-}
-
-interface ParsedFileStatus {
-  parameters: boolean;
-  extended_convex_hull: boolean;
-  individuals: boolean;
-  pareto_ranking: boolean;
-  ml_properties: boolean;
-  origin: boolean;
-  gathered_poscars: boolean;
-  gathered_poscars_unrelaxed: boolean;
-  convex_hull: boolean;
 }
 
 interface ProjectState {
@@ -101,6 +90,25 @@ const EMPTY_PARSED: ParsedFileStatus = {
   gathered_poscars_unrelaxed: false,
   convex_hull: false,
 };
+
+/**
+ * Infer which source files were parsed from the structures themselves.
+ * Used when loading a saved project that doesn't carry parsedFiles.
+ */
+function inferParsedFiles(structures: Structure[], sysInfo: SystemInfo | null, hullGenCount: number): ParsedFileStatus {
+  if (!structures.length) return { ...EMPTY_PARSED };
+  return {
+    parameters:                   !!sysInfo,
+    extended_convex_hull:         structures.some((s) => !isNaN(s.fitness)),
+    individuals:                  structures.some((s) => s.generation > 0),
+    pareto_ranking:               structures.some((s) => s.paretoFront != null),
+    ml_properties:                structures.some((s) => s.bulkModulus != null),
+    origin:                       structures.some((s) => s.origin !== 'Unknown'),
+    gathered_poscars:             structures.some((s) => !!s.poscarData),
+    gathered_poscars_unrelaxed:   false,   // cannot infer; treat as absent
+    convex_hull:                  hullGenCount > 0,
+  };
+}
 
 const DEFAULT_TAGS: TagDefinition[] = [
   { id: 'candidate', nameKey: 'tag.candidate', color: '#f59e0b' },
@@ -180,14 +188,19 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       sysInfo.compositionMode = 'varcomp';
     }
 
+    const hullGens = project.hullGenerations ?? [];
+    const parsedFiles: ParsedFileStatus = project.parsedFiles
+      ? { ...EMPTY_PARSED, ...project.parsedFiles }
+      : inferParsedFiles(migratedStructures, sysInfo, hullGens.length);
+
     set({
       systemInfo: sysInfo,
       structures: migratedStructures,
       userStructures: project.userAddedStructures ?? [],
-      hullGenerations: project.hullGenerations ?? [],
+      hullGenerations: hullGens,
       tags: project.tags?.length ? project.tags : [...DEFAULT_TAGS],
       filterPresets: project.filterPresets ?? [],
-      parsedFiles: { ...EMPTY_PARSED }, // not from files
+      parsedFiles,
       isLoading: false,
       isDataLoaded: true,
       parseWarnings: [],
@@ -213,6 +226,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       tags: state.tags,
       filterPresets: state.filterPresets,
       hullGenerations: state.hullGenerations,
+      parsedFiles: state.parsedFiles,
     };
   },
 

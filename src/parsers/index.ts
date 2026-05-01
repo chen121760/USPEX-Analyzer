@@ -432,6 +432,9 @@ export function parseAllFiles(
     maxFitness: fitnessValues.length > 0 ? Math.max(...fitnessValues) : 0,
     calculationType: paramsResult?.calculationType ?? 0,
     externalPressure: paramsResult?.externalPressure ?? null,
+    isPickup: paramsResult?.isPickup ?? false,
+    pickUpGen: paramsResult?.pickUpGen ?? 0,
+    pickUpFolder: paramsResult?.pickUpFolder ?? 0,
   };
 
   return {

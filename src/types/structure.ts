@@ -83,6 +83,19 @@ export interface LatticeParams {
   gamma: number;
 }
 
+/** Status flags for each USPEX output file */
+export interface ParsedFileStatus {
+  parameters: boolean;
+  extended_convex_hull: boolean;
+  individuals: boolean;
+  pareto_ranking: boolean;
+  ml_properties: boolean;
+  origin: boolean;
+  gathered_poscars: boolean;
+  gathered_poscars_unrelaxed: boolean;
+  convex_hull: boolean;
+}
+
 /** Global system information derived from parsed files */
 export interface SystemInfo {
   elements: string[];
@@ -99,6 +112,9 @@ export interface SystemInfo {
   totalStructuresSource: string;
   calculationType: number;         // 3-digit code from Parameters.txt
   externalPressure: number | null; // GPa, null if not specified
+  isPickup: boolean;               // true if pickUpGen or pickUpFolder is non-zero
+  pickUpGen: number;               // value of pickUpGen (0 = not a restart)
+  pickUpFolder: number;            // value of pickUpFolder (0 = not a restart)
 }
 
 /** Tag definition */
@@ -208,6 +224,9 @@ export interface ParsedParameters {
   isVarcomp: boolean;            // derived: calculationType % 10 === 1
   numComponents: number;         // from atomType count: 2=binary, 3=ternary
   externalPressure: number | null; // GPa, from "100 : ExternalPressure"
+  isPickup: boolean;               // true if pickUpGen or pickUpFolder is non-zero
+  pickUpGen: number;               // value of pickUpGen (0 = not a restart)
+  pickUpFolder: number;            // value of pickUpFolder (0 = not a restart)
 }
 
 export interface ParsedExtendedHull {
@@ -296,6 +315,8 @@ export interface ProjectFile {
   tags: TagDefinition[];
   filterPresets: FilterPreset[];
   hullGenerations?: HullGeneration[];
+  /** Which files were originally parsed (persisted for project restore) */
+  parsedFiles?: ParsedFileStatus;
 }
 
 // ============================================================

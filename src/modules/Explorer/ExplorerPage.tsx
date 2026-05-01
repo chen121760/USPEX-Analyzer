@@ -6,7 +6,7 @@ import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT } from '@/lib/constants';
+import { PLOTLY_FONT, getPlotlyTheme } from '@/lib/constants';
 import GIF from 'gif.js';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadCsv } from '@/lib/exportCsv';
@@ -101,20 +101,12 @@ function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: bo
   return opts;
 }
 
-const AXIS_STYLE = {
-  tickfont: { size: 11, color: '#64748b' },
-  gridcolor: '#e2e8f0',
-  zerolinecolor: '#cbd5e1',
-  linecolor: '#94a3b8',
-};
-
-const TITLE_FONT = { size: 13, color: '#334155' };
-
 export function ExplorerPage() {
   const { t } = useTranslation();
   const openViewer      = useUIStore((s) => s.openViewer);
   const markActiveTags  = useUIStore((s) => s.markActiveTags);
   const markEaInput     = useUIStore((s) => s.markEaInput);
+  const theme           = useUIStore((s) => s.theme);
   const allTags         = useProjectStore((s) => s.tags);
   const structures      = useProjectStore((s) => s.structures);
   const systemInfo      = useProjectStore((s) => s.systemInfo);
@@ -516,6 +508,16 @@ export function ExplorerPage() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const layout: any = useMemo(() => {
+    const pt = getPlotlyTheme(theme);
+
+    const axisStyle = {
+      tickfont: { size: 11, color: pt.tickColor },
+      gridcolor: pt.gridColor,
+      zerolinecolor: pt.zerolineColor,
+      linecolor: pt.lineColor,
+    };
+    const titleFont = { size: 13, color: pt.axisTitleColor };
+
     const xRange = (xMin !== '' || xMax !== '')
       ? [xMin !== '' ? parseFloat(xMin) : undefined, xMax !== '' ? parseFloat(xMax) : undefined]
       : undefined;
@@ -531,26 +533,26 @@ export function ExplorerPage() {
 
     const base: any = {
       font: PLOTLY_FONT,
-      title: hasMarginal ? undefined : { text: `${xField.label} vs ${yField.label}`, font: { size: 15, color: '#0f172a' } },
+      title: hasMarginal ? undefined : { text: `${xField.label} vs ${yField.label}`, font: { size: 15, color: pt.titleColor } },
       xaxis: {
-        title: { text: xField.label, font: TITLE_FONT },
+        title: { text: xField.label, font: titleFont },
         ...(xRange ? { range: xRange } : {}),
         domain: mainXDomain,
-        ...AXIS_STYLE,
+        ...axisStyle,
       },
       yaxis: {
-        title: { text: yField.label, font: TITLE_FONT },
+        title: { text: yField.label, font: titleFont },
         ...(yRange ? { range: yRange } : {}),
         domain: mainYDomain,
-        ...AXIS_STYLE,
+        ...axisStyle,
       },
       hovermode: 'closest' as const,
       showlegend: true,
-      legend: { font: { size: 11, color: '#334155' } },
+      legend: { font: { size: 11, color: pt.legendColor } },
       dragmode: 'lasso' as const,
       margin: { t: showXMarginal ? 10 : 50, r: showYMarginal ? 10 : 20, l: 60, b: 60 },
-      plot_bgcolor: '#ffffff',
-      paper_bgcolor: '#ffffff',
+      plot_bgcolor: pt.plotBg,
+      paper_bgcolor: pt.paperBg,
     };
 
     if (showXMarginal) {
@@ -558,32 +560,32 @@ export function ExplorerPage() {
         domain: mainXDomain,
         matches: 'x',
         showticklabels: false,
-        ...AXIS_STYLE,
+        ...axisStyle,
       };
       base.yaxis2 = {
         domain: [0.83, 1],
-        title: { text: 'density', font: { size: 10, color: '#94a3b8' } },
-        ...AXIS_STYLE,
+        title: { text: 'density', font: { size: 10, color: pt.tickColor } },
+        ...axisStyle,
       };
     }
 
     if (showYMarginal) {
       base.xaxis3 = {
         domain: [0.83, 1],
-        title: { text: 'density', font: { size: 10, color: '#94a3b8' } },
-        ...AXIS_STYLE,
+        title: { text: 'density', font: { size: 10, color: pt.tickColor } },
+        ...axisStyle,
       };
       base.yaxis3 = {
         domain: mainYDomain,
         matches: 'y',
         showticklabels: false,
-        ...AXIS_STYLE,
+        ...axisStyle,
       };
     }
 
     return base;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [xField, yField, xMin, xMax, yMin, yMax, showXMarginal, showYMarginal]);
+  }, [xField, yField, xMin, xMax, yMin, yMax, showXMarginal, showYMarginal, theme]);
 
   layoutRef.current = layout;
 

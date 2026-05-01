@@ -18,7 +18,7 @@ import { useProjectStore } from '@/store/useProjectStore';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT } from '@/lib/constants';
+import { PLOTLY_FONT, getPlotlyTheme } from '@/lib/constants';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadCsv } from '@/lib/exportCsv';
 
@@ -50,6 +50,7 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
   const markActiveTags  = useUIStore((s) => s.markActiveTags);
   const markEaInput     = useUIStore((s) => s.markEaInput);
   const allTags         = useProjectStore((s) => s.tags);
+  const theme           = useUIStore((s) => s.theme);
 
   const allSorted = useMemo(() =>
     structures
@@ -145,29 +146,31 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
   }, [allSorted, displayCount, rankMap, markActiveTags, markEaInput, allTags, t]);
 
 
+  const pt = getPlotlyTheme(theme);
+
   const layout: PlotlyLayout = {
     font: PLOTLY_FONT,
     title: {
       text: `${systemInfo.elements.join('-')} ${t('hull.energyRanking', 'Energy Ranking')}`,
-      font: { size: 15, color: '#0f172a' },
+      font: { size: 15, color: pt.titleColor },
     },
     xaxis: {
-      title: { text: 'Rank', font: { size: 13, color: '#334155' } },
-      tickfont: { size: 11, color: '#64748b' },
-      gridcolor: '#e2e8f0',
+      title: { text: 'Rank', font: { size: 13, color: pt.axisTitleColor } },
+      tickfont: { size: 11, color: pt.tickColor },
+      gridcolor: pt.gridColor,
     },
     yaxis: {
-      title: { text: 'ΔH (eV/atom above ground state)', font: { size: 13, color: '#334155' } },
-      tickfont: { size: 11, color: '#64748b' },
-      gridcolor: '#e2e8f0',
+      title: { text: 'ΔH (eV/atom above ground state)', font: { size: 13, color: pt.axisTitleColor } },
+      tickfont: { size: 11, color: pt.tickColor },
+      gridcolor: pt.gridColor,
       range: [-0.001, undefined],
-      zerolinecolor: '#cbd5e1',
+      zerolinecolor: pt.zerolineColor,
       automargin: true,
     },
     margin: { t: 50, r: 40, l: 80, b: 60 },
-    height: 500,  // 散点图固定高度就够了
-    plot_bgcolor: '#ffffff',
-    paper_bgcolor: '#ffffff',
+    height: 500,
+    plot_bgcolor: pt.plotBg,
+    paper_bgcolor: pt.paperBg,
     showlegend: false,
   };
 

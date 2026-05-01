@@ -40,6 +40,21 @@ function parseExternalPressure(content: string): number | null {
   return match ? parseFloat(match[1]) : null;
 }
 
+/**
+ * Extract pickUpGen and pickUpFolder from lines like:
+ *   "5     : pickUpGen"
+ *   "0     : pickUpFolder"
+ * Returns { pickUpGen, pickUpFolder }; both default to 0 if not found.
+ * isPickup is true when either value is non-zero.
+ */
+function parsePickup(content: string): { isPickup: boolean; pickUpGen: number; pickUpFolder: number } {
+  const genMatch = content.match(/(\d+)\s*:\s*pickUpGen\b/i);
+  const folderMatch = content.match(/(\d+)\s*:\s*pickUpFolder\b/i);
+  const pickUpGen = genMatch ? parseInt(genMatch[1], 10) : 0;
+  const pickUpFolder = folderMatch ? parseInt(folderMatch[1], 10) : 0;
+  return { isPickup: pickUpGen !== 0 || pickUpFolder !== 0, pickUpGen, pickUpFolder };
+}
+
 export function parseParameters(content: string): ParsedParameters {
   // Extract element names
   const atomMatch = content.match(
@@ -56,6 +71,7 @@ export function parseParameters(content: string): ParsedParameters {
     : false;
   const numComponents = elements.length;
   const externalPressure = parseExternalPressure(content);
+  const { isPickup, pickUpGen, pickUpFolder } = parsePickup(content);
 
   return {
     elements,
@@ -64,5 +80,8 @@ export function parseParameters(content: string): ParsedParameters {
     isVarcomp,
     numComponents,
     externalPressure,
+    isPickup,
+    pickUpGen,
+    pickUpFolder,
   };
 }
