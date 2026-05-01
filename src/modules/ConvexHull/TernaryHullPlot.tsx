@@ -22,7 +22,7 @@ import { computeTernaryHullEdges, uniqueHullPoints, type TernaryHullInput } from
 import { StructureViewerModal } from '@/components/StructureViewer/StructureViewerModal';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT } from '@/lib/constants';
+import { PLOTLY_FONT, getPlotlyTheme } from '@/lib/constants';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadCsv } from '@/lib/exportCsv';
 
@@ -43,6 +43,7 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
   const markActiveTags  = useUIStore((s) => s.markActiveTags);
   const markEaInput     = useUIStore((s) => s.markEaInput);
   const allTags         = useProjectStore((s) => s.tags);
+  const theme           = useUIStore((s) => s.theme);
 
   const maxFitness = useMemo(() => {
     const vals = structures.filter((s) => s.fitness > 0 && s.enthalpy < 900).map((s) => s.fitness);
@@ -150,7 +151,7 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
       mode: 'lines' as const,
       type: 'scatter' as const,
       name: '',
-      line: { color: '#1e293b', width: 1.5 },
+      line: { color: getPlotlyTheme(theme).structureLineColor, width: 1.5 },
       hoverinfo: 'skip' as const,
       showlegend: false,
     },
@@ -196,7 +197,7 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
       mode: 'lines' as const,
       type: 'scatter' as const,
       name: t('hull.tieLines', 'Tie Lines'),
-      line: { color: '#1e293b', width: 0.8 },
+      line: { color: getPlotlyTheme(theme).structureLineColor, width: 0.8 },
       hoverinfo: 'skip' as const,
     },
 
@@ -238,15 +239,16 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
 
   // Element labels at triangle corners
   const labels = elements.length >= 3 ? elements : ['A', 'B', 'C'];
+  const pt = getPlotlyTheme(theme);
   const labelAnnotations = [
-    { x: -0.05, y: -0.05, text: labels[0], showarrow: false, font: { size: 13, color: '#334155', weight: 'bold' as const } },
-    { x: 0.5, y: Math.sqrt(3) / 2 + 0.06, text: labels[1], showarrow: false, font: { size: 13, color: '#334155', weight: 'bold' as const } },
-    { x: 1.05, y: -0.05, text: labels[2], showarrow: false, font: { size: 13, color: '#334155', weight: 'bold' as const } },
+    { x: -0.05, y: -0.05, text: labels[0], showarrow: false, font: { size: 13, color: pt.annotationColor, weight: 'bold' as const } },
+    { x: 0.5, y: Math.sqrt(3) / 2 + 0.06, text: labels[1], showarrow: false, font: { size: 13, color: pt.annotationColor, weight: 'bold' as const } },
+    { x: 1.05, y: -0.05, text: labels[2], showarrow: false, font: { size: 13, color: pt.annotationColor, weight: 'bold' as const } },
   ];
 
   const layout: PlotlyLayout = {
     font: PLOTLY_FONT,
-    title: { text: `${elements.join('-')} ${t('hull.ternaryTitle', 'Ternary Phase Diagram')}`, font: { size: 15, color: '#0f172a' } },
+    title: { text: `${elements.join('-')} ${t('hull.ternaryTitle', 'Ternary Phase Diagram')}`, font: { size: 15, color: pt.titleColor } },
     xaxis: {
       range: [-0.12, 1.12],
       showgrid: false,
@@ -266,10 +268,10 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
     annotations: labelAnnotations,
     hovermode: 'closest' as const,
     showlegend: true,
-    legend: { x: 0.02, y: 0.98, font: { size: 11, color: '#334155' } },
+    legend: { x: 0.02, y: 0.98, font: { size: 11, color: pt.legendColor } },
     margin: { t: 50, r: 80 },
-    plot_bgcolor: '#ffffff',
-    paper_bgcolor: '#ffffff',
+    plot_bgcolor: pt.plotBg,
+    paper_bgcolor: pt.paperBg,
     width: 600,
     height: 550,
   };

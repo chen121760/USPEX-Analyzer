@@ -6,7 +6,7 @@ import { useUIStore } from '@/store/useUIStore';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT } from '@/lib/constants';
+import { PLOTLY_FONT, getPlotlyTheme } from '@/lib/constants';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadWideCsv } from '@/lib/exportCsv';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -22,6 +22,7 @@ export function ParetoPage() {
   const allTags         = useProjectStore((s) => s.tags);
   const structures      = useProjectStore((s) => s.structures);
   const systemInfo      = useProjectStore((s) => s.systemInfo);
+  const theme           = useUIStore((s) => s.theme);
 
   const isMulti = systemInfo?.optimizationType === 'multi';
   const objName = systemInfo?.secondObjectiveName || 'Second Objective';
@@ -146,26 +147,27 @@ export function ParetoPage() {
   }
 
   const axisStyle = {
-    tickfont: { size: 11, color: '#64748b' },
-    gridcolor: '#e2e8f0',
-    zerolinecolor: '#cbd5e1',
-    linecolor: '#94a3b8',
+    tickfont: { size: 11, color: getPlotlyTheme(theme).tickColor },
+    gridcolor: getPlotlyTheme(theme).gridColor,
+    zerolinecolor: getPlotlyTheme(theme).zerolineColor,
+    linecolor: getPlotlyTheme(theme).lineColor,
   };
 
-  const titleFont = { size: 13, color: '#334155' };
+  const titleFont = { size: 13, color: getPlotlyTheme(theme).axisTitleColor };
+  const pt = getPlotlyTheme(theme);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const layout: any = {
     font: PLOTLY_FONT,
-    title: { text: `${systemInfo?.elements.join('-')} ${t('pareto.title')}`, font: { size: 15, color: '#0f172a' } },
+    title: { text: `${systemInfo?.elements.join('-')} ${t('pareto.title')}`, font: { size: 15, color: pt.titleColor } },
     xaxis: { title: { text: t('pareto.xAxis'), font: titleFont }, ...axisStyle },
     yaxis: { title: { text: objName, font: titleFont }, ...axisStyle },
     hovermode: 'closest' as const,
     showlegend: true,
-    legend: { font: { size: 11, color: '#334155' } },
+    legend: { font: { size: 11, color: pt.legendColor } },
     margin: { t: 50, l: 60, b: 60 },
-    plot_bgcolor: '#ffffff',
-    paper_bgcolor: '#ffffff',
+    plot_bgcolor: pt.plotBg,
+    paper_bgcolor: pt.paperBg,
   };
 
   function handleExport() {

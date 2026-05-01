@@ -16,7 +16,7 @@ import { useProjectStore } from '@/store/useProjectStore';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT } from '@/lib/constants';
+import { PLOTLY_FONT, getPlotlyTheme } from '@/lib/constants';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadMultiSectionCsv } from '@/lib/exportCsv';
 
@@ -67,6 +67,7 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
   const openViewer = useUIStore((s) => s.openViewer);
   const markActiveTags  = useUIStore((s) => s.markActiveTags);
   const markEaInput     = useUIStore((s) => s.markEaInput);
+  const theme           = useUIStore((s) => s.theme);
   const allTags         = useProjectStore((s) => s.tags);
 
   const maxFitness = useMemo(() => {
@@ -189,7 +190,7 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
       mode: 'lines' as const,
       type: 'scatter' as const,
       name: 'Convex Hull',
-      line: { color: '#1e293b', width: 2 },
+      line: { color: getPlotlyTheme(theme).structureLineColor, width: 2 },
       hoverinfo: 'skip' as const,
     },
     {
@@ -217,25 +218,26 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
   ];
 
   const axisStyle = {
-    tickfont: { size: 11, color: '#64748b' },
-    gridcolor: '#e2e8f0',
-    zerolinecolor: '#cbd5e1',
-    linecolor: '#94a3b8',
+    tickfont: { size: 11, color: getPlotlyTheme(theme).tickColor },
+    gridcolor: getPlotlyTheme(theme).gridColor,
+    zerolinecolor: getPlotlyTheme(theme).zerolineColor,
+    linecolor: getPlotlyTheme(theme).lineColor,
   };
 
-  const titleFont = { size: 13, color: '#334155' };
+  const titleFont = { size: 13, color: getPlotlyTheme(theme).axisTitleColor };
+  const pt = getPlotlyTheme(theme);
 
   const layout: PlotlyLayout = {
     font: PLOTLY_FONT,
-    title: { text: `${elements.join('-')} ${t('hull.title')}`, font: { size: 15, color: '#0f172a' } },
+    title: { text: `${elements.join('-')} ${t('hull.title')}`, font: { size: 15, color: pt.titleColor } },
     xaxis: { title: { text: `x(${elements[1] || 'B'}) = ${elements[1] || 'B'}/(${elements[0] || 'A'}+${elements[1] || 'B'})`, font: titleFont }, ...axisStyle },
     yaxis: { title: { text: t('hull.formationEnergy'), font: titleFont }, range: [-0.001, undefined], ...axisStyle },
     hovermode: 'closest' as const,
     showlegend: true,
-    legend: { x: 0.02, y: 0.02, xanchor: 'left', yanchor: 'bottom', font: { size: 11, color: '#334155' } },
+    legend: { x: 0.02, y: 0.02, xanchor: 'left', yanchor: 'bottom', font: { size: 11, color: pt.legendColor } },
     margin: { t: 50, r: 80, l: 60, b: 60 },
-    plot_bgcolor: '#ffffff',
-    paper_bgcolor: '#ffffff',
+    plot_bgcolor: pt.plotBg,
+    paper_bgcolor: pt.paperBg,
   };
 
   return (
