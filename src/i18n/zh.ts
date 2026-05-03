@@ -91,6 +91,7 @@ const zh = {
   'upload.suffixPlaceholder': '例如：Tc、run2（留空则不添加后缀）',
   'upload.requiredFilesHint': '请上传全部 4 个核心文件：Individuals、origin、Parameters.txt、gatheredPOSCARS',
   'upload.confirmDelete': '确认从历史记录中删除这个项目？',
+  'upload.sampleHint': '仅供演示，不代表真实计算结果',
 
   // ---- File types ----
   'files.parameters': 'Parameters.txt',
