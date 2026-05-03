@@ -91,6 +91,7 @@ const en = {
   'upload.suffixPlaceholder': 'e.g. Tc, run2 (leave blank for none)',
   'upload.requiredFilesHint': 'Please upload all 4 core files: Individuals, origin, Parameters.txt, gatheredPOSCARS',
   'upload.confirmDelete': 'Delete this project from history?',
+  'upload.sampleHint': 'Demo data only — not for scientific use',
 
   // ---- File types ----
   'files.parameters': 'Parameters.txt',

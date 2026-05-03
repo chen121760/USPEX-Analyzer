@@ -38,6 +38,7 @@ export function UploadPage() {
   const [suffix, setSuffix] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
   const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
+  const [loadingSample, setLoadingSample] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -147,7 +148,6 @@ export function UploadPage() {
     fileContents.has('gathered_poscars');
 
   const startAnalysis = () => {
-    if (!canStart) return;
     processFiles(detectedFiles, fileContents);
     // Build auto name from parsed systemInfo (processFiles is synchronous)
     const si = useProjectStore.getState().systemInfo;
@@ -156,6 +156,24 @@ export function UploadPage() {
       : suffix.trim() || 'project';
     setProjectName(autoName);
     navigate('/dashboard');
+  };
+
+  const handleLoadSample = async () => {
+    setLoadingSample(true);
+    try {
+      const res = await fetch(`${import.meta.env.BASE_URL}examples/example.json`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const project: ProjectFile = await res.json();
+      loadProjectFile(project);
+      const name = project.projectName || 'Sample';
+      setProjectName(name);
+      saveProject(project, name);
+      navigate('/dashboard');
+    } catch (e) {
+      setErrors([`Failed to load sample: ${e}`]);
+    } finally {
+      setLoadingSample(false);
+    }
   };
 
   const toggleLang = () => {
@@ -189,12 +207,36 @@ export function UploadPage() {
       </button>
 
       {/* Logo only */}
-      <div style={{ textAlign: 'center', marginBottom: 1 }} className="fade-in">
+      <div style={{ textAlign: 'center', marginBottom: 4 }} className="fade-in">
         <img
           src={logoImg}
           alt="USPEX Analyzer"
           style={{ width: 250, height: 250, borderRadius: 6, margin: '0 auto' }}
         />
+      </div>
+
+      {/* Sample data banner */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '7px 16px', borderRadius: 10, marginBottom: 10,
+        background: 'var(--color-surface)',
+        border: '1px solid var(--color-border)',
+        fontSize: 13,
+      }}>
+        <span style={{ color: 'var(--color-text-muted)' }}>
+          {i18n.language === 'zh' ? '没有数据？' : 'No data yet?'}
+        </span>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={handleLoadSample}
+          disabled={loadingSample}
+          style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-primary)', padding: '2px 8px' }}
+        >
+          {loadingSample ? '...' : t('btn.loadSample')} →
+        </button>
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+          {t('upload.sampleHint')}
+        </span>
       </div>
 
       {/* Main content: upload + recent side by side when history exists */}
@@ -211,13 +253,10 @@ export function UploadPage() {
         <div style={{ flex: recentProjects.length > 0 ? '0 0 560px' : undefined, width: recentProjects.length > 0 ? undefined : '100%' }}>
 
           {/* Suffix input — optional, above dropzone */}
-          <div style={{ marginBottom: 10 }}>
+          <div style={{ marginBottom: 8 }}>
             <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 4 }}>
               {t('upload.suffixLabel')}
             </label>
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '0 0 6px' }}>
-              {t('upload.suffixHint')}
-            </p>
             <input
               type="text"
               value={suffix}
@@ -225,7 +264,7 @@ export function UploadPage() {
               placeholder={t('upload.suffixPlaceholder')}
               onClick={(e) => e.stopPropagation()}
               style={{
-                width: '100%', padding: '8px 12px', borderRadius: 6,
+                width: '100%', padding: '7px 12px', borderRadius: 6,
                 border: '1px solid var(--color-border)', fontSize: 13,
                 background: 'var(--color-surface)', color: 'var(--color-text)',
                 boxSizing: 'border-box',
@@ -240,19 +279,19 @@ export function UploadPage() {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onClick={handleClick}
-            style={{ width: '100%', marginBottom: 16, padding: '28px 24px' }}
+            style={{ width: '100%', marginBottom: 12, padding: '14px 20px' }}
           >
             <input ref={inputRef} type="file" multiple style={{ display: 'none' }} onChange={handleInputChange} />
-            <UploadCloud size={36} color="var(--color-primary)" style={{ display: 'block', margin: '0 auto 8px' }} />
-            <p style={{ fontSize: 15, fontWeight: 600, margin: '0 0 4px', color: 'var(--color-text)' }}>
+            <UploadCloud size={24} color="var(--color-primary)" style={{ display: 'block', margin: '0 auto 6px' }} />
+            <p style={{ fontSize: 14, fontWeight: 600, margin: '0 0 2px', color: 'var(--color-text)' }}>
               {t('upload.dragHint')}
             </p>
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '0 0 16px' }}>
+            <p style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: '0 0 10px' }}>
               {t('upload.orLoadProject')}
             </p>
 
             {/* File groups with live status */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, width: '100%' }}>
               {([
                 { labelKey: 'upload.groupCore', color: '#16a34a', bg: 'rgba(22,163,74,0.12)', files: [
                   { name: 'Individuals', type: 'individuals' },
@@ -271,7 +310,7 @@ export function UploadPage() {
                 ] },
               ] as const).map((group) => (
                 <div key={group.labelKey}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     {t(group.labelKey)}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 6px' }}>
