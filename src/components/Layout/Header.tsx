@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useUIStore } from '@/store/useUIStore';
 import { useProjectStore } from '@/store/useProjectStore';
-import { Moon, Sun, Globe, UploadCloud, HelpCircle } from 'lucide-react';
+import { Moon, Sun, Globe, UploadCloud, HelpCircle, Contact } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export function Header() {
@@ -62,6 +62,17 @@ export function Header() {
           </span>
         </button>
       )}
+
+      {/* Contact */}
+      <a
+        className="btn btn-ghost btn-sm"
+        href="https://chen121760.github.io/"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Contact"
+      >
+        <Contact size={16} />
+      </a>
 
       {/* New upload */}
       <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>
