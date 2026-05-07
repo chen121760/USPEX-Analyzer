@@ -30,3 +30,5 @@
 26.explorer 加上X，Y轴数据分步统计（加上一个按钮）。主要是导出GIF图能看数据分布变化情况。 √
 27.exploror 中加入 Pareto-Front √
 28.多条件导出， 加入 “or” 条件 ！ √
+29.Header 加入 Cite USPEX 引用提醒弹窗 √
+30.深色模式待完善

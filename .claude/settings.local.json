@@ -4,7 +4,10 @@
       "Bash(npx tsc:*)",
       "Bash(npm run:*)",
       "Bash(node -e ':*)",
-      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(npm install *)",
+      "Bash(npx vite *)",
+      "Bash(npx eslint *)"
     ]
   }
 }

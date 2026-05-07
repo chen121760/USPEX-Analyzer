@@ -9,6 +9,8 @@ import { useEffect } from 'react';
 import { loadRecentProjects, deleteProject, saveProject, type StoredProject } from '@/lib/projectStorage';
 import { Clock, Trash2 } from 'lucide-react';
 import logoImg from '@/assets/logo.jpg';
+import { QuickPackCommand } from '@/components/QuickPackCommand';
+import { extractArchive, entriesToFiles, isArchive } from '@/utils/extractArchive';
 
 /** Build auto project name: Elements-calculationType-PressureGPa[-suffix] */
 function buildAutoName(
@@ -67,11 +69,30 @@ export function UploadPage() {
 
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
+    const fileArr = Array.from(files);
     const newDetected: DetectedFile[] = [...detectedFiles];
     const newContents = new Map(fileContents);
     const newErrors: string[] = [];
 
-    for (const file of Array.from(files)) {
+    // Archive pre-processing: if a single archive file is dropped, extract it first
+    let resolvedFiles: File[];
+    if (fileArr.length === 1 && isArchive(fileArr[0])) {
+      try {
+        const entries = await extractArchive(fileArr[0]);
+        resolvedFiles = entriesToFiles(entries);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        const friendlyMsg = i18n.language === 'zh'
+          ? `解压失败: ${fileArr[0].name} — ${msg}`
+          : `Extraction failed: ${fileArr[0].name} — ${msg}`;
+        setErrors([friendlyMsg]);
+        return;
+      }
+    } else {
+      resolvedFiles = fileArr;
+    }
+
+    for (const file of resolvedFiles) {
       try {
         const content = await file.text();
         const detected = detectFileType(file, content);
@@ -114,7 +135,7 @@ export function UploadPage() {
     setDetectedFiles(newDetected);
     setFileContents(newContents);
     setErrors(newErrors);
-  }, [detectedFiles, fileContents, loadProjectFile, navigate]);
+  }, [detectedFiles, fileContents, loadProjectFile, navigate, i18n.language]);
 
 
   const handleDrop = useCallback(
@@ -238,6 +259,9 @@ export function UploadPage() {
           {t('upload.sampleHint')}
         </span>
       </div>
+
+      {/* Quick-pack command card — visible before user uploads anything */}
+      <QuickPackCommand />
 
       {/* Main content: upload + recent side by side when history exists */}
       <div style={{

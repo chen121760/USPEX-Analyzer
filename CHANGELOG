@@ -1,6 +1,20 @@
 # USPEX Analyzer
 
 ## 版本更新记录
+### V1.2.3
+
+全局 — Header 工具栏优化
+
+- 新增 **Cite USPEX** 按钮（书本图标）：点击弹出 Popover 面板，展示 USPEX 四类引用文献（General / Variable Composition / Random Topological / Multi-Objective Pareto），附"复制全部"按钮与 USPEX 官网链接
+- 引用数据独立存放于 `src/utils/citations.ts`，后续更新引用只需编辑该文件
+- Contact 按钮悬停提示改为"联系作者" / "Contact Author"（跟随语言切换）
+- 调整 Header 右侧按钮顺序为：Upload → Language → Cite → Contact → Help
+
+上传页面 — 一键打包命令与压缩包上传
+
+- 新增**一键打包命令**卡片（QuickPackCommand）：展示在集群上打包 USPEX 结果目录的 shell 命令，点击一键复制，中英双语
+- 新增**压缩包上传**支持：拖入单个 .tar.gz / .tgz / .zip 文件时自动解压并提取内部文件，无需手动解压
+
 ### V1.2.2
 
 上传页面 — 示例数据与界面压缩
