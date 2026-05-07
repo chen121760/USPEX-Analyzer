@@ -1,4 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="6" fill="#2563eb"/>
-  <text x="16" y="22" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white">U</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="100%" height="100%">
+  <style>
+    .frame { 
+      stroke: #1F606E;
+      stroke-width: 28;
+      stroke-linejoin: round; 
+    }
+    .node-outer { 
+      fill: #F05A22;
+    }
+    .node-inner { 
+      fill: #F7B58A;
+    }
+  </style>
+
+  <!-- 圆角背景底板 -->
+  <rect width="400" height="400" rx="80" fill="#0F172A" />
+
+  <!-- 核心结构：等腰稳固三角形 -->
+  <polygon points="200,80 80,320 320,320" fill="none" class="frame" />
+
+  <!-- 顶部节点 -->
+  <circle cx="200" cy="80" r="32" class="node-outer" />
+  <circle cx="200" cy="80" r="14" class="node-inner" />
+  
+  <!-- 左下节点 -->
+  <circle cx="80" cy="320" r="32" class="node-outer" />
+  <circle cx="80" cy="320" r="14" class="node-inner" />
+
+  <!-- 右下节点 -->
+  <circle cx="320" cy="320" r="32" class="node-outer" />
+  <circle cx="320" cy="320" r="14" class="node-inner" />
 </svg>
