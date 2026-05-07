@@ -1,13 +1,12 @@
 import { useTranslation } from 'react-i18next';
 import { useUIStore } from '@/store/useUIStore';
 import { useProjectStore } from '@/store/useProjectStore';
-import { Moon, Sun, Globe, UploadCloud, HelpCircle, Contact } from 'lucide-react';
+import { Globe, UploadCloud, HelpCircle, Contact } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { CitePopover } from '@/components/CitePopover';
 
 export function Header() {
   const { t, i18n } = useTranslation();
-  const theme = useUIStore((s) => s.theme);
-  const toggleTheme = useUIStore((s) => s.toggleTheme);
   const systemInfo = useProjectStore((s) => s.systemInfo);
   const compareIds = useUIStore((s) => s.compareIds);
   const hintPanelOpen = useUIStore((s) => s.hintPanelOpen);
@@ -63,19 +62,8 @@ export function Header() {
         </button>
       )}
 
-      {/* Contact */}
-      <a
-        className="btn btn-ghost btn-sm"
-        href="https://chen121760.github.io/"
-        target="_blank"
-        rel="noopener noreferrer"
-        title="Contact"
-      >
-        <Contact size={16} />
-      </a>
-
       {/* New upload */}
-      <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')}>
+      <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')} title={t('btn.upload')}>
         <UploadCloud size={16} />
       </button>
 
@@ -85,10 +73,19 @@ export function Header() {
         <span style={{ fontSize: 12 }}>{i18n.language === 'zh' ? 'EN' : '中'}</span>
       </button>
 
-      {/* Theme toggle */}
-      <button className="btn btn-ghost btn-sm" onClick={toggleTheme} title="Toggle theme">
-        {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
-      </button>
+      {/* Cite USPEX */}
+      <CitePopover />
+
+      {/* Contact author */}
+      <a
+        className="btn btn-ghost btn-sm"
+        href="https://chen121760.github.io/"
+        target="_blank"
+        rel="noopener noreferrer"
+        title={i18n.language === 'zh' ? '联系作者' : 'Contact Author'}
+      >
+        <Contact size={16} />
+      </a>
 
       {/* Help / hint panel toggle */}
       <button

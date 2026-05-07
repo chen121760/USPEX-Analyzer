@@ -70,6 +70,11 @@ const zh = {
   "table.filterSelectElement": "选择元素",
 
 
+  // ---- Quick Pack Command ----
+  'quickpack.title': '在集群上一键打包所需文件',
+  'quickpack.instruction': '复制命令到集群 USPEX 结果目录运行，下载后拖入网页即可，无需解压。',
+  'quickpack.copy': '复制',
+
   // ---- Upload Page ----
   'upload.title': '上传 USPEX 输出文件',
   'upload.dragHint': '拖拽文件到此处，或点击选择',
@@ -502,6 +507,13 @@ const zh = {
   'error': '错误',
   'success': '成功',
   'info': '提示',
+
+  // ---- Citation ----
+  'cite.title': '引用 USPEX',
+  'cite.description': '发表使用 USPEX 获得的结果时，请引用以下论文：',
+  'cite.copied': '已复制！',
+  'cite.copyAll': '复制全部',
+  'cite.moreInfo': '更多信息',
 };
 
 export default zh;

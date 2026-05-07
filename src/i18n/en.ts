@@ -70,6 +70,11 @@ const en = {
   "table.filterSelectElement": "Select element",
 
 
+  // ---- Quick Pack Command ----
+  'quickpack.title': 'One-line packing command for HPC clusters',
+  'quickpack.instruction': 'Copy the command, run it in results directory on the cluster, then drag the .tar.gz here — no need to extract.',
+  'quickpack.copy': 'Copy',
+
   // ---- Upload Page ----
   'upload.title': 'Upload USPEX Output Files',
   'upload.dragHint': 'Drag files here, or click to select',
@@ -505,6 +510,13 @@ const en = {
   'error': 'Error',
   'success': 'Success',
   'info': 'Info',
+
+  // ---- Citation ----
+  'cite.title': 'Cite USPEX',
+  'cite.description': 'Please cite the following papers when you publish results obtained from USPEX:',
+  'cite.copied': 'Copied!',
+  'cite.copyAll': 'Copy All',
+  'cite.moreInfo': 'More info',
 };
 
 export default en;
