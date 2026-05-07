@@ -689,7 +689,7 @@ export function LineagePanel({
           <div>SG: {tooltip.s.spaceGroup}</div>
           <div>
             Fitness:{' '}
-            {tooltip.s.fitness >= 0 ? tooltip.s.fitness.toFixed(4) : 'N/A'}
+            {tooltip.s.fitness != null && tooltip.s.fitness >= 0 ? tooltip.s.fitness.toFixed(4) : 'N/A'}
           </div>
 
           {hasSecondObj && tooltip.s.extraProps && (() => {
