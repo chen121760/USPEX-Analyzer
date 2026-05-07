@@ -479,8 +479,8 @@ export function DataTablePage() {
         header: t('col.fitness'),
         size: 110,
         cell: ({ getValue }) => {
-          const v = getValue<number>();
-          if (v < 0) return '—';
+          const v = getValue<number | null>();
+          if (v == null || v < 0) return '—';
           return (
             <span style={{ color: v === 0 ? 'var(--color-success)' : undefined, fontWeight: v === 0 ? 600 : undefined }}>
               {v.toFixed(4)}
