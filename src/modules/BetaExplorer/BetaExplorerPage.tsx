@@ -119,7 +119,7 @@ export function BetaExplorerPage() {
   const systemInfo     = useProjectStore((s) => s.systemInfo);
   const theme          = useUIStore((s) => s.theme);
 
-  const hasML     = structures.some((s) => s.youngModulus != null && s.youngModulus! > 0);
+  const hasML     = structures.some((s) => s.youngModulus >= 0);
   const hasPareto = systemInfo?.optimizationType === 'multi';
 
   const extraPropKeys = useMemo(() => {

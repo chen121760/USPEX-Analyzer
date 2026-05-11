@@ -163,7 +163,7 @@ export function ComparePage() {
             )}
 
             {/* ML Properties */}
-            {compareStructures.some((s) => s.youngModulus != null) && (
+            {compareStructures.some((s) => s.youngModulus >= 0) && (
               <>
                 <tr><td colSpan={compareStructures.length + 1} style={{ padding: '10px 12px 4px', fontSize: 11, fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: 1 }}>Elastic Properties (ML)</td></tr>
                 <PropRow label={t('col.young')} values={compareStructures.map((s) => s.youngModulus)} fmt={numFmt(1)} />
@@ -176,7 +176,7 @@ export function ComparePage() {
             )}
 
             {/* Fingerprint */}
-            {compareStructures.some((s) => s.qEntropy != null) && (
+            {compareStructures.some((s) => s.qEntropy > 0) && (
               <>
                 <tr><td colSpan={compareStructures.length + 1} style={{ padding: '10px 12px 4px', fontSize: 11, fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: 1 }}>Fingerprint</td></tr>
                 <PropRow label={t('col.qEntropy')} values={compareStructures.map((s) => s.qEntropy)} fmt={numFmt(3)} />

@@ -63,7 +63,7 @@ const zh = {
   "table.filterNumeric": "数值列",
   "table.filterText": "文本列",
   "table.filterNComponents": "体系类型",
-  "table.filterElemFraction": "元素分数",
+  "table.filterElemFraction": "原子数比例",
   "table.filterUnary": "一元（1种元素）",
   "table.filterBinary": "二元（2种元素）",
   "table.filterTernary": "三元（3种元素）",

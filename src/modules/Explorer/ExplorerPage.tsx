@@ -111,7 +111,7 @@ export function ExplorerPage() {
   const structures      = useProjectStore((s) => s.structures);
   const systemInfo      = useProjectStore((s) => s.systemInfo);
 
-  const hasML = structures.some((s) => s.youngModulus != null && s.youngModulus! > 0);
+  const hasML = structures.some((s) => s.youngModulus >= 0);
   const hasPareto = systemInfo?.optimizationType === 'multi';
 
   const extraPropKeys = useMemo(() => {

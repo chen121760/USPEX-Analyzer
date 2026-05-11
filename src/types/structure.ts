@@ -40,26 +40,26 @@ export interface Structure {
   // --- Density (from Individuals / Pareto) ---
   density: number;             // g/cm³
 
-  // --- Pareto (optional — multi-objective only) ---
-  paretoFront?: number;
+  // --- Pareto (multi-objective) ---
+  paretoFront: number;
 
   // --- Dynamic extra properties (second objective, etc.) ---
   // Keys: "{name}-Individuals" and "{name}-Pareto_ranking"
   extraProps?: Record<string, number>;
 
-  // --- ML Elastic Properties (optional) ---
-  bulkModulus?: number;        // GPa
-  shearModulus?: number;       // GPa
-  youngModulus?: number;       // GPa
-  poissonRatio?: number;
-  pughRatio?: number;
-  vickersHardness?: number;    // GPa
-  fractureToughness?: number;  // MPa·m^½
+  // --- ML Elastic Properties ---
+  bulkModulus: number;        // GPa
+  shearModulus: number;       // GPa
+  youngModulus: number;       // GPa
+  poissonRatio: number;
+  pughRatio: number;
+  vickersHardness: number;    // GPa
+  fractureToughness: number;  // MPa·m^½
 
   // --- Fingerprint (from Individuals) ---
-  qEntropy?: number;           // Q_entr
-  aOrder?: number;             // A_order
-  sOrder?: number;             // S_order
+  qEntropy: number;           // Q_entr
+  aOrder: number;             // A_order
+  sOrder: number;             // S_order
 
   // --- KPOINTS ---
   kpoints?: number[];

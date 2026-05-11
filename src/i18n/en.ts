@@ -63,7 +63,7 @@ const en = {
   "table.filterNumeric": "Numeric",
   "table.filterText": "Text",
   "table.filterNComponents": "System Type",
-  "table.filterElemFraction": "Element Fraction",
+  "table.filterElemFraction": "Atom Ratio",
   "table.filterUnary": "Unary (1 element)",
   "table.filterBinary": "Binary (2 elements)",
   "table.filterTernary": "Ternary (3 elements)",
