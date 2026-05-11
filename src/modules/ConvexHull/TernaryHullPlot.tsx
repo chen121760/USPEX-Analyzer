@@ -46,7 +46,7 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
   const theme           = useUIStore((s) => s.theme);
 
   const maxFitness = useMemo(() => {
-    const vals = structures.filter((s) => s.fitness > 0 && s.enthalpy < 900).map((s) => s.fitness);
+    const vals = structures.filter((s) => s.fitness > 0 && s.enthalpyTotal <= 900).map((s) => s.fitness);
     return vals.length > 0 ? Math.max(...vals) : 1;
   }, [structures]);
 
@@ -60,7 +60,7 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
 
   const plotData = useMemo(() => {
     const elements = systemInfo.elements;
-    const validStructures = structures.filter((s) => s.enthalpy < 900 && !isNaN(s.enthalpy));
+    const validStructures = structures.filter((s) => s.enthalpyTotal <= 900 && !isNaN(s.enthalpy));
     const stable = validStructures.filter((s) => s.fitness === 0);
     const unstable = validStructures.filter((s) => s.fitness > 0 && s.fitness <= fitnessMax);
 

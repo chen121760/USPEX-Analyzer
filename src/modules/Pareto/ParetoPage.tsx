@@ -32,7 +32,7 @@ export function ParetoPage() {
   const frontNumbers = useMemo(() => {
     const fronts = new Set<number>();
     structures.forEach((s) => {
-      if (s.paretoFront != null) fronts.add(s.paretoFront);
+      if (s.paretoFront >= 0) fronts.add(s.paretoFront);
     });
     return Array.from(fronts).sort((a, b) => a - b);
   }, [structures]);
@@ -108,7 +108,7 @@ export function ParetoPage() {
   // --- Mark overlay traces ---
   if (paretoKey != null) {
     const allParetoVisible = structures.filter(
-      (s) => s.paretoFront != null && s.extraProps?.[paretoKey] != null,
+      (s) => s.paretoFront >= 0 && s.extraProps?.[paretoKey] != null,
     );
 
     for (const tagId of markActiveTags) {

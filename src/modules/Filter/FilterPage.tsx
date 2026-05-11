@@ -124,8 +124,8 @@ export function FilterPage() {
 
   // 动态数值字段列表（根据实际数据判断）
   const hasPareto      = systemInfo?.optimizationType === 'multi';
-  const hasML          = structures.some((s) => s.bulkModulus != null);
-  const hasFingerprint = structures.some((s) => s.qEntropy != null && s.qEntropy > 0);
+  const hasML          = structures.some((s) => s.bulkModulus >= 0);
+  const hasFingerprint = structures.some((s) => s.qEntropy > 0);
 
   const numericFields = useMemo(() => {
     const base = ['fitness', 'enthalpy', 'volume', 'density', 'spaceGroup', 'generation'];
@@ -588,7 +588,7 @@ export function FilterPage() {
                     <td style={{ fontWeight: 600 }}>EA{s.id}</td>
                     <td><FormulaDisplay formula={s.formula} /></td>
                     <td>{s.spaceGroup}</td>
-                    <td>{s.enthalpy != null && s.enthalpy < 900 ? s.enthalpy.toFixed(4) : '—'}</td>
+                    <td>{s.enthalpyTotal <= 900 ? s.enthalpy.toFixed(4) : '—'}</td>
                     <td>{s.fitness != null && s.fitness >= 0 ? s.fitness.toFixed(4) : '—'}</td>
                     <td>{s.origin}</td>
                     {extraFields.map((f) => {

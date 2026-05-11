@@ -300,22 +300,22 @@ export function parseAllFiles(
       density: ind?.density ?? pareto?.density ?? 0,
 
       // Pareto
-      paretoFront: pareto?.paretoFront,
+      paretoFront: pareto?.paretoFront ?? -1,
       extraProps: Object.keys(extraProps).length > 0 ? extraProps : undefined,
 
       // ML Properties
-      bulkModulus: ml?.bulkModulus,
-      shearModulus: ml?.shearModulus,
-      youngModulus: ml?.youngModulus,
-      poissonRatio: ml?.poissonRatio,
-      pughRatio: ml?.pughRatio,
-      vickersHardness: ml?.vickersHardness,
-      fractureToughness: ml?.fractureToughness,
+      bulkModulus: ml?.bulkModulus ?? -1,
+      shearModulus: ml?.shearModulus ?? -1,
+      youngModulus: ml?.youngModulus ?? -1,
+      poissonRatio: ml?.poissonRatio ?? -1,
+      pughRatio: ml?.pughRatio ?? -1,
+      vickersHardness: ml?.vickersHardness ?? -1,
+      fractureToughness: ml?.fractureToughness ?? -1,
 
       // Fingerprint
-      qEntropy: ind?.qEntropy,
-      aOrder: ind?.aOrder,
-      sOrder: ind?.sOrder,
+      qEntropy: ind?.qEntropy ?? 0,
+      aOrder: ind?.aOrder ?? 0,
+      sOrder: ind?.sOrder ?? 0,
 
       // KPOINTS
       kpoints: ind?.kpoints,
@@ -379,7 +379,7 @@ export function parseAllFiles(
         parentIds: orig?.parentIds ?? [],
         parentEnthalpy: orig?.parentEnthalpy ?? 0,
         density: ind.density ?? pareto?.density ?? 0,
-        paretoFront: pareto?.paretoFront,
+        paretoFront: pareto?.paretoFront ?? -1,
         extraProps: (() => {
           if (!secondObjectiveName) return undefined;
           const ep: Record<string, number> = {};
@@ -387,16 +387,16 @@ export function parseAllFiles(
           if (pareto !== undefined) ep[`${secondObjectiveName}-Pareto_ranking`] = pareto.secondObjectiveValue;
           return ep;
         })(),
-        bulkModulus: ml?.bulkModulus,
-        shearModulus: ml?.shearModulus,
-        youngModulus: ml?.youngModulus,
-        poissonRatio: ml?.poissonRatio,
-        pughRatio: ml?.pughRatio,
-        vickersHardness: ml?.vickersHardness,
-        fractureToughness: ml?.fractureToughness,
-        qEntropy: ind.qEntropy,
-        aOrder: ind.aOrder,
-        sOrder: ind.sOrder,
+        bulkModulus: ml?.bulkModulus ?? -1,
+        shearModulus: ml?.shearModulus ?? -1,
+        youngModulus: ml?.youngModulus ?? -1,
+        poissonRatio: ml?.poissonRatio ?? -1,
+        pughRatio: ml?.pughRatio ?? -1,
+        vickersHardness: ml?.vickersHardness ?? -1,
+        fractureToughness: ml?.fractureToughness ?? -1,
+        qEntropy: ind.qEntropy ?? 0,
+        aOrder: ind.aOrder ?? 0,
+        sOrder: ind.sOrder ?? 0,
         kpoints: ind.kpoints,
         poscarData: poscar?.poscarText,
         latticeParams: poscar?.latticeParams,
@@ -410,7 +410,10 @@ export function parseAllFiles(
   // ---- Step 4: Build system info ----
 
   const fitnessValues = structures.map((s) => s.fitness).filter((f) => f >= 0);
-  const enthalpyValues = structures.map((s) => s.enthalpy).filter((e) => !isNaN(e) && e < 900);
+  const unconvergedCount = structures.filter((s) => s.enthalpyTotal > 900).length;
+  const enthalpyValues = structures
+    .filter((s) => !isNaN(s.enthalpy) && isFinite(s.enthalpy) && s.enthalpyTotal <= 900)
+    .map((s) => s.enthalpy);
 
   const primarySource = hullContent && indContent
     ? 'extended_convex_hull + Individuals'
@@ -428,6 +431,7 @@ export function parseAllFiles(
     totalStructuresSource: primarySource,
     totalGenerations: individualsResult?.maxGeneration ?? hullGenerations.length,
     stableCount: structures.filter((s) => s.fitness === 0).length,
+    unconvergedCount,
     minEnthalpy: enthalpyValues.length > 0 ? Math.min(...enthalpyValues) : 0,
     maxFitness: fitnessValues.length > 0 ? Math.max(...fitnessValues) : 0,
     calculationType: paramsResult?.calculationType ?? 0,

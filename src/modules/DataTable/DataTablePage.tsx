@@ -23,7 +23,6 @@ import type {
   TextFilterColumn,
   NumericFilterCondition,
   TextFilterCondition,
-  NComponentsFilterCondition,
   ElementFractionFilterCondition,
   TableFilterCondition,
   TableFilterGroup,
@@ -319,8 +318,8 @@ export function DataTablePage() {
 
   // 这三个变量要在 numericFilterColumns 之前定义，因为后者依赖它们
   const hasPareto     = systemInfo?.optimizationType === 'multi';
-  const hasML         = structures.some((s) => s.bulkModulus != null);
-  const hasFingerprint = structures.some((s) => s.qEntropy != null && s.qEntropy > 0);
+  const hasML         = structures.some((s) => s.bulkModulus >= 0);
+  const hasFingerprint = structures.some((s) => s.qEntropy > 0);
 
   // 当前正在编辑的筛选条件（还没点"添加"）
   const [colKind, setColKind] = useState<'numeric' | 'text' | 'nComponents' | 'elementFraction'>('numeric');
@@ -341,8 +340,9 @@ export function DataTablePage() {
   const numericFilterColumns = useMemo(() => {
     // 基础列：永远存在
     const base: { key: NumericFilterColumn; label: string }[] = [
-      { key: 'enthalpy',   label: t('col.enthalpy') },
-      { key: 'fitness',    label: t('col.fitness') },
+      { key: 'enthalpy',      label: t('col.enthalpy') },
+      { key: 'enthalpyTotal', label: t('col.enthalpyTotal') },
+      { key: 'fitness',       label: t('col.fitness') },
       { key: 'volume',     label: t('col.volume') },
       { key: 'density',    label: t('col.density') },
       { key: 'spaceGroup', label: t('col.spaceGroup') },
@@ -468,9 +468,19 @@ export function DataTablePage() {
         accessorKey: 'enthalpy',
         header: t('col.enthalpy'),
         size: 120,
-        cell: ({ getValue }) => {
+        cell: ({ row, getValue }) => {
           const v = getValue<number>();
-          return v > 900 ? '—' : v.toFixed(4);
+          return row.original.enthalpyTotal > 900 ? '—' : v.toFixed(4);
+        },
+      },
+      {
+        id: 'enthalpyTotal',
+        accessorKey: 'enthalpyTotal',
+        header: t('col.enthalpyTotal'),
+        size: 120,
+        cell: ({ row, getValue }) => {
+          const v = getValue<number>();
+          return v > 900 ? '—' : v.toFixed(2);
         },
       },
       {
@@ -520,7 +530,10 @@ export function DataTablePage() {
         accessorKey: 'paretoFront',
         header: t('col.paretoFront'),
         size: 80,
-        cell: ({ getValue }) => getValue<number | undefined>() ?? '—',
+        cell: ({ getValue }) => {
+          const v = getValue<number>();
+          return v >= 0 ? v : '—';
+        },
       });
     }
 
@@ -528,12 +541,12 @@ export function DataTablePage() {
     for (const key of extraPropKeys) {
       cols.push({
         id: `extra_${key}`,
-        accessorFn: (s) => s.extraProps?.[key],
+        accessorFn: (s) => s.extraProps?.[key] ?? -1,
         header: key,
         size: 150,
         cell: ({ getValue }) => {
-          const v = getValue<number | undefined>();
-          return v != null ? v.toFixed(4) : '—';
+          const v = getValue<number>();
+          return v >= 0 ? v.toFixed(4) : '—';
         },
       });
     }
@@ -546,49 +559,49 @@ export function DataTablePage() {
           accessorKey: 'bulkModulus',
           header: 'Bulk Modulus (GPa)',
           size: 140,
-          cell: ({ getValue }) => { const v = getValue<number | undefined>(); return v != null ? v.toFixed(1) : '—'; },
+          cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(1) : '—'; },
         },
         {
           id: 'shearModulus',
           accessorKey: 'shearModulus',
           header: 'Shear Modulus (GPa)',
           size: 150,
-          cell: ({ getValue }) => { const v = getValue<number | undefined>(); return v != null ? v.toFixed(1) : '—'; },
+          cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(1) : '—'; },
         },
         {
           id: 'youngModulus',
           accessorKey: 'youngModulus',
           header: 'Young Modulus (GPa)',
           size: 150,
-          cell: ({ getValue }) => { const v = getValue<number | undefined>(); return v != null ? v.toFixed(1) : '—'; },
+          cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(1) : '—'; },
         },
         {
           id: 'poissonRatio',
           accessorKey: 'poissonRatio',
           header: 'Poisson Ratio',
           size: 120,
-          cell: ({ getValue }) => { const v = getValue<number | undefined>(); return v != null ? v.toFixed(3) : '—'; },
+          cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(3) : '—'; },
         },
         {
           id: 'pughRatio',
           accessorKey: 'pughRatio',
           header: 'Pugh Ratio (G/K)',
           size: 120,
-          cell: ({ getValue }) => { const v = getValue<number | undefined>(); return v != null ? v.toFixed(3) : '—'; },
+          cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(3) : '—'; },
         },
         {
           id: 'vickersHardness',
           accessorKey: 'vickersHardness',
           header: 'Vickers Hardness (GPa)',
           size: 160,
-          cell: ({ getValue }) => { const v = getValue<number | undefined>(); return v != null ? v.toFixed(2) : '—'; },
+          cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(2) : '—'; },
         },
         {
           id: 'fractureToughness',
           accessorKey: 'fractureToughness',
           header: 'Fracture Toughness (MPa·m^½)',
           size: 200,
-          cell: ({ getValue }) => { const v = getValue<number | undefined>(); return v != null ? v.toFixed(2) : '—'; },
+          cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(2) : '—'; },
         },
       );
     }
@@ -601,28 +614,28 @@ export function DataTablePage() {
         header: t('col.qEntropy'),
         size: 80,
         cell: ({ getValue }) => {
-          const v = getValue<number | undefined>();
-          return v != null ? v.toFixed(3) : '—';
+          const v = getValue<number>();
+          return v > 0 ? v.toFixed(3) : '—';
         },
       });
       cols.push({
         id: 'aOrder',
-        accessorKey: 'aOrder',
+        accessorFn: (s) => s.qEntropy > 0 ? s.aOrder : -1,
         header: t('col.aOrder'),
         size: 80,
         cell: ({ getValue }) => {
-          const v = getValue<number | undefined>();
-          return v != null ? v.toFixed(3) : '—';
+          const v = getValue<number>();
+          return v >= 0 ? v.toFixed(3) : '—';
         },
       });
       cols.push({
         id: 'sOrder',
-        accessorKey: 'sOrder',
+        accessorFn: (s) => s.qEntropy > 0 ? s.sOrder : -1,
         header: t('col.sOrder'),
         size: 80,
         cell: ({ getValue }) => {
-          const v = getValue<number | undefined>();
-          return v != null ? v.toFixed(3) : '—';
+          const v = getValue<number>();
+          return v >= 0 ? v.toFixed(3) : '—';
         },
       });
     }

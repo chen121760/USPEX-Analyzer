@@ -32,6 +32,7 @@ function getFieldOptions(
 ): FieldOption[] {
   const opts: FieldOption[] = [
     { key: 'enthalpy', label: t('col.enthalpy'), accessor: (s) => s.enthalpy, type: 'numeric' },
+    { key: 'enthalpyTotal', label: t('col.enthalpyTotal'), accessor: (s) => s.enthalpyTotal, type: 'numeric' },
     { key: 'fitness', label: t('col.fitness'), accessor: (s) => (s.fitness >= 0 ? s.fitness : undefined), type: 'numeric' },
     { key: 'volume', label: t('col.volume'), accessor: (s) => s.volume, type: 'numeric' },
     { key: 'density', label: t('col.density'), accessor: (s) => (s.density > 0 ? s.density : undefined), type: 'numeric' },
@@ -119,7 +120,7 @@ export function BetaExplorerPage() {
   const systemInfo     = useProjectStore((s) => s.systemInfo);
   const theme          = useUIStore((s) => s.theme);
 
-  const hasML     = structures.some((s) => s.youngModulus != null && s.youngModulus! > 0);
+  const hasML     = structures.some((s) => s.youngModulus >= 0);
   const hasPareto = systemInfo?.optimizationType === 'multi';
 
   const extraPropKeys = useMemo(() => {
@@ -244,7 +245,7 @@ export function BetaExplorerPage() {
     for (const hi of frames) {
       const frameData = structures.filter((s) => {
         const xv = xField.accessor(s); const yv = yField.accessor(s);
-        if (xv == null || yv == null || s.enthalpy >= 900) return false;
+        if (xv == null || yv == null || s.enthalpyTotal > 900) return false;
         if (colorField && colorField.type === 'numeric') {
           const cv = colorField.accessor(s) as number;
           if (cv == null || !isFinite(cv) || cv < fixedLow || cv > hi) return false;
@@ -290,7 +291,7 @@ export function BetaExplorerPage() {
   const filteredData = useMemo(() => {
     return structures.filter((s) => {
       const xv = xField.accessor(s); const yv = yField.accessor(s);
-      if (xv == null || yv == null || s.enthalpy >= 900) return false;
+      if (xv == null || yv == null || s.enthalpyTotal > 900) return false;
       if (colorField && colorField.type === 'numeric' && (cMin !== null || cMax !== null)) {
         const cv = colorField.accessor(s) as number;
         if (cv == null || !isFinite(cv)) return false;
