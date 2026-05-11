@@ -25,6 +25,8 @@ function applyCondition(s: Structure, cond: UnifiedCondition, elements: string[]
     const val = (s as unknown as Record<string, unknown>)[cond.field];
     if (val == null) return false;
     const num = Number(val);
+    // Sentinel -1 means "no data" for these fields
+    if (num === -1 && new Set(['paretoFront', 'eForm', 'eHullRecons', 'bulkModulus', 'shearModulus', 'youngModulus', 'poissonRatio', 'pughRatio', 'vickersHardness', 'fractureToughness', 'aOrder', 'sOrder']).has(cond.field)) return false;
     if (isNaN(num)) return false;
     const target = cond.value;
     switch (cond.operator) {
