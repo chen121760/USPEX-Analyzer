@@ -317,8 +317,9 @@ export function DataTablePage() {
   const pageSize = 50;
 
   // 这三个变量要在 numericFilterColumns 之前定义，因为后者依赖它们
-  const hasPareto     = systemInfo?.optimizationType === 'multi';
-  const hasML         = structures.some((s) => s.bulkModulus >= 0);
+  const isVarcomp      = systemInfo?.compositionMode === 'varcomp';
+  const hasPareto      = systemInfo?.optimizationType === 'multi';
+  const hasML          = structures.some((s) => s.bulkModulus >= 0);
   const hasFingerprint = structures.some((s) => s.qEntropy > 0);
 
   // 当前正在编辑的筛选条件（还没点"添加"）
@@ -349,6 +350,10 @@ export function DataTablePage() {
       { key: 'generation', label: t('col.generation') },
     ];
     // 条件列：只有数据里有这个字段才加进来
+    if (isVarcomp) {
+      base.push({ key: 'eForm',              label: t('col.eForm') });
+      base.push({ key: 'eHullRecons', label: t('col.eHullRecons') });
+    }
     if (hasPareto)     base.push({ key: 'paretoFront',       label: t('col.paretoFront') });
     if (hasML) {
       base.push({ key: 'bulkModulus',       label: t('col.bulk') });
@@ -365,7 +370,7 @@ export function DataTablePage() {
       base.push({ key: 'sOrder',   label: t('col.sOrder') });
     }
     return base;
-  }, [t, hasPareto, hasML, hasFingerprint]);
+  }, [t, isVarcomp, hasPareto, hasML, hasFingerprint]);
 
   // 文字列：固定两个
   const textFilterColumns: { key: TextFilterColumn; label: string }[] = useMemo(() => [
@@ -396,14 +401,14 @@ export function DataTablePage() {
     const cols: ColumnDef<Structure, unknown>[] = [      {
         id: 'id',
         accessorKey: 'id',
-        header: t('col.id'),
+        header: () => <span title={t('col.idDesc')}>{t('col.id')}</span>,
         size: 70,
         cell: ({ getValue }) => <span style={{ fontWeight: 600 }}>EA{getValue<number>()}</span>,
       },
       {
         id: 'formula',
         accessorKey: 'formula',
-        header: t('col.formula'),
+        header: () => <span title={t('col.formulaDesc')}>{t('col.formula')}</span>,
         size: 100,
         cell: ({ getValue }) => <FormulaDisplay formula={getValue<string>()} />,
       },
@@ -427,7 +432,7 @@ export function DataTablePage() {
       },
       {
         id: 'actions',
-        header: t('col.actions'),
+        header: () => <span title={t('col.actionsDesc')}>{t('col.actions')}</span>,
         size: 140,
         enableSorting: false,
         cell: ({ row }) => {
@@ -454,19 +459,19 @@ export function DataTablePage() {
       {
         id: 'spaceGroup',
         accessorKey: 'spaceGroup',
-        header: t('col.spaceGroup'),
+        header: () => <span title={t('col.spaceGroupDesc')}>{t('col.spaceGroup')}</span>,
         size: 100,
       },
       {
         id: 'generation',
         accessorKey: 'generation',
-        header: t('col.generation'),
+        header: () => <span title={t('col.generationDesc')}>{t('col.generation')}</span>,
         size: 100,
       },
       {
         id: 'enthalpy',
         accessorKey: 'enthalpy',
-        header: t('col.enthalpy'),
+        header: () => <span title={t('col.enthalpyDesc')}>{t('col.enthalpy')}</span>,
         size: 120,
         cell: ({ row, getValue }) => {
           const v = getValue<number>();
@@ -476,7 +481,7 @@ export function DataTablePage() {
       {
         id: 'enthalpyTotal',
         accessorKey: 'enthalpyTotal',
-        header: t('col.enthalpyTotal'),
+        header: () => <span title={t('col.enthalpyTotalDesc')}>{t('col.enthalpyTotal')}</span>,
         size: 120,
         cell: ({ row, getValue }) => {
           const v = getValue<number>();
@@ -486,7 +491,7 @@ export function DataTablePage() {
       {
         id: 'fitness',
         accessorKey: 'fitness',
-        header: t('col.fitness'),
+        header: () => <span title={t('col.fitnessDesc')}>{t('col.fitness')}</span>,
         size: 110,
         cell: ({ getValue }) => {
           const v = getValue<number | null>();
@@ -501,14 +506,14 @@ export function DataTablePage() {
       {
         id: 'volume',
         accessorKey: 'volume',
-        header: t('col.volume'),
+        header: () => <span title={t('col.volumeDesc')}>{t('col.volume')}</span>,
         size: 120,
         cell: ({ getValue }) => getValue<number>().toFixed(3),
       },
       {
         id: 'density',
         accessorKey: 'density',
-        header: t('col.density'),
+        header: () => <span title={t('col.densityDesc')}>{t('col.density')}</span>,
         size: 100,
         cell: ({ getValue }) => {
           const v = getValue<number>();
@@ -518,17 +523,41 @@ export function DataTablePage() {
       {
         id: 'origin',
         accessorKey: 'origin',
-        header: t('col.origin'),
+        header: () => <span title={t('col.originDesc')}>{t('col.origin')}</span>,
         size: 100,
       },
     ];
+
+    // eForm / eHullRecons columns (conditional: varcomp only)
+    if (isVarcomp) {
+      cols.push({
+        id: 'eForm',
+        accessorKey: 'eForm',
+        header: () => <span title={t('col.eFormDesc')}>{t('col.eForm')}</span>,
+        size: 120,
+        cell: ({ getValue }) => {
+          const v = getValue<number>();
+          return v === -1 ? '—' : v.toFixed(4);
+        },
+      });
+      cols.push({
+        id: 'eHullRecons',
+        accessorKey: 'eHullRecons',
+        header: () => <span title={t('col.eHullReconsDesc')}>{t('col.eHullRecons')}</span>,
+        size: 130,
+        cell: ({ getValue }) => {
+          const v = getValue<number>();
+          return v === -1 ? '—' : v.toFixed(4);
+        },
+      });
+    }
 
     // Pareto front column (conditional)
     if (hasPareto) {
       cols.push({
         id: 'paretoFront',
         accessorKey: 'paretoFront',
-        header: t('col.paretoFront'),
+        header: () => <span title={t('col.paretoFrontDesc')}>{t('col.paretoFront')}</span>,
         size: 80,
         cell: ({ getValue }) => {
           const v = getValue<number>();
@@ -542,7 +571,7 @@ export function DataTablePage() {
       cols.push({
         id: `extra_${key}`,
         accessorFn: (s) => s.extraProps?.[key] ?? -1,
-        header: key,
+        header: () => <span title={t('col.extraPropsDesc')}>{key}</span>,
         size: 150,
         cell: ({ getValue }) => {
           const v = getValue<number>();
@@ -557,49 +586,49 @@ export function DataTablePage() {
         {
           id: 'bulkModulus',
           accessorKey: 'bulkModulus',
-          header: 'Bulk Modulus (GPa)',
+          header: () => <span title={t('col.bulkDesc')}>{t('col.bulk')}</span>,
           size: 140,
           cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(1) : '—'; },
         },
         {
           id: 'shearModulus',
           accessorKey: 'shearModulus',
-          header: 'Shear Modulus (GPa)',
+          header: () => <span title={t('col.shearDesc')}>{t('col.shear')}</span>,
           size: 150,
           cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(1) : '—'; },
         },
         {
           id: 'youngModulus',
           accessorKey: 'youngModulus',
-          header: 'Young Modulus (GPa)',
+          header: () => <span title={t('col.youngDesc')}>{t('col.young')}</span>,
           size: 150,
           cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(1) : '—'; },
         },
         {
           id: 'poissonRatio',
           accessorKey: 'poissonRatio',
-          header: 'Poisson Ratio',
+          header: () => <span title={t('col.poissonDesc')}>{t('col.poisson')}</span>,
           size: 120,
           cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(3) : '—'; },
         },
         {
           id: 'pughRatio',
           accessorKey: 'pughRatio',
-          header: 'Pugh Ratio (G/K)',
+          header: () => <span title={t('col.pughDesc')}>{t('col.pugh')}</span>,
           size: 120,
           cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(3) : '—'; },
         },
         {
           id: 'vickersHardness',
           accessorKey: 'vickersHardness',
-          header: 'Vickers Hardness (GPa)',
+          header: () => <span title={t('col.hardnessDesc')}>{t('col.hardness')}</span>,
           size: 160,
           cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(2) : '—'; },
         },
         {
           id: 'fractureToughness',
           accessorKey: 'fractureToughness',
-          header: 'Fracture Toughness (MPa·m^½)',
+          header: () => <span title={t('col.toughnessDesc')}>{t('col.toughness')}</span>,
           size: 200,
           cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(2) : '—'; },
         },
@@ -611,7 +640,7 @@ export function DataTablePage() {
       cols.push({
         id: 'qEntropy',
         accessorKey: 'qEntropy',
-        header: t('col.qEntropy'),
+        header: () => <span title={t('col.qEntropyDesc')}>{t('col.qEntropy')}</span>,
         size: 80,
         cell: ({ getValue }) => {
           const v = getValue<number>();
@@ -621,7 +650,7 @@ export function DataTablePage() {
       cols.push({
         id: 'aOrder',
         accessorFn: (s) => s.qEntropy > 0 ? s.aOrder : -1,
-        header: t('col.aOrder'),
+        header: () => <span title={t('col.aOrderDesc')}>{t('col.aOrder')}</span>,
         size: 80,
         cell: ({ getValue }) => {
           const v = getValue<number>();
@@ -631,7 +660,7 @@ export function DataTablePage() {
       cols.push({
         id: 'sOrder',
         accessorFn: (s) => s.qEntropy > 0 ? s.sOrder : -1,
-        header: t('col.sOrder'),
+        header: () => <span title={t('col.sOrderDesc')}>{t('col.sOrder')}</span>,
         size: 80,
         cell: ({ getValue }) => {
           const v = getValue<number>();
@@ -640,7 +669,7 @@ export function DataTablePage() {
       });
     }
     return cols;
-  }, [t, hasPareto, hasML, hasFingerprint, extraPropKeys, tags, compareIds, openViewer, toggleCompare]);
+  }, [t, isVarcomp, hasPareto, hasML, hasFingerprint, extraPropKeys, tags, compareIds, openViewer, toggleCompare]);
 
   const tableData = useMemo(() => {
     let data = structures;

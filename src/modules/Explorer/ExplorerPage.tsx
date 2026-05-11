@@ -21,7 +21,7 @@ interface FieldOption {
   type: 'numeric' | 'categorical';
 }
 
-function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: boolean, extraPropKeys: string[], elements: string[], structureMap: Map<number, Structure>): FieldOption[] {
+function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: boolean, extraPropKeys: string[], elements: string[], structureMap: Map<number, Structure>, isVarcomp: boolean): FieldOption[] {
   const opts: FieldOption[] = [
     { key: 'enthalpy', label: t('col.enthalpy'), accessor: (s) => s.enthalpy, type: 'numeric' },
     { key: 'enthalpyTotal', label: t('col.enthalpyTotal'), accessor: (s) => s.enthalpyTotal, type: 'numeric' },
@@ -62,6 +62,13 @@ function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: bo
   if (hasPareto) {
     opts.push(
       { key: 'paretoFront', label: t('col.paretoFront'), accessor: (s) => s.paretoFront, type: 'numeric' },
+    );
+  }
+
+  if (isVarcomp) {
+    opts.push(
+      { key: 'eForm', label: t('col.eForm'), accessor: (s) => s.eForm !== -1 ? s.eForm : undefined, type: 'numeric' },
+      { key: 'eHullRecons', label: t('col.eHullRecons'), accessor: (s) => s.eHullRecons >= 0 ? s.eHullRecons : undefined, type: 'numeric' },
     );
   }
 
@@ -114,6 +121,7 @@ export function ExplorerPage() {
 
   const hasML = structures.some((s) => s.youngModulus >= 0);
   const hasPareto = systemInfo?.optimizationType === 'multi';
+  const isVarcomp = systemInfo?.compositionMode === 'varcomp';
 
   const extraPropKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -128,8 +136,8 @@ export function ExplorerPage() {
   }, [structures]);
 
   const fields = useMemo(
-    () => getFieldOptions(t, hasML, hasPareto, extraPropKeys, systemInfo?.elements ?? [], structureMap),
-    [t, hasML, hasPareto, extraPropKeys, systemInfo, structureMap],
+    () => getFieldOptions(t, hasML, hasPareto, extraPropKeys, systemInfo?.elements ?? [], structureMap, isVarcomp),
+    [t, hasML, hasPareto, extraPropKeys, systemInfo, structureMap, isVarcomp],
   );
 
   const xKey      = useUIStore((s) => s.explorerXKey);

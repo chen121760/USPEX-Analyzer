@@ -180,6 +180,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const migratedStructures = project.structures.map((s) => ({
       ...s,
       hullX: Array.isArray(s.hullX) ? s.hullX : [s.hullX as number],
+      eForm: s.eForm ?? -1,
+      eHullRecons: s.eHullRecons ?? -1,
     }));
 
     // Ensure compositionMode exists (backward compat)
@@ -257,6 +259,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       density: partial.density ?? 0,
       paretoFront: -1,
       bulkModulus: -1,
+      eForm: -1,
+      eHullRecons: -1,
       shearModulus: -1,
       youngModulus: -1,
       poissonRatio: -1,
