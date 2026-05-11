@@ -322,6 +322,14 @@ export function DataTablePage() {
   const hasML          = structures.some((s) => s.bulkModulus >= 0);
   const hasFingerprint = structures.some((s) => s.qEntropy > 0);
 
+  // Columns where -1 is the sentinel for "no data"
+  const SENTINEL_COLS = useMemo(() => new Set([
+    'paretoFront', 'eForm', 'eHullRecons',
+    'bulkModulus', 'shearModulus', 'youngModulus',
+    'poissonRatio', 'pughRatio', 'vickersHardness', 'fractureToughness',
+    'aOrder', 'sOrder',
+  ]), []);
+
   // 当前正在编辑的筛选条件（还没点"添加"）
   const [colKind, setColKind] = useState<'numeric' | 'text' | 'nComponents' | 'elementFraction'>('numeric');
   const [filterNumCol, setFilterNumCol] = useState<NumericFilterColumn>('enthalpy');
@@ -687,6 +695,8 @@ export function DataTablePage() {
             if (f.kind === 'numeric') {
               const val = (s as unknown as Record<string, number>)[f.column];
               if (val == null) return false;
+              // Sentinel -1 means "no data" for these fields — exclude from numeric filters
+              if (val === -1 && SENTINEL_COLS.has(f.column)) return false;
               switch (f.operator) {
                 case '>':  return val > f.value;
                 case '<':  return val < f.value;
