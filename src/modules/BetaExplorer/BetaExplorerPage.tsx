@@ -29,6 +29,7 @@ function getFieldOptions(
   extraPropKeys: string[],
   elements: string[],
   structureMap: Map<number, Structure>,
+  isVarcomp: boolean,
 ): FieldOption[] {
   const opts: FieldOption[] = [
     { key: 'enthalpy', label: t('col.enthalpy'), accessor: (s) => s.enthalpy, type: 'numeric' },
@@ -69,6 +70,13 @@ function getFieldOptions(
 
   if (hasPareto) {
     opts.push({ key: 'paretoFront', label: t('col.paretoFront'), accessor: (s) => s.paretoFront, type: 'numeric' });
+  }
+
+  if (isVarcomp) {
+    opts.push(
+      { key: 'eForm', label: t('col.eForm'), accessor: (s) => s.eForm !== -1 ? s.eForm : undefined, type: 'numeric' },
+      { key: 'eHullRecons', label: t('col.eHullRecons'), accessor: (s) => s.eHullRecons >= 0 ? s.eHullRecons : undefined, type: 'numeric' },
+    );
   }
 
   for (const key of extraPropKeys) {
@@ -122,6 +130,7 @@ export function BetaExplorerPage() {
 
   const hasML     = structures.some((s) => s.youngModulus >= 0);
   const hasPareto = systemInfo?.optimizationType === 'multi';
+  const isVarcomp = systemInfo?.compositionMode === 'varcomp';
 
   const extraPropKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -136,8 +145,8 @@ export function BetaExplorerPage() {
   }, [structures]);
 
   const fields = useMemo(
-    () => getFieldOptions(t, hasML, hasPareto, extraPropKeys, systemInfo?.elements ?? [], structureMap),
-    [t, hasML, hasPareto, extraPropKeys, systemInfo, structureMap],
+    () => getFieldOptions(t, hasML, hasPareto, extraPropKeys, systemInfo?.elements ?? [], structureMap, isVarcomp),
+    [t, hasML, hasPareto, extraPropKeys, systemInfo, structureMap, isVarcomp],
   );
 
   // --- Beta Explorer UIStore state ---

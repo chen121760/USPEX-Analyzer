@@ -33,6 +33,7 @@ import { parseOrigin } from './originParser';
 import { parseGatheredPoscars } from './poscarParser';
 import { parseConvexHullGenerations } from './convexHullParser';
 import { buildFormula, totalAtoms } from './compositionUtils';
+import { reconstructConvexHull } from '@/lib/convexHullReconstruction';
 
 // Re-export individual parsers for direct use
 export {
@@ -324,6 +325,10 @@ export function parseAllFiles(
       poscarData: poscar?.poscarText,
       latticeParams: poscar?.latticeParams,
 
+      // Convex hull reconstruction (computed later)
+      eForm: 0,
+      eHullRecons: 0,
+
       // User data (empty by default)
       tags: [],
       isUserAdded: false,
@@ -400,12 +405,18 @@ export function parseAllFiles(
         kpoints: ind.kpoints,
         poscarData: poscar?.poscarText,
         latticeParams: poscar?.latticeParams,
+        // Convex hull reconstruction (computed later)
+        eForm: 0,
+        eHullRecons: 0,
         tags: [],
         isUserAdded: false,
         notes: '',
       });
     }
   }
+
+  // ---- Step 3c: Reconstruct convex hull (compute eForm / eHullRecons) ----
+  reconstructConvexHull(structures, systemType, compositionMode, elements);
 
   // ---- Step 4: Build system info ----
 

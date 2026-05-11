@@ -72,6 +72,10 @@ export interface Structure {
   tags: string[];
   isUserAdded: boolean;
   notes: string;
+
+  // --- Convex hull reconstruction ---
+  eForm: number;              // Formation enthalpy (eV/atom), -1 = unconverged
+  eHullRecons: number; // Distance to reconstructed hull (eV/atom), -1 = unconverged
 }
 
 export interface LatticeParams {
@@ -128,7 +132,8 @@ export interface TagDefinition {
 // ── DataTable 筛选条件类型 ────────────────────────────────────
 export type NumericFilterColumn = 'enthalpy' | 'enthalpyTotal' | 'fitness' | 'volume' | 'density' | 'spaceGroup' | 'generation'
   | 'paretoFront' | 'bulkModulus' | 'shearModulus' | 'youngModulus' | 'poissonRatio'
-  | 'pughRatio' | 'vickersHardness' | 'fractureToughness' | 'qEntropy' | 'aOrder' | 'sOrder';
+  | 'pughRatio' | 'vickersHardness' | 'fractureToughness' | 'qEntropy' | 'aOrder' | 'sOrder'
+  | 'eForm' | 'eHullRecons';
 
 export type TextFilterColumn = 'formula' | 'origin';
 

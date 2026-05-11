@@ -12,6 +12,19 @@
 - Explorer / BetaExplorer 轴选项新增 `enthalpyTotal` 字段
 - 筛选下拉 "元素分数" 更名为 "原子数比例"（Atom Ratio），与实际运算逻辑一致
 
+凸包重构 — E_form 与 E_hull 独立计算
+
+- 新增 `src/lib/convexHullReconstruction.ts` 模块，基于 USPEX 凸包几何（fitness=0 结构）独立重算形成焓和凸包距离
+- 新增 **E_form (Recons)** 列：自动提取端元结构参考化学势，计算 formation enthalpy (eV/atom)
+- 新增 **E_hull (Recons)** 列：基于 E_form 重算的凸包距离 (eV/atom)，二元用竖直距离插值，三元用重心坐标插值
+- 两列仅在变组分系统显示，未收敛结构显示 `—`；Explorer / BetaExplorer 轴选项中同步新增
+- 修复 E_form 轴选项因 `>= 0` 过滤导致合法负形成焓不显示的 bug
+
+数据表格 — 列头悬停提示数据来源
+
+- 所有列头新增 `title` 提示，标明每列数据来源于哪个 USPEX 文件（extended_convex_hull / Individuals / origin / MLProperties / Pareto_ranking 等）
+- 重建值列（E_form / E_hull）提示注明"非 USPEX 原始输出"
+
 ### V1.2.3
 
 全局 — Header 工具栏优化
