@@ -588,7 +588,7 @@ export function FilterPage() {
                     <td style={{ fontWeight: 600 }}>EA{s.id}</td>
                     <td><FormulaDisplay formula={s.formula} /></td>
                     <td>{s.spaceGroup}</td>
-                    <td>{s.enthalpy != null && s.enthalpy < 900 ? s.enthalpy.toFixed(4) : '—'}</td>
+                    <td>{s.enthalpyTotal <= 900 ? s.enthalpy.toFixed(4) : '—'}</td>
                     <td>{s.fitness != null && s.fitness >= 0 ? s.fitness.toFixed(4) : '—'}</td>
                     <td>{s.origin}</td>
                     {extraFields.map((f) => {

@@ -71,15 +71,15 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
   const allTags         = useProjectStore((s) => s.tags);
 
   const maxFitness = useMemo(() => {
-    const vals = structures.filter((s) => s.fitness > 0 && s.enthalpy < 900).map((s) => s.fitness);
+    const vals = structures.filter((s) => s.fitness > 0 && s.enthalpyTotal <= 900).map((s) => s.fitness);
     return vals.length > 0 ? Math.max(...vals) : 1;
   }, [structures]);
 
   const [fitnessMax, setFitnessMax] = useState(() => maxFitness);
 
   const plotData = useMemo(() => {
-    const stable = structures.filter((s) => s.fitness === 0 && s.enthalpy < 900);
-    const unstable = structures.filter((s) => s.fitness > 0 && s.fitness <= fitnessMax && s.enthalpy < 900);
+    const stable = structures.filter((s) => s.fitness === 0 && s.enthalpyTotal <= 900);
+    const unstable = structures.filter((s) => s.fitness > 0 && s.fitness <= fitnessMax && s.enthalpyTotal <= 900);
     const hullPoints = stable.map((s) => ({ x: s.hullX[0] ?? 0, y: s.hullY }));
     const hullLine = computeLowerHull2D(hullPoints);
     return { stable, unstable, hullLine };

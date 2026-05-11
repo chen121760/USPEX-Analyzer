@@ -340,8 +340,9 @@ export function DataTablePage() {
   const numericFilterColumns = useMemo(() => {
     // 基础列：永远存在
     const base: { key: NumericFilterColumn; label: string }[] = [
-      { key: 'enthalpy',   label: t('col.enthalpy') },
-      { key: 'fitness',    label: t('col.fitness') },
+      { key: 'enthalpy',      label: t('col.enthalpy') },
+      { key: 'enthalpyTotal', label: t('col.enthalpyTotal') },
+      { key: 'fitness',       label: t('col.fitness') },
       { key: 'volume',     label: t('col.volume') },
       { key: 'density',    label: t('col.density') },
       { key: 'spaceGroup', label: t('col.spaceGroup') },
@@ -467,9 +468,19 @@ export function DataTablePage() {
         accessorKey: 'enthalpy',
         header: t('col.enthalpy'),
         size: 120,
-        cell: ({ getValue }) => {
+        cell: ({ row, getValue }) => {
           const v = getValue<number>();
-          return v > 900 ? '—' : v.toFixed(4);
+          return row.original.enthalpyTotal > 900 ? '—' : v.toFixed(4);
+        },
+      },
+      {
+        id: 'enthalpyTotal',
+        accessorKey: 'enthalpyTotal',
+        header: t('col.enthalpyTotal'),
+        size: 120,
+        cell: ({ row, getValue }) => {
+          const v = getValue<number>();
+          return v > 900 ? '—' : v.toFixed(2);
         },
       },
       {

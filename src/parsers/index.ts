@@ -410,7 +410,10 @@ export function parseAllFiles(
   // ---- Step 4: Build system info ----
 
   const fitnessValues = structures.map((s) => s.fitness).filter((f) => f >= 0);
-  const enthalpyValues = structures.map((s) => s.enthalpy).filter((e) => !isNaN(e) && e < 900);
+  const unconvergedCount = structures.filter((s) => s.enthalpyTotal > 900).length;
+  const enthalpyValues = structures
+    .filter((s) => !isNaN(s.enthalpy) && isFinite(s.enthalpy) && s.enthalpyTotal <= 900)
+    .map((s) => s.enthalpy);
 
   const primarySource = hullContent && indContent
     ? 'extended_convex_hull + Individuals'
@@ -428,6 +431,7 @@ export function parseAllFiles(
     totalStructuresSource: primarySource,
     totalGenerations: individualsResult?.maxGeneration ?? hullGenerations.length,
     stableCount: structures.filter((s) => s.fitness === 0).length,
+    unconvergedCount,
     minEnthalpy: enthalpyValues.length > 0 ? Math.min(...enthalpyValues) : 0,
     maxFitness: fitnessValues.length > 0 ? Math.max(...fitnessValues) : 0,
     calculationType: paramsResult?.calculationType ?? 0,

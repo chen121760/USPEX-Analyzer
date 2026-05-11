@@ -54,7 +54,7 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
 
   const allSorted = useMemo(() =>
     structures
-      .filter((s) => !isNaN(s.enthalpy) && s.enthalpy < 900)
+      .filter((s) => !isNaN(s.enthalpy) && s.enthalpyTotal <= 900)
       .sort((a, b) => a.enthalpy - b.enthalpy),
   [structures]);
 

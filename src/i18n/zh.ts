@@ -133,6 +133,7 @@ const zh = {
   'system.elements': '元素',
   'system.totalStructures': '结构总数',
   'system.stableStructures': '稳定结构（凸包上）',
+  'system.unconvergedStructures': '未收敛结构',
   'system.generations': '进化代数',
   'system.minEnthalpy': '最低焓值',
   'system.secondObjective': '第二目标',

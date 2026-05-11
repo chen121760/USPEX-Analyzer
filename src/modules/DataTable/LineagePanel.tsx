@@ -682,7 +682,7 @@ export function LineagePanel({
           <div>Origin: {tooltip.s.origin}</div>
           <div>Gen: {tooltip.s.generation}</div>
 
-          {tooltip.s.enthalpy < 900 && (
+          {tooltip.s.enthalpyTotal <= 900 && (
             <div>Enthalpy: {tooltip.s.enthalpy.toFixed(4)} eV/atom</div>
           )}
 

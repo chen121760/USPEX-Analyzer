@@ -106,6 +106,7 @@ export interface SystemInfo {
   totalStructures: number;
   totalGenerations: number;
   stableCount: number;
+  unconvergedCount: number;
   minEnthalpy: number;
   maxFitness: number;
   /** Which file was used as the primary data source for totalStructures */
@@ -125,7 +126,7 @@ export interface TagDefinition {
 }
 
 // ── DataTable 筛选条件类型 ────────────────────────────────────
-export type NumericFilterColumn = 'enthalpy' | 'fitness' | 'volume' | 'density' | 'spaceGroup' | 'generation'
+export type NumericFilterColumn = 'enthalpy' | 'enthalpyTotal' | 'fitness' | 'volume' | 'density' | 'spaceGroup' | 'generation'
   | 'paretoFront' | 'bulkModulus' | 'shearModulus' | 'youngModulus' | 'poissonRatio'
   | 'pughRatio' | 'vickersHardness' | 'fractureToughness' | 'qEntropy' | 'aOrder' | 'sOrder';
 

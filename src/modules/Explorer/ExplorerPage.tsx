@@ -24,6 +24,7 @@ interface FieldOption {
 function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: boolean, extraPropKeys: string[], elements: string[], structureMap: Map<number, Structure>): FieldOption[] {
   const opts: FieldOption[] = [
     { key: 'enthalpy', label: t('col.enthalpy'), accessor: (s) => s.enthalpy, type: 'numeric' },
+    { key: 'enthalpyTotal', label: t('col.enthalpyTotal'), accessor: (s) => s.enthalpyTotal, type: 'numeric' },
     { key: 'fitness', label: t('col.fitness'), accessor: (s) => s.fitness >= 0 ? s.fitness : undefined, type: 'numeric' },
     { key: 'volume', label: t('col.volume'), accessor: (s) => s.volume, type: 'numeric' },
     { key: 'density', label: t('col.density'), accessor: (s) => s.density > 0 ? s.density : undefined, type: 'numeric' },
@@ -252,7 +253,7 @@ export function ExplorerPage() {
       const frameData = structures.filter((s) => {
         const xv = xField.accessor(s);
         const yv = yField.accessor(s);
-        if (xv == null || yv == null || s.enthalpy >= 900) return false;
+        if (xv == null || yv == null || s.enthalpyTotal > 900) return false;
         if (colorField && colorField.type === 'numeric') {
           const cv = colorField.accessor(s) as number;
           if (cv == null || !isFinite(cv)) return false;
@@ -352,7 +353,7 @@ export function ExplorerPage() {
     return structures.filter((s) => {
       const xv = xField.accessor(s);
       const yv = yField.accessor(s);
-      if (xv == null || yv == null || s.enthalpy >= 900) return false;
+      if (xv == null || yv == null || s.enthalpyTotal > 900) return false;
       // color range filter
       if (colorField && colorField.type === 'numeric' && (cMin !== null || cMax !== null)) {
         const cv = colorField.accessor(s) as number;

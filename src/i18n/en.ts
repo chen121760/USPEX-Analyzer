@@ -133,6 +133,7 @@ const en = {
   'system.elements': 'Elements',
   'system.totalStructures': 'Total Structures',
   'system.stableStructures': 'Stable (on hull)',
+  'system.unconvergedStructures': 'Unconverged',
   'system.generations': 'Generations',
   'system.minEnthalpy': 'Min Enthalpy',
   'system.secondObjective': 'Second Objective',

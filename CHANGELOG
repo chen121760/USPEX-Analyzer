@@ -1,6 +1,17 @@
 # USPEX Analyzer
 
 ## 版本更新记录
+### V1.2.4
+
+数据表格 — 未收敛判断修正与缺失值排序修复
+
+- 收敛判断从 `enthalpy(eV/atom) > 900` 改为 `enthalpyTotal(eV) > 900`，解决大胞结构哨兵值被除以原子数后掩盖的问题
+- 新增 **焓 (eV)** 列（`enthalpyTotal`），与原有 焓 (eV/atom) 并排显示
+- 统计面板新增**未收敛结构**计数卡片，仅当存在未收敛结构时显示
+- Explorer / BetaExplorer / ConvexHull / EnergyRanking 等图表页面自动排除未收敛结构（`enthalpyTotal > 900`）
+- Explorer / BetaExplorer 轴选项新增 `enthalpyTotal` 字段
+- 筛选下拉 "元素分数" 更名为 "原子数比例"（Atom Ratio），与实际运算逻辑一致
+
 ### V1.2.3
 
 全局 — Header 工具栏优化
