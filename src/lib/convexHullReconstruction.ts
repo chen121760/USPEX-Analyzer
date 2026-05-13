@@ -108,7 +108,35 @@ export function computeFormationEnthalpy(
 
 // ── 2D point-in-segment helpers ──
 
-interface Point2D { x: number; y: number }
+export interface Point2D { x: number; y: number }
+
+/* ------------------------------------------------------------------ */
+/*  2D lower convex hull — Andrew's monotone chain                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Compute the 2D lower convex hull of a set of (x, y) points.
+ * Uses Andrew's monotone chain algorithm (single pass, lower envelope only).
+ * Points are sorted by x (then y); cross-product <= 0 pops non-hull points.
+ */
+export function computeLowerHull2D(points: Point2D[]): Point2D[] {
+  if (points.length < 2) return [...points];
+  const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+  const hull: Point2D[] = [];
+  for (const p of sorted) {
+    while (hull.length >= 2) {
+      const a = hull[hull.length - 2];
+      const b = hull[hull.length - 1];
+      if ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x) <= 0) {
+        hull.pop();
+      } else {
+        break;
+      }
+    }
+    hull.push(p);
+  }
+  return hull;
+}
 
 /**
  * Vertical distance from point (px, py) to the hull segment (a, b).
@@ -166,7 +194,86 @@ export function binaryHullDistance(
 
 // ── Ternary (3D) hull distance ──
 
-interface Point3D { x: number; y: number; z: number }
+export interface Point3D { x: number; y: number; z: number }
+
+/** Pre-computed lower hull face for O(1) distance queries. */
+export interface TernaryLowerFace {
+  v0: Point3D;
+  v1: Point3D;
+  v2: Point3D;
+}
+
+/**
+ * Pre-compute the lower convex hull faces from a set of 3D points.
+ * Call this ONCE, then use ternaryHullDistanceFromFaces() for each point.
+ * This avoids the O(N * convex_hull(N)) trap of calling ternaryHullDistance()
+ * repeatedly on the same hull.
+ */
+export function computeTernaryLowerFaces(
+  hullPoints3D: Point3D[],
+): TernaryLowerFace[] {
+  if (hullPoints3D.length < 4) return [];
+
+  const coords = hullPoints3D.map((p) => [p.x, p.y, p.z] as [number, number, number]);
+  let faces: number[][];
+  try {
+    faces = convexHull(coords);
+  } catch {
+    return [];
+  }
+
+  if (!faces || faces.length === 0) return [];
+
+  const result: TernaryLowerFace[] = [];
+
+  for (const face of faces) {
+    if (face.length < 3) continue;
+    const v0 = coords[face[0]];
+    const v1 = coords[face[1]];
+    const v2 = coords[face[2]];
+
+    const normal = faceNormal(v0, v1, v2);
+    if (normal[2] >= -1e-10) continue;
+
+    result.push({
+      v0: { x: v0[0], y: v0[1], z: v0[2] },
+      v1: { x: v1[0], y: v1[1], z: v1[2] },
+      v2: { x: v2[0], y: v2[1], z: v2[2] },
+    });
+  }
+
+  return result;
+}
+
+/**
+ * Fast vertical distance above ternary hull using pre-computed lower faces.
+ * Avoids re-running convexHull().
+ */
+export function ternaryHullDistanceFromFaces(
+  px: number, py: number, pz: number,
+  lowerFaces: TernaryLowerFace[],
+): number {
+  if (lowerFaces.length === 0) return 0;
+
+  let minDist = Infinity;
+
+  for (const { v0, v1, v2 } of lowerFaces) {
+    if (!pointInTriangle2D(px, py, v0.x, v0.y, v1.x, v1.y, v2.x, v2.y)) {
+      continue;
+    }
+    const hullZ = barycentricZ(px, py, v0, v1, v2);
+    const dist = pz - hullZ;
+    if (dist < minDist) minDist = dist;
+  }
+
+  if (minDist === Infinity) {
+    const allZ = lowerFaces.flatMap((f) => [f.v0.z, f.v1.z, f.v2.z]);
+    const minZ = allZ.length > 0 ? Math.min(...allZ) : 0;
+    minDist = pz - minZ;
+  }
+
+  return Math.max(0, minDist);
+}
 
 /**
  * Check whether (px, py) lies inside the 2D projection of triangle (a, b, c).
@@ -337,9 +444,16 @@ export function reconstructConvexHull(
       return { x: cx, y: cy, z: s.eForm };
     });
 
+    // Pre-compute lower faces ONCE instead of per-structure convexHull()
+    const lowerFaces = computeTernaryLowerFaces(hullPoints3D);
+
     for (const s of converged) {
       const [cx, cy] = ternaryToCartesian(s.composition);
-      s.eHullRecons = ternaryHullDistance(cx, cy, s.eForm, hullPoints3D);
+      s.eHullRecons = lowerFaces.length > 0
+        ? ternaryHullDistanceFromFaces(cx, cy, s.eForm, lowerFaces)
+        : hullPoints3D.length > 0
+          ? Math.max(0, s.eForm - Math.min(...hullPoints3D.map(p => p.z)))
+          : 0;
     }
   } else {
     // Unary: no hull needed

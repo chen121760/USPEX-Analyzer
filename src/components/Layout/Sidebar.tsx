@@ -6,9 +6,10 @@ import logoImg from '@/assets/logo.jpg';
 import {
   LayoutDashboard,
   Table2,
-  TrendingDown,
+  Triangle,
   Target,
   ScatterChart,
+  ChartSpline,
   FlaskConical,
   Filter,
   ChevronLeft,
@@ -104,11 +105,12 @@ export function Sidebar() {
       <nav style={{ flex: 1, padding: '8px 0', overflowY: 'auto' }}>
         <NavItem to="/dashboard" icon={<LayoutDashboard size={iconSize} />} label={t('nav.dashboard')} />
         <NavItem to="/table" icon={<Table2 size={iconSize} />} label={t('nav.table')} />
-        <NavItem to="/convex-hull" icon={<TrendingDown size={iconSize} />} label={isFixed ? t('nav.energyRanking', 'Energy Ranking') : t('nav.hull')} />
+        <NavItem to="/convex-hull" icon={<Triangle size={iconSize} />} label={isFixed ? t('nav.energyRanking', 'Energy Ranking') : t('nav.hull')} />
         <NavItem to="/pareto" icon={<Target size={iconSize} />} label={t('nav.pareto')} hidden={!isMulti} />
         <NavItem to="/explorer" icon={<ScatterChart size={iconSize} />} label={t('nav.explorer')} />
-        <NavItem to="/beta-explorer" icon={<FlaskConical size={iconSize} />} label={t('nav.betaExplorer')} />
         <NavItem to="/filter" icon={<Filter size={iconSize} />} label={t('nav.filter')} />
+        <NavItem to="/beta-explorer" icon={<ChartSpline size={iconSize} />} label={t('nav.betaExplorer')} />
+        <NavItem to="/hull-workshop" icon={<FlaskConical size={iconSize} />} label={t('nav.hullWorkshop', 'Hull Workshop')} />
       </nav>
 
       {/* Bottom actions */}

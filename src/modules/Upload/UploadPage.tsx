@@ -12,15 +12,26 @@ import logoImg from '@/assets/logo.jpg';
 import { QuickPackCommand } from '@/components/QuickPackCommand';
 import { extractArchive, entriesToFiles, isArchive } from '@/utils/extractArchive';
 
-/** Build auto project name: Elements-calculationType-PressureGPa[-suffix] */
+/**
+ * Build auto project name.
+ * Format: Elements-calcType-PressureGPa[-suffix]
+ * For fixed composition (calculationType % 10 === 0), the formula
+ * (e.g. Ti2H11) is used in place of element symbols (e.g. Ti-H).
+ */
 function buildAutoName(
   elements: string[],
   calculationType: number,
   externalPressure: number | null,
   suffix: string,
+  fixedFormula?: string,
 ): string {
   const parts: string[] = [];
-  if (elements.length > 0) parts.push(elements.join('-'));
+  const isFixed = calculationType > 0 && calculationType % 10 === 0;
+  if (isFixed && fixedFormula) {
+    parts.push(fixedFormula);
+  } else if (elements.length > 0) {
+    parts.push(elements.join('-'));
+  }
   if (calculationType > 0) parts.push(String(calculationType));
   if (externalPressure !== null) parts.push(`${externalPressure}GPa`);
   if (suffix.trim()) parts.push(suffix.trim());
@@ -171,9 +182,11 @@ export function UploadPage() {
   const startAnalysis = () => {
     processFiles(detectedFiles, fileContents);
     // Build auto name from parsed systemInfo (processFiles is synchronous)
-    const si = useProjectStore.getState().systemInfo;
+    const state = useProjectStore.getState();
+    const si = state.systemInfo;
+    const fixedFormula = state.structures?.[0]?.formula;
     const autoName = si
-      ? buildAutoName(si.elements, si.calculationType, si.externalPressure, suffix)
+      ? buildAutoName(si.elements, si.calculationType, si.externalPressure, suffix, fixedFormula)
       : suffix.trim() || 'project';
     setProjectName(autoName);
     navigate('/dashboard');

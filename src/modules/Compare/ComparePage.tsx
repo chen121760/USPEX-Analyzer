@@ -82,9 +82,9 @@ export function ComparePage() {
     return (
       <div className="fade-in" style={{ padding: 60, textAlign: 'center' }}>
         <ArrowLeftRight size={48} color="var(--color-text-muted)" style={{ marginBottom: 16 }} />
-        <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+        <h1 style={{ fontSize: 18, fontWeight: 600, color: 'var(--color-text-secondary)' }}>
           {t('compare.title')}
-        </h2>
+        </h1>
         <p style={{ color: 'var(--color-text-muted)', fontSize: 14, maxWidth: 400, margin: '8px auto' }}>
           {t('compare.hint')}
         </p>
@@ -101,9 +101,9 @@ export function ComparePage() {
   return (
     <div className="fade-in">
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>
+        <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>
           {t('compare.title')} ({compareStructures.length})
-        </h2>
+        </h1>
         <button className="btn btn-ghost btn-sm" onClick={clearCompare}>
           {t('compare.clearAll')}
         </button>

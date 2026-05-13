@@ -10,7 +10,7 @@ import { parseEaIds } from '@/lib/parseEaIds';
  * Renders tag toggle buttons and an EA ID search input.
  * Active tags/IDs cause star markers to be overlaid on chart points.
  */
-export function MarkPanel() {
+export function MarkPanel({ showTags = true }: { showTags?: boolean }) {
   const { t } = useTranslation();
 
   const markActiveTags  = useUIStore((s) => s.markActiveTags);
@@ -57,7 +57,7 @@ export function MarkPanel() {
       </div>
 
       {/* Tag section */}
-      <div style={{ marginBottom: 8 }}>
+      {showTags && <div style={{ marginBottom: 8 }}>
         <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginRight: 8 }}>
           {t('mark.byTag')}:
         </span>
@@ -85,7 +85,7 @@ export function MarkPanel() {
             );
           })}
         </span>
-      </div>
+      </div>}
 
       {/* EA ID section */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

@@ -6,6 +6,7 @@ import { UploadPage } from '@/modules/Upload/UploadPage';
 import { DashboardPage } from '@/modules/Dashboard/DashboardPage';
 import { DataTablePage } from '@/modules/DataTable/DataTablePage';
 import { ConvexHullPage } from '@/modules/ConvexHull/ConvexHullPage';
+import { HullWorkshopPage } from '@/modules/HullWorkshop/HullWorkshopPage';
 import { ParetoPage } from '@/modules/Pareto/ParetoPage';
 import { ExplorerPage } from '@/modules/Explorer/ExplorerPage';
 import { BetaExplorerPage } from '@/modules/BetaExplorer/BetaExplorerPage';
@@ -52,6 +53,7 @@ function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/table" element={<DataTablePage />} />
             <Route path="/convex-hull" element={<ConvexHullPage />} />
+            <Route path="/hull-workshop" element={<HullWorkshopPage />} />
             <Route path="/pareto" element={<ParetoPage />} />
             <Route path="/explorer" element={<ExplorerPage />} />
             <Route path="/beta-explorer" element={<BetaExplorerPage />} />

@@ -207,6 +207,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       isDataLoaded: true,
       parseWarnings: [],
       projectId: project.projectId ?? makeProjectId(),  // reuse existing ID or mint one for old files
+      projectName: project.projectName || project.systemInfo?.elements?.join('-') || '',
     });
     useUIStore.getState().clearProjectFilters();
   },

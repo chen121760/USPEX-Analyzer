@@ -25,7 +25,7 @@ export function ConvexHullPage() {
 
   return (
     <div className="fade-in">
-      <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>{pageTitle}</h2>
+      <h1 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>{pageTitle}</h1>
 
       {compositionMode === 'fixed' ? (
         <EnergyRankingChart structures={structures} systemInfo={systemInfo} />

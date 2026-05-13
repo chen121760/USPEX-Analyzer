@@ -200,7 +200,7 @@ export function ParetoPage() {
   return (
     <div className="fade-in">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{t('pareto.title')}</h2>
+        <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{t('pareto.title')}</h1>
         <ExportDataButton onClick={handleExport} />
       </div>
 

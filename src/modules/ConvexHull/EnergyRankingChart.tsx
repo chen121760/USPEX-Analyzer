@@ -9,7 +9,7 @@ type PlotlyData = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyLayout = any;
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import type { Structure, SystemInfo } from '@/types/structure';
@@ -20,7 +20,6 @@ import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
 import { PLOTLY_FONT, getPlotlyTheme } from '@/lib/constants';
 import { ExportDataButton } from '@/components/ExportDataButton';
-import { downloadCsv } from '@/lib/exportCsv';
 
 
 /** Palette for auto-assigning colors to any origin method */
@@ -42,9 +41,15 @@ function getOriginColor(origin: string): string {
 interface Props {
   structures: Structure[];
   systemInfo: SystemInfo;
+  /** Structure ID → group name (for workshop multi-group display) */
+  groupMap?: Map<number, string>;
+  /** Show the export button (default true, set false in HullWorkshop) */
+  showExport?: boolean;
+  /** Show tag buttons in MarkPanel (default true) */
+  showTags?: boolean;
 }
 
-export function EnergyRankingChart({ structures, systemInfo }: Props) {
+export function EnergyRankingChart({ structures, systemInfo, groupMap, showExport = true, showTags = true }: Props) {
   const { t } = useTranslation();
   const openViewer      = useUIStore((s) => s.openViewer);
   const markActiveTags  = useUIStore((s) => s.markActiveTags);
@@ -54,8 +59,13 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
 
   const allSorted = useMemo(() =>
     structures
-      .filter((s) => !isNaN(s.enthalpy) && s.enthalpyTotal <= 900)
+      .filter((s) => !s.isUserAdded && !isNaN(s.enthalpy) && s.enthalpyTotal <= 900)
       .sort((a, b) => a.enthalpy - b.enthalpy),
+  [structures]);
+
+  const userAdded = useMemo(() =>
+    structures
+      .filter((s) => s.isUserAdded && !isNaN(s.enthalpy) && s.enthalpyTotal <= 900),
   [structures]);
 
   const [displayCount, setDisplayCount] = useState(() => Math.min(100, allSorted.length));
@@ -67,6 +77,7 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
       fitness: top.map((s) => s.fitness ?? 0),
       colors: top.map((s) => getOriginColor(s.origin)),
       hoverTexts: top.map((s) =>
+        (s.groupName || groupMap ? `Group: ${s.groupName ?? groupMap?.get(s.id) ?? '—'}<br>` : '') +
         `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
         `ΔH: ${(s.fitness ?? 0).toFixed(4)} eV/atom<br>` +
         `Enthalpy: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
@@ -95,14 +106,47 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
     customdata: plotData.ids,
   };
 
-  // Build rank lookup map for overlay traces
+  // Build rank lookup map for overlay traces (includes user-added)
   const rankMap = useMemo(() => {
     const map = new Map<number, { rank: number; fitness: number }>();
     allSorted.slice(0, displayCount).forEach((s, i) => {
       map.set(s.id, { rank: i + 1, fitness: s.fitness ?? 0 });
     });
+    // User-added — compute rank by insertion into sorted list
+    const topN = allSorted.slice(0, displayCount);
+    for (const ua of userAdded) {
+      let rank = topN.length + 1;
+      for (let i = 0; i < topN.length; i++) {
+        if (ua.enthalpy < topN[i].enthalpy) { rank = i + 1; break; }
+      }
+      map.set(ua.id, { rank, fitness: ua.fitness ?? 0 });
+    }
     return map;
-  }, [allSorted, displayCount]);
+  }, [allSorted, displayCount, userAdded]);
+
+  const userAddedTrace: PlotlyData = {
+    x: userAdded.map((s) => rankMap.get(s.id)?.rank ?? 0),
+    y: userAdded.map((s) => rankMap.get(s.id)?.fitness ?? 0),
+    mode: 'markers' as const,
+    type: 'scatter' as const,
+    name: 'Manual',
+    marker: {
+      color: '#ffffff',
+      size: 10,
+      symbol: 'circle' as const,
+      line: { width: 1.5, color: '#1e293b' },
+    },
+    text: userAdded.map((s) =>
+      `[Manual]<br>` +
+      (s.groupName ? `Group: ${s.groupName}<br>` : '') +
+      `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
+      `ΔH: ${(s.fitness ?? 0).toFixed(4)} eV/atom<br>` +
+      `Enthalpy: ${s.enthalpy.toFixed(4)} eV/atom`
+    ),
+    hoverinfo: 'text' as const,
+    customdata: userAdded.map((s) => s.id),
+    showlegend: true,
+  };
 
   // --- Mark overlay traces ---
   const overlayTraces = useMemo(() => {
@@ -130,16 +174,28 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
     if (eaIds.size > 0) {
       const eaMarked = visible.filter((s) => eaIds.has(s.id));
       if (eaMarked.length > 0) {
-        result.push({
-          x: eaMarked.map((s) => rankMap.get(s.id)!.rank),
-          y: eaMarked.map((s) => rankMap.get(s.id)!.fitness),
-          mode: 'markers', type: 'scatter',
-          name: t('mark.eaSearchName'),
-          marker: { symbol: 'star', size: 14, color: '#FFD700', line: { width: 1, color: 'white' } },
-          hoverinfo: 'skip',
-          customdata: eaMarked.map((s) => s.id),
-          showlegend: true,
-        });
+        const byGroup = new Map<string, typeof eaMarked>();
+        for (const s of eaMarked) {
+          const key = s.groupName || '';
+          if (!byGroup.has(key)) byGroup.set(key, []);
+          byGroup.get(key)!.push(s);
+        }
+        for (const [gn, structs] of byGroup) {
+          const color = structs[0].groupColor ?? '#FFD700';
+          const name = gn
+            ? `★ ${t('mark.eaSearchName')} · ${gn}`
+            : `★ ${t('mark.eaSearchName')}`;
+          result.push({
+            x: structs.map((s) => rankMap.get(s.id)!.rank),
+            y: structs.map((s) => rankMap.get(s.id)!.fitness),
+            mode: 'markers', type: 'scatter',
+            name,
+            marker: { symbol: 'star', size: 14, color, line: { width: 1, color: 'white' } },
+            hoverinfo: 'skip',
+            customdata: structs.map((s) => s.id),
+            showlegend: true,
+          });
+        }
       }
     }
     return result;
@@ -147,6 +203,10 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
 
 
   const pt = getPlotlyTheme(theme);
+
+  // Persist viewport across re-renders (zoom/pan)
+  const viewRef = useRef<Partial<PlotlyLayout>>({});
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const layout: PlotlyLayout = {
     font: PLOTLY_FONT,
@@ -172,24 +232,83 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
     plot_bgcolor: pt.plotBg,
     paper_bgcolor: pt.paperBg,
     showlegend: false,
+    ...viewRef.current,
   };
 
 
   function handleExport() {
     const top = allSorted.slice(0, displayCount);
-    const headers = ['Rank', 'EA_ID', 'Formula', 'SpaceGroup', 'Generation', 'Origin', 'Enthalpy(eV/atom)', 'Fitness(eV/atom)'];
+    const elements = systemInfo.elements;
+    const systemType = systemInfo.systemType;
+    const hasGroup = groupMap != null || structures.some((s) => s.groupName != null);
+    const groupCol = hasGroup ? ['Group'] : [];
+
+    // Build x-fraction columns for workshop varcomp compatibility
+    let xHeaders: string[] = [];
+    if (systemType === 'binary') {
+      const elB = elements[1] || 'B';
+      xHeaders = [`x(${elB})`];
+    } else if (systemType === 'ternary') {
+      xHeaders = elements.map((el) => `x_${el}`);
+    }
+
+    const headers = [...groupCol, 'Rank', 'EA_ID', 'Formula', ...xHeaders, 'SpaceGroup', 'Generation', 'Origin', 'Enthalpy(eV/atom)', 'Fitness(eV/atom)'];
+    const groupField = (s: Structure) => hasGroup ? { 'Group': s.groupName ?? '' } : {};
+
+    function xFraction(s: Structure): Record<string, number> {
+      const total = s.composition.reduce((a, b) => a + b, 0) || 1;
+      if (systemType === 'binary') {
+        const elB = elements[1] || 'B';
+        return { [`x(${elB})`]: (s.composition[1] / total) };
+      }
+      if (systemType === 'ternary') {
+        const frac: Record<string, number> = {};
+        for (let i = 0; i < elements.length; i++) {
+          frac[`x_${elements[i]}`] = s.composition[i] / total;
+        }
+        return frac;
+      }
+      return {};
+    }
+
     const rows = top.map((s, i) => ({
+      ...groupField(s),
       'Rank': i + 1,
       'EA_ID': s.id,
       'Formula': s.formula,
+      ...xFraction(s),
       'SpaceGroup': s.spaceGroup,
       'Generation': s.generation,
       'Origin': s.origin,
       'Enthalpy(eV/atom)': s.enthalpy,
       'Fitness(eV/atom)': s.fitness ?? 0,
     }));
-    const elements = systemInfo.elements.join('-');
-    downloadCsv(`${elements}_energy_ranking_top${displayCount}`, headers, rows);
+
+    // Build metadata comment lines — export as varcomp for workshop compatibility
+    const metaHeaders = [
+      `# elements: ${elements.join(',')}`,
+      `# systemType: ${systemType}`,
+      `# compositionMode: varcomp`,
+    ];
+
+    function csvCell(v: unknown): string {
+      if (v === undefined || v === null) return '';
+      const s = String(v);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    }
+    const csvLine = (h: string[], r: Record<string, unknown>) =>
+      h.map((k) => csvCell(r[k])).join(',');
+    const body = [headers.join(','), ...rows.map((r) => csvLine(headers, r))].join('\r\n');
+
+    const fullCsv = '\uFEFF' + [...metaHeaders, '', body].join('\r\n');
+    const blob = new Blob([fullCsv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${elements.join('-')}_energy_ranking_top${displayCount}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -210,7 +329,7 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
         <span style={{ fontSize: 13, fontWeight: 600, minWidth: 60 }}>
           {displayCount} / {allSorted.length}
         </span>
-        <ExportDataButton onClick={handleExport} style={{ marginLeft: 'auto' }} />
+        {showExport && <ExportDataButton onClick={handleExport} style={{ marginLeft: 'auto' }} />}
       </div>
 
       <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', marginBottom: 12 }}>
@@ -219,20 +338,38 @@ export function EnergyRankingChart({ structures, systemInfo }: Props) {
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <Plot
-          data={[trace, ...overlayTraces]}
+          data={[trace, userAddedTrace, ...overlayTraces]}
           layout={layout}
           config={{ responsive: true, displayModeBar: true }}
           style={{ width: '100%', height: layout.height }}
           onClick={(event: PlotMouseEvent) => {
-            const point = event.points?.[0];
-            if (point?.customdata) {
-              openViewer(Number(point.customdata));
+            if (clickTimerRef.current) {
+              clearTimeout(clickTimerRef.current);
+              clickTimerRef.current = null;
+              return;
             }
+            clickTimerRef.current = setTimeout(() => {
+              clickTimerRef.current = null;
+              const point = event.points?.[0];
+              if (point?.customdata) {
+                openViewer(Number(point.customdata));
+              }
+            }, 300);
+          }}
+          onRelayout={(e) => {
+            const v: Record<string, unknown> = {};
+            if (e['xaxis.range[0]'] !== undefined) {
+              v.xaxis = { range: [e['xaxis.range[0]'], e['xaxis.range[1]']] };
+            }
+            if (e['yaxis.range[0]'] !== undefined) {
+              v.yaxis = { range: [e['yaxis.range[0]'], e['yaxis.range[1]']] };
+            }
+            if (Object.keys(v).length > 0) viewRef.current = v;
           }}
         />
       </div>
 
-      <MarkPanel />
+      <MarkPanel showTags={showTags} />
 
       {/* Legend for origin colors */}
       <div className="card" style={{ marginTop: 16 }}>
