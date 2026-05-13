@@ -338,7 +338,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <Plot
-          data={[trace, userAddedTrace, ...overlayTraces]}
+          data={[trace, userAddedTrace, ...(showTags ? overlayTraces : [])]}
           layout={layout}
           config={{ responsive: true, displayModeBar: true }}
           style={{ width: '100%', height: layout.height }}

@@ -557,7 +557,7 @@ export function ExplorerPage() {
       },
       hovermode: 'closest' as const,
       showlegend: true,
-      legend: { font: { size: 11, color: pt.legendColor } },
+      legend: { bgcolor: 'rgba(255,255,255,0.4)', font: { size: 11, color: pt.legendColor } },
       dragmode: 'lasso' as const,
       margin: { t: showXMarginal ? 10 : 50, r: showYMarginal ? 10 : 20, l: 60, b: 60 },
       plot_bgcolor: pt.plotBg,

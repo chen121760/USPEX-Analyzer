@@ -316,7 +316,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
       hoverinfo: 'text' as const,
       customdata: userAddedWithCoords.map((u) => u.id),
     },
-    ...overlayTraces,
+    ...(showTags ? overlayTraces : []),
   ];
 
   // Element labels at triangle corners
@@ -350,7 +350,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
     annotations: labelAnnotations,
     hovermode: 'closest' as const,
     showlegend: true,
-    legend: { x: 0.02, y: 0.98, font: { size: 11, color: pt.legendColor } },
+    legend: { x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.4)', font: { size: 11, color: pt.legendColor } },
     margin: { t: 50, r: 80 },
     plot_bgcolor: pt.plotBg,
     paper_bgcolor: pt.paperBg,

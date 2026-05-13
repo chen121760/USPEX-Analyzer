@@ -164,7 +164,7 @@ export function ParetoPage() {
     yaxis: { title: { text: objName, font: titleFont }, ...axisStyle },
     hovermode: 'closest' as const,
     showlegend: true,
-    legend: { font: { size: 11, color: pt.legendColor } },
+    legend: { bgcolor: 'rgba(255,255,255,0.4)', font: { size: 11, color: pt.legendColor } },
     margin: { t: 50, l: 60, b: 60 },
     plot_bgcolor: pt.plotBg,
     paper_bgcolor: pt.paperBg,

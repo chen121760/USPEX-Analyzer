@@ -265,7 +265,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
       hoverinfo: 'text' as const,
       customdata: userAdded.map((s) => s.id),
     },
-    ...overlayTraces,
+    ...(showTags ? overlayTraces : []),
   ];
 
   const axisStyle = {
@@ -289,7 +289,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
     yaxis: { title: { text: t('hull.formationEnergy'), font: titleFont }, range: [-0.001, undefined], ...axisStyle },
     hovermode: 'closest' as const,
     showlegend: true,
-    legend: { x: 0.02, y: 0.02, xanchor: 'left', yanchor: 'bottom', font: { size: 11, color: pt.legendColor } },
+    legend: { x: 0.02, y: 0.02, xanchor: 'left', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.4)', font: { size: 11, color: pt.legendColor } },
     margin: { t: 50, r: 80, l: 60, b: 60 },
     plot_bgcolor: pt.plotBg,
     paper_bgcolor: pt.paperBg,

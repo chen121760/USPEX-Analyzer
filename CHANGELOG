@@ -1,16 +1,26 @@
 # USPEX Analyzer
 
 ## 版本更新记录
-### V1.2.4
 
-数据表格 — 未收敛判断修正与缺失值排序修复
+### V1.3.1
 
-- 收敛判断从 `enthalpy(eV/atom) > 900` 改为 `enthalpyTotal(eV) > 900`，解决大胞结构哨兵值被除以原子数后掩盖的问题
-- 新增 **焓 (eV)** 列（`enthalpyTotal`），与原有 焓 (eV/atom) 并排显示
-- 统计面板新增**未收敛结构**计数卡片，仅当存在未收敛结构时显示
-- Explorer / BetaExplorer / ConvexHull / EnergyRanking 等图表页面自动排除未收敛结构（`enthalpyTotal > 900`）
-- Explorer / BetaExplorer 轴选项新增 `enthalpyTotal` 字段
-- 筛选下拉 "元素分数" 更名为 "原子数比例"（Atom Ratio），与实际运算逻辑一致
+凸包工作台 — 修复与优化
+
+- 修复 Tag 星标标记（`overlayTraces`）不受 `showTags` 控制、泄漏到 Hull Workshop 的问题
+- 全局 Plotly 图表图例底色从不透明白底改为 60% 透明
+
+### V1.3.0
+
+凸包工作台（Hull Workshop）— 全新模块
+
+- 新增 **Hull Workshop** 模块：多数据组合并构建统一凸包
+  - 从当前项目导入 / 从已保存项目多选导入 / 上传 JSON 文件，每个来源成为独立数据组
+  - 纯几何凸包算法：基于所有可见结构的 (composition, eForm) 计算，不依赖 USPEX 原始 fitness 字段
+  - 支持二元、三元、定组分三种体系模式
+  - 手动添加结构：输入化学式 + 焓值，即时测试结构是否扩展（降低）凸包；若扩展，图表以实线显示新凸包、虚线显示旧凸包，全部结构在新凸包下重算 energy above hull
+  - 数据组可见性切换、重命名、删除
+  - 导出 CSV（含 Group 列，方便外部工具绘图）和 JSON（完整结构数据保存与重新导入）
+  - 工作区数据按项目隔离，持久化于 IndexedDB
 
 凸包重构 — E_form 与 E_hull 独立计算
 
@@ -19,11 +29,6 @@
 - 新增 **E_hull (Recons)** 列：基于 E_form 重算的凸包距离 (eV/atom)，二元用竖直距离插值，三元用重心坐标插值
 - 两列仅在变组分系统显示，未收敛结构显示 `—`；Explorer / BetaExplorer 轴选项中同步新增
 - 修复 E_form 轴选项因 `>= 0` 过滤导致合法负形成焓不显示的 bug
-
-数据表格 — 列头悬停提示数据来源
-
-- 所有列头新增 `title` 提示，标明每列数据来源于哪个 USPEX 文件（extended_convex_hull / Individuals / origin / MLProperties / Pareto_ranking 等）
-- 重建值列（E_form / E_hull）提示注明"非 USPEX 原始输出"
 
 ### V1.2.3
 

@@ -629,7 +629,7 @@ export function BetaExplorerPage() {
       xaxis: { title: { text: xField.label, font: titleFont }, ...(xRange ? { range: xRange } : {}), domain: mainXDomain, ...axisStyle },
       yaxis: { title: { text: yField.label, font: titleFont }, ...(yRange ? { range: yRange } : {}), domain: mainYDomain, ...axisStyle },
       hovermode: 'closest' as const, showlegend: true,
-      legend: { font: { size: 11, color: pt.legendColor } },
+      legend: { bgcolor: 'rgba(255,255,255,0.4)', font: { size: 11, color: pt.legendColor } },
       dragmode: 'lasso' as const,
       margin: { t: showXMarginal ? 10 : 50, r: showYMarginal ? 10 : 20, l: 60, b: 60 },
       plot_bgcolor: pt.plotBg, paper_bgcolor: pt.paperBg,
@@ -844,7 +844,7 @@ export function BetaExplorerPage() {
                 yaxis: { title: { text: t('beta.hvYAxis'), font: { size: 13, color: getPlotlyTheme(theme).axisTitleColor } }, tickfont: { size: 11, color: getPlotlyTheme(theme).tickColor }, gridcolor: getPlotlyTheme(theme).gridColor, zerolinecolor: getPlotlyTheme(theme).zerolineColor, linecolor: getPlotlyTheme(theme).lineColor },
                 hovermode: 'closest' as const,
                 showlegend: true,
-                legend: { font: { size: 11, color: getPlotlyTheme(theme).legendColor } },
+                legend: { bgcolor: 'rgba(255,255,255,0.4)', font: { size: 11, color: getPlotlyTheme(theme).legendColor } },
                 margin: { t: 50, r: 20, l: 70, b: 60 },
                 plot_bgcolor: getPlotlyTheme(theme).plotBg, paper_bgcolor: getPlotlyTheme(theme).paperBg,
               }}

@@ -292,7 +292,7 @@ export function DashboardPage() {
               }]}
               layout={{
                 showlegend: true,
-                legend: { font: { size: 11, color: plotTheme.legendColor }, orientation: 'v', x: 1, y: 0.5 },
+                legend: { bgcolor: 'rgba(255,255,255,0.4)', font: { size: 11, color: plotTheme.legendColor }, orientation: 'v', x: 1, y: 0.5 },
                 margin: { t: 4, b: 4, l: 4, r: 80 },
                 paper_bgcolor: 'transparent',
                 plot_bgcolor: 'transparent',
