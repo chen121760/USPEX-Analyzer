@@ -42,6 +42,7 @@ function usePageHint(): PageHint | null {
     '/beta-explorer':'hv',
     '/filter':       'filter',
     '/compare':      'compare',
+    '/hull-workshop': 'hullWorkshop',
   };
 
   const navKey: Record<string, string> = {
@@ -54,6 +55,7 @@ function usePageHint(): PageHint | null {
     'hv':           'nav.betaExplorer',
     'filter':       'nav.filter',
     'compare':      'nav.compare',
+    'hullWorkshop': 'nav.hullWorkshop',
   };
 
   const key = routeKey[pathname];

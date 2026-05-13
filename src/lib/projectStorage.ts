@@ -57,3 +57,17 @@ export async function deleteProject(id: string): Promise<void> {
   const db = await getDB();
   await db.delete(STORE, id);
 }
+
+/** 列出所有已存项目（不限制数量），按时间倒序 */
+export async function listAllProjects(): Promise<StoredProject[]> {
+  const db = await getDB();
+  const all = await db.getAll(STORE);
+  return all.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+}
+
+/** 按 projectId 加载单个项目 */
+export async function loadProjectById(id: string): Promise<StoredProject | null> {
+  const db = await getDB();
+  const record = await db.get(STORE, id);
+  return record ?? null;
+}

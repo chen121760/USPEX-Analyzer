@@ -8,6 +8,7 @@ import { CitePopover } from '@/components/CitePopover';
 export function Header() {
   const { t, i18n } = useTranslation();
   const systemInfo = useProjectStore((s) => s.systemInfo);
+  const projectName = useProjectStore((s) => s.projectName);
   const compareIds = useUIStore((s) => s.compareIds);
   const hintPanelOpen = useUIStore((s) => s.hintPanelOpen);
   const toggleHintPanel = useUIStore((s) => s.toggleHintPanel);
@@ -21,7 +22,12 @@ export function Header() {
     <header className="header">
       {/* System summary */}
       {systemInfo && (
-        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', display: 'flex', gap: 16 }}>
+        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', display: 'flex', gap: 16, alignItems: 'center' }}>
+          {projectName && (
+            <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
+              {projectName}
+            </span>
+          )}
           <span>
             {t('system.totalStructures')}: <b>{systemInfo.totalStructures}</b>
           </span>

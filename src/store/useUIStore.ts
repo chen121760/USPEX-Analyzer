@@ -301,7 +301,7 @@ export const useUIStore = create<UIState>()(
       setBetaYMinimize: (v) => set({ betaYMinimize: v }),
       betaColorByFront: true,
       setBetaColorByFront: (v) => set({ betaColorByFront: v }),
-      betaNumFronts: 3,
+      betaNumFronts: 1,
       setBetaNumFronts: (v) => set({ betaNumFronts: v }),
       betaRefMode: 'auto',
       setBetaRefMode: (v) => set({ betaRefMode: v }),

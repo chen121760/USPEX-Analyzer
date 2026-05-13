@@ -73,6 +73,10 @@ export interface Structure {
   isUserAdded: boolean;
   notes: string;
 
+  // --- Workshop group (set by HullWorkshop when merging multi-group data) ---
+  groupName?: string;
+  groupColor?: string;
+
   // --- Convex hull reconstruction ---
   eForm: number;              // Formation enthalpy (eV/atom), -1 = unconverged
   eHullRecons: number; // Distance to reconstructed hull (eV/atom), -1 = unconverged

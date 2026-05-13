@@ -11,7 +11,7 @@ type PlotlyData = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyLayout = any;
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import type { Structure, SystemInfo } from '@/types/structure';
@@ -35,9 +35,21 @@ interface StructureWithCoords extends Structure {
 interface Props {
   structures: Structure[];
   systemInfo: SystemInfo;
+  /** Structure ID → group name (for workshop multi-group display) */
+  groupMap?: Map<number, string>;
+  /** Show the export button (default true, set false in HullWorkshop) */
+  showExport?: boolean;
+  /** Show tag buttons in MarkPanel (default true) */
+  showTags?: boolean;
+  /** Show stable-phases footer (default true) */
+  showFooter?: boolean;
+  /** Old tie-line edges (dashed) — shown when user-added expanded the hull */
+  oldHullEdges?: { p1: [number, number]; p2: [number, number] }[];
+  /** Whether user-added structures expanded the hull */
+  hullExpanded?: boolean;
 }
 
-export function TernaryHullPlot({ structures, systemInfo }: Props) {
+export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport = true, showTags = true, showFooter = true, oldHullEdges }: Props) {
   const { t } = useTranslation();
   const openViewer = useUIStore((s) => s.openViewer);
   const markActiveTags  = useUIStore((s) => s.markActiveTags);
@@ -52,6 +64,7 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
 
   const [fitnessMax, setFitnessMax] = useState(() => maxFitness);
   const [revision, setRevision] = useState(0);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function handleFitnessChange(val: number) {
     setFitnessMax(val);
@@ -61,8 +74,10 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
   const plotData = useMemo(() => {
     const elements = systemInfo.elements;
     const validStructures = structures.filter((s) => s.enthalpyTotal <= 900 && !isNaN(s.enthalpy));
-    const stable = validStructures.filter((s) => s.fitness === 0);
-    const unstable = validStructures.filter((s) => s.fitness > 0 && s.fitness <= fitnessMax);
+    const userAdded = validStructures.filter((s) => s.isUserAdded);
+    const nonUser = validStructures.filter((s) => !s.isUserAdded);
+    const stable = nonUser.filter((s) => s.fitness === 0);
+    const unstable = nonUser.filter((s) => s.fitness > 0 && s.fitness <= fitnessMax);
 
     // Compute cartesian coords for unstable structures
     const unstableWithCoords: StructureWithCoords[] = unstable.map((s) => {
@@ -70,14 +85,24 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
       return { ...s, cartX: cx, cartY: cy };
     });
 
-    // Stable points for hull computation
+    // Stable points for hull computation — include ALL fitness=0 structures
+    // (including user-added that expanded the hull) so the tie-lines reflect
+    // the expanded hull geometry.
+    const hullInputs: TernaryHullInput[] = validStructures
+      .filter((s) => s.fitness === 0)
+      .map((s) => {
+        const [cx, cy] = ternaryToCartesian(s.composition);
+        return { id: s.id, composition: s.composition, enthalpy: s.enthalpy, cartX: cx, cartY: cy };
+      });
+
+    // Compute tie-lines from all on-hull structures
+    const edges = computeTernaryHullEdges(hullInputs);
+
+    // Display-only stable points (non-user-added, for diamond markers)
     const stableInputs: TernaryHullInput[] = stable.map((s) => {
       const [cx, cy] = ternaryToCartesian(s.composition);
       return { id: s.id, composition: s.composition, enthalpy: s.enthalpy, cartX: cx, cartY: cy };
     });
-
-    // Compute tie-lines
-    const edges = computeTernaryHullEdges(stableInputs);
 
     // Unique stable points for display — join back to full Structure for hover info
     const uniqueStable = uniqueHullPoints(stableInputs);
@@ -87,18 +112,25 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
       full: structureMap.get(p.id),
     }));
 
-    return { unstableWithCoords, stableInputs, uniqueStableFull, edges, elements };
+    // User-added in cartesian
+    const userAddedWithCoords: { id: number; cartX: number; cartY: number; s: Structure }[] = userAdded.map((s) => {
+      const [cx, cy] = ternaryToCartesian(s.composition);
+      return { id: s.id, cartX: cx, cartY: cy, s };
+    });
+
+    return { unstableWithCoords, stableInputs, uniqueStableFull, edges, elements, userAddedWithCoords };
   }, [structures, systemInfo, fitnessMax]);
 
-  const { unstableWithCoords, uniqueStableFull, edges, elements } = plotData;
+  const { unstableWithCoords, uniqueStableFull, edges, elements, userAddedWithCoords } = plotData;
 
   // Build coord lookup map for overlay traces
   const coordMap = useMemo(() => {
     const map = new Map<number, { cartX: number; cartY: number }>();
     for (const s of unstableWithCoords) map.set(s.id, { cartX: s.cartX, cartY: s.cartY });
     for (const p of uniqueStableFull) map.set(p.id, { cartX: p.cartX, cartY: p.cartY });
+    for (const u of userAddedWithCoords) map.set(u.id, { cartX: u.cartX, cartY: u.cartY });
     return map;
-  }, [unstableWithCoords, uniqueStableFull]);
+  }, [unstableWithCoords, uniqueStableFull, userAddedWithCoords]);
 
   // --- Mark overlay traces ---
   const overlayTraces = useMemo(() => {
@@ -125,16 +157,28 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
     if (eaIds.size > 0) {
       const eaMarked = structures.filter((s) => eaIds.has(s.id) && coordMap.has(s.id));
       if (eaMarked.length > 0) {
-        result.push({
-          x: eaMarked.map((s) => coordMap.get(s.id)!.cartX),
-          y: eaMarked.map((s) => coordMap.get(s.id)!.cartY),
-          mode: 'markers', type: 'scatter',
-          name: t('mark.eaSearchName'),
-          marker: { symbol: 'star', size: 14, color: '#FFD700', line: { width: 1, color: 'white' } },
-          hoverinfo: 'skip',
-          customdata: eaMarked.map((s) => s.id),
-          showlegend: true,
-        });
+        const byGroup = new Map<string, typeof eaMarked>();
+        for (const s of eaMarked) {
+          const key = s.groupName || '';
+          if (!byGroup.has(key)) byGroup.set(key, []);
+          byGroup.get(key)!.push(s);
+        }
+        for (const [gn, structs] of byGroup) {
+          const color = structs[0].groupColor ?? '#FFD700';
+          const name = gn
+            ? `★ ${t('mark.eaSearchName')} · ${gn}`
+            : `★ ${t('mark.eaSearchName')}`;
+          result.push({
+            x: structs.map((s) => coordMap.get(s.id)!.cartX),
+            y: structs.map((s) => coordMap.get(s.id)!.cartY),
+            mode: 'markers', type: 'scatter',
+            name,
+            marker: { symbol: 'star', size: 14, color, line: { width: 1, color: 'white' } },
+            hoverinfo: 'skip',
+            customdata: structs.map((s) => s.id),
+            showlegend: true,
+          });
+        }
       }
     }
     return result;
@@ -180,6 +224,7 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
       },
       text: unstableWithCoords.map(
         (s) =>
+          (s.groupName || groupMap ? `Group: ${s.groupName ?? groupMap?.get(s.id) ?? '—'}<br>` : '') +
           `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
           `ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
           `Fitness: ${s.fitness.toFixed(4)} eV/atom<br>` +
@@ -200,6 +245,16 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
       line: { color: getPlotlyTheme(theme).structureLineColor, width: 0.8 },
       hoverinfo: 'skip' as const,
     },
+    // Old tie-lines (dashed) — shown when user-added expanded the hull
+    ...(oldHullEdges && oldHullEdges.length > 0 ? [{
+      x: oldHullEdges.flatMap((e) => [e.p1[0], e.p2[0], null]),
+      y: oldHullEdges.flatMap((e) => [e.p1[1], e.p2[1], null]),
+      mode: 'lines' as const,
+      type: 'scatter' as const,
+      name: 'Previous Tie Lines',
+      line: { color: getPlotlyTheme(theme).structureLineColor, width: 0.8, dash: 'dash' as const },
+      hoverinfo: 'skip' as const,
+    }] : []),
 
     // Stable points
     {
@@ -224,6 +279,7 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
       hovertext: uniqueStableFull.map((p) => {
         const s = p.full;
         return (
+          (s?.groupName || groupMap ? `Group: ${s?.groupName ?? groupMap?.get(p.id) ?? '—'}<br>` : '') +
           `EA${p.id}: ${formulaToHtml(s?.formula ?? '')}<br>` +
           `ΔH: ${p.enthalpy.toFixed(4)} eV/atom<br>` +
           `Fitness: 0.0000 eV/atom<br>` +
@@ -233,6 +289,32 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
       }),
       hoverinfo: 'text' as const,
       customdata: uniqueStableFull.map((p) => p.id),
+    },
+    // User-added structures — white circles with black border
+    {
+      x: userAddedWithCoords.map((u) => u.cartX),
+      y: userAddedWithCoords.map((u) => u.cartY),
+      mode: 'markers' as const,
+      type: 'scatter' as const,
+      name: 'Manual',
+      marker: {
+        color: '#ffffff',
+        size: 10,
+        symbol: 'circle' as const,
+        line: { width: 1.5, color: '#1e293b' },
+      },
+      text: userAddedWithCoords.map((u) => {
+        const s = u.s;
+        return (
+          `[Manual]<br>` +
+          (s.groupName ? `Group: ${s.groupName}<br>` : '') +
+          `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
+          `ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
+          `Fitness: ${s.fitness.toFixed(4)} eV/atom`
+        );
+      }),
+      hoverinfo: 'text' as const,
+      customdata: userAddedWithCoords.map((u) => u.id),
     },
     ...overlayTraces,
   ];
@@ -280,26 +362,31 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
     const elA = elements[0] || 'A';
     const elB = elements[1] || 'B';
     const elC = elements[2] || 'C';
-    const headers = ['EA_ID', 'Formula', `x_${elA}`, `x_${elB}`, `x_${elC}`, 'Enthalpy(eV/atom)', 'Fitness(eV/atom)', 'SpaceGroup', 'Generation', 'Origin', 'Type'];
+    const hasGroup = groupMap != null || structures.some((s) => s.groupName != null);
+    const groupCol = hasGroup ? ['Group'] : [];
+    const headers = [...groupCol, 'EA_ID', 'Formula', `x_${elA}`, `x_${elB}`, `x_${elC}`, 'Enthalpy(eV/atom)', 'Fitness(eV/atom)', 'SpaceGroup', 'Generation', 'Origin', 'Type'];
     const stableRows = uniqueStableFull.map((p) => {
       const total = p.composition.reduce((a: number, b: number) => a + b, 0) || 1;
+      const s = p.full;
       return {
+        ...(hasGroup ? { 'Group': s?.groupName ?? '' } : {}),
         'EA_ID': p.id,
-        'Formula': p.full?.formula ?? '',
+        'Formula': s?.formula ?? '',
         [`x_${elA}`]: (p.composition[0] / total).toFixed(6),
         [`x_${elB}`]: (p.composition[1] / total).toFixed(6),
         [`x_${elC}`]: (p.composition[2] / total).toFixed(6),
         'Enthalpy(eV/atom)': p.enthalpy,
         'Fitness(eV/atom)': 0,
-        'SpaceGroup': p.full?.spaceGroup ?? '',
-        'Generation': p.full?.generation ?? '',
-        'Origin': p.full?.origin ?? '',
+        'SpaceGroup': s?.spaceGroup ?? '',
+        'Generation': s?.generation ?? '',
+        'Origin': s?.origin ?? '',
         'Type': 'Stable',
       };
     });
     const unstableRows = unstableWithCoords.map((s) => {
       const total = s.composition.reduce((a: number, b: number) => a + b, 0) || 1;
       return {
+        ...(hasGroup ? { 'Group': s.groupName ?? '' } : {}),
         'EA_ID': s.id,
         'Formula': s.formula,
         [`x_${elA}`]: (s.composition[0] / total).toFixed(6),
@@ -336,7 +423,7 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
         <span style={{ fontSize: 13, fontWeight: 600, minWidth: 70 }}>
           ≤ {fitnessMax.toFixed(3)} eV
         </span>
-        <ExportDataButton onClick={handleExport} style={{ marginLeft: 'auto' }} />
+        {showExport && <ExportDataButton onClick={handleExport} style={{ marginLeft: 'auto' }} />}
       </div>
       <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
         <Plot
@@ -346,18 +433,26 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
           config={{ responsive: true, displayModeBar: true }}
           style={{ width: '100%', maxWidth: 700, height: 550 }}
           onClick={(event: PlotMouseEvent) => {
-            const point = event.points?.[0];
-            if (point?.customdata) {
-              openViewer(Number(point.customdata));
+            if (clickTimerRef.current) {
+              clearTimeout(clickTimerRef.current);
+              clickTimerRef.current = null;
+              return;
             }
+            clickTimerRef.current = setTimeout(() => {
+              clickTimerRef.current = null;
+              const point = event.points?.[0];
+              if (point?.customdata) {
+                openViewer(Number(point.customdata));
+              }
+            }, 300);
           }}
         />
       </div>
 
-      <MarkPanel />
+      <MarkPanel showTags={showTags} />
 
       {/* Stable phases list */}
-      <div className="card" style={{ marginTop: 16 }}>
+      {showFooter && <div className="card" style={{ marginTop: 16 }}>
         <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--color-text-secondary)' }}>
           {t('hull.stablePhases')} ({uniqueStableFull.length})
         </h3>
@@ -377,7 +472,7 @@ export function TernaryHullPlot({ structures, systemInfo }: Props) {
             );
           })}
         </div>
-      </div>
+      </div>}
     </>
   );
 }

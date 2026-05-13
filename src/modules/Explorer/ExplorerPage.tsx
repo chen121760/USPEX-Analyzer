@@ -633,7 +633,7 @@ export function ExplorerPage() {
   return (
     <div className="fade-in">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{t('explorer.title')}</h2>
+        <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{t('explorer.title')}</h1>
         <ExportDataButton onClick={handleExportData} />
       </div>
 

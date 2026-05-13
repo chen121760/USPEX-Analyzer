@@ -7,7 +7,7 @@ type PlotlyData = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyLayout = any;
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import type { Structure, SystemInfo } from '@/types/structure';
@@ -19,32 +19,23 @@ import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
 import { PLOTLY_FONT, getPlotlyTheme } from '@/lib/constants';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadMultiSectionCsv } from '@/lib/exportCsv';
-
-/**
- * Compute 2D lower convex hull (Andrew's monotone chain).
- */
-function computeLowerHull2D(points: { x: number; y: number }[]): { x: number; y: number }[] {
-  if (points.length < 2) return points;
-  const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
-  const hull: { x: number; y: number }[] = [];
-  for (const p of sorted) {
-    while (hull.length >= 2) {
-      const a = hull[hull.length - 2];
-      const b = hull[hull.length - 1];
-      if ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x) <= 0) {
-        hull.pop();
-      } else {
-        break;
-      }
-    }
-    hull.push(p);
-  }
-  return hull;
-}
+import { computeLowerHull2D } from '@/lib/convexHullReconstruction';
 
 interface Props {
   structures: Structure[];
   systemInfo: SystemInfo;
+  /** Structure ID → group name (for workshop multi-group display) */
+  groupMap?: Map<number, string>;
+  /** Show the export button (default true, set false in HullWorkshop) */
+  showExport?: boolean;
+  /** Show tag buttons in MarkPanel (default true) */
+  showTags?: boolean;
+  /** Show stable-phases footer (default true) */
+  showFooter?: boolean;
+  /** Old hull line (dashed) — shown when user-added expanded the hull */
+  oldHullLine?: { x: number; y: number }[];
+  /** Whether user-added structures expanded the hull */
+  hullExpanded?: boolean;
 }
 
 function makeStarTrace(
@@ -62,7 +53,7 @@ function makeStarTrace(
   };
 }
 
-export function BinaryHullPlot({ structures, systemInfo }: Props) {
+export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = true, showTags = true, showFooter = true, oldHullLine, hullExpanded }: Props) {
   const { t } = useTranslation();
   const openViewer = useUIStore((s) => s.openViewer);
   const markActiveTags  = useUIStore((s) => s.markActiveTags);
@@ -78,20 +69,25 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
   const [fitnessMax, setFitnessMax] = useState(() => maxFitness);
 
   const plotData = useMemo(() => {
-    const stable = structures.filter((s) => s.fitness === 0 && s.enthalpyTotal <= 900);
-    const unstable = structures.filter((s) => s.fitness > 0 && s.fitness <= fitnessMax && s.enthalpyTotal <= 900);
-    const hullPoints = stable.map((s) => ({ x: s.hullX[0] ?? 0, y: s.hullY }));
+    const userAdded = structures.filter((s) => s.isUserAdded && s.enthalpyTotal <= 900);
+    const stable = structures.filter((s) => !s.isUserAdded && s.fitness === 0 && s.enthalpyTotal <= 900);
+    const unstable = structures.filter((s) => !s.isUserAdded && s.fitness > 0 && s.fitness <= fitnessMax && s.enthalpyTotal <= 900);
+    // Hull computation: include ALL fitness=0 structures, including user-added ones
+    // that expanded the hull.  Display layers stay separate.
+    const hullPoints = structures
+      .filter((s) => s.fitness === 0 && s.enthalpyTotal <= 900)
+      .map((s) => ({ x: s.hullX[0] ?? 0, y: s.hullY }));
     const hullLine = computeLowerHull2D(hullPoints);
-    return { stable, unstable, hullLine };
+    return { stable, unstable, userAdded, hullLine };
   }, [structures, fitnessMax]);
 
-  const { stable, unstable, hullLine } = plotData;
+  const { stable, unstable, userAdded, hullLine } = plotData;
   const elements = systemInfo.elements;
 
   // --- Mark overlay traces ---
   const overlayTraces = useMemo(() => {
     const result: PlotlyData[] = [];
-    const allVisible = [...stable, ...unstable];
+    const allVisible = [...stable, ...unstable, ...userAdded];
 
     for (const tagId of markActiveTags) {
       const tagDef = allTags.find((t) => t.id === tagId);
@@ -111,25 +107,42 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
     if (eaIds.size > 0) {
       const eaMarked = allVisible.filter((s) => eaIds.has(s.id));
       if (eaMarked.length > 0) {
-        result.push(makeStarTrace(
-          eaMarked.map((s) => s.hullX[0] ?? 0),
-          eaMarked.map((s) => s.hullY),
-          '#FFD700',
-          t('mark.eaSearchName'),
-          eaMarked.map((s) => s.id),
-        ));
+        const byGroup = new Map<string, typeof eaMarked>();
+        for (const s of eaMarked) {
+          const key = s.groupName || '';
+          if (!byGroup.has(key)) byGroup.set(key, []);
+          byGroup.get(key)!.push(s);
+        }
+        for (const [gn, structs] of byGroup) {
+          const color = structs[0].groupColor ?? '#FFD700';
+          const name = gn
+            ? `★ ${t('mark.eaSearchName')} · ${gn}`
+            : `★ ${t('mark.eaSearchName')}`;
+          result.push(makeStarTrace(
+            structs.map((s) => s.hullX[0] ?? 0),
+            structs.map((s) => s.hullY),
+            color,
+            name,
+            structs.map((s) => s.id),
+          ));
+        }
       }
     }
     return result;
   }, [stable, unstable, markActiveTags, markEaInput, allTags, t]);
 
   function handleExport() {
-    const pointHeaders = ['EA_ID', 'Formula', `x(${elements[1] || 'B'})`, 'Formation_Energy(eV/atom)', 'Fitness(eV/atom)', 'SpaceGroup', 'Generation', 'Origin', 'Type'];
+    const hasGroup = groupMap != null || structures.some((s) => s.groupName != null);
+    const groupCol = hasGroup ? ['Group'] : [];
+    const pointHeaders = [...groupCol, 'EA_ID', 'Formula', `x(${elements[1] || 'B'})`, 'Formation_Energy(eV/atom)', 'Enthalpy(eV/atom)', 'Fitness(eV/atom)', 'SpaceGroup', 'Generation', 'Origin', 'Type'];
+    const groupField = (s: Structure) => hasGroup ? { 'Group': s.groupName ?? '' } : {};
     const stableRows = stable.map((s) => ({
+      ...groupField(s),
       'EA_ID': s.id,
       'Formula': s.formula,
       [`x(${elements[1] || 'B'})`]: s.hullX[0] ?? 0,
       'Formation_Energy(eV/atom)': s.hullY,
+      'Enthalpy(eV/atom)': s.enthalpy,
       'Fitness(eV/atom)': 0,
       'SpaceGroup': s.spaceGroup,
       'Generation': s.generation,
@@ -137,10 +150,12 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
       'Type': 'Stable',
     }));
     const unstableRows = unstable.map((s) => ({
+      ...groupField(s),
       'EA_ID': s.id,
       'Formula': s.formula,
       [`x(${elements[1] || 'B'})`]: s.hullX[0] ?? 0,
       'Formation_Energy(eV/atom)': s.hullY,
+      'Enthalpy(eV/atom)': s.enthalpy,
       'Fitness(eV/atom)': s.fitness,
       'SpaceGroup': s.spaceGroup,
       'Generation': s.generation,
@@ -175,6 +190,7 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
       },
       text: unstable.map(
         (s) =>
+          (s.groupName || groupMap ? `Group: ${s.groupName ?? groupMap?.get(s.id) ?? '—'}<br>` : '') +
           `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
           `ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
           `Fitness: ${s.fitness.toFixed(4)} eV/atom<br>` +
@@ -193,6 +209,16 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
       line: { color: getPlotlyTheme(theme).structureLineColor, width: 2 },
       hoverinfo: 'skip' as const,
     },
+    // Old hull (dashed) — shown when user-added expanded the hull
+    ...(oldHullLine && oldHullLine.length >= 2 ? [{
+      x: oldHullLine.map((p) => p.x),
+      y: oldHullLine.map((p) => p.y),
+      mode: 'lines' as const,
+      type: 'scatter' as const,
+      name: 'Previous Hull',
+      line: { color: getPlotlyTheme(theme).structureLineColor, width: 1.5, dash: 'dash' as const },
+      hoverinfo: 'skip' as const,
+    }] : []),
     {
       x: stable.map((s) => s.hullX[0] ?? 0),
       y: stable.map((s) => s.hullY),
@@ -205,6 +231,7 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
       textfont: { size: 10 },
       hovertext: stable.map(
         (s) =>
+          (s.groupName || groupMap ? `Group: ${s.groupName ?? groupMap?.get(s.id) ?? '—'}<br>` : '') +
           `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
           `ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
           `Fitness: ${s.fitness.toFixed(4)} eV/atom<br>` +
@@ -213,6 +240,30 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
       ),
       customdata: stable.map((s) => s.id),
       hoverinfo: 'text' as const,
+    },
+    // User-added structures — white circles with black border
+    {
+      x: userAdded.map((s) => s.hullX[0] ?? 0),
+      y: userAdded.map((s) => s.hullY),
+      mode: 'markers' as const,
+      type: 'scatter' as const,
+      name: 'Manual',
+      marker: {
+        color: '#ffffff',
+        size: 10,
+        symbol: 'circle' as const,
+        line: { width: 1.5, color: '#1e293b' },
+      },
+      text: userAdded.map(
+        (s) =>
+          `[Manual]<br>` +
+          (s.groupName ? `Group: ${s.groupName}<br>` : '') +
+          `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
+          `ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
+          `Fitness: ${s.fitness.toFixed(4)} eV/atom`,
+      ),
+      hoverinfo: 'text' as const,
+      customdata: userAdded.map((s) => s.id),
     },
     ...overlayTraces,
   ];
@@ -227,6 +278,10 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
   const titleFont = { size: 13, color: getPlotlyTheme(theme).axisTitleColor };
   const pt = getPlotlyTheme(theme);
 
+  // Persist viewport across re-renders (zoom/pan)
+  const viewRef = useRef<Partial<PlotlyLayout>>({});
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const layout: PlotlyLayout = {
     font: PLOTLY_FONT,
     title: { text: `${elements.join('-')} ${t('hull.title')}`, font: { size: 15, color: pt.titleColor } },
@@ -238,6 +293,7 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
     margin: { t: 50, r: 80, l: 60, b: 60 },
     plot_bgcolor: pt.plotBg,
     paper_bgcolor: pt.paperBg,
+    ...viewRef.current,
   };
 
   return (
@@ -259,7 +315,7 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
         <span style={{ fontSize: 13, fontWeight: 600, minWidth: 70 }}>
           ≤ {fitnessMax.toFixed(3)} eV
         </span>
-        <ExportDataButton onClick={handleExport} style={{ marginLeft: 'auto' }} />
+        {showExport && <ExportDataButton onClick={handleExport} style={{ marginLeft: 'auto' }} />}
       </div>
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <Plot
@@ -268,18 +324,36 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
           config={{ responsive: true, displayModeBar: true }}
           style={{ width: '100%', height: 550 }}
           onClick={(event: PlotMouseEvent) => {
-            const point = event.points?.[0];
-            if (point?.customdata) {
-              openViewer(Number(point.customdata));
+            if (clickTimerRef.current) {
+              clearTimeout(clickTimerRef.current);
+              clickTimerRef.current = null;
+              return;
             }
+            clickTimerRef.current = setTimeout(() => {
+              clickTimerRef.current = null;
+              const point = event.points?.[0];
+              if (point?.customdata) {
+                openViewer(Number(point.customdata));
+              }
+            }, 300);
+          }}
+          onRelayout={(e) => {
+            const v: Record<string, unknown> = {};
+            if (e['xaxis.range[0]'] !== undefined) {
+              v.xaxis = { range: [e['xaxis.range[0]'], e['xaxis.range[1]']] };
+            }
+            if (e['yaxis.range[0]'] !== undefined) {
+              v.yaxis = { range: [e['yaxis.range[0]'], e['yaxis.range[1]']] };
+            }
+            if (Object.keys(v).length > 0) viewRef.current = v;
           }}
         />
       </div>
 
-      <MarkPanel />
+      <MarkPanel showTags={showTags} />
 
       {/* Stable phases list */}
-      <div className="card" style={{ marginTop: 16 }}>
+      {showFooter && <div className="card" style={{ marginTop: 16 }}>
         <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--color-text-secondary)' }}>
           {t('hull.stablePhases')} ({stable.length})
         </h3>
@@ -294,7 +368,7 @@ export function BinaryHullPlot({ structures, systemInfo }: Props) {
             </span>
           ))}
         </div>
-      </div>
+      </div>}
     </>
   );
 }

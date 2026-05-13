@@ -273,7 +273,7 @@ export function FilterPage() {
 
   return (
     <div className="fade-in">
-      <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>{t('filter.title')}</h2>
+      <h1 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>{t('filter.title')}</h1>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         {/* ── 左：筛选条件 ── */}

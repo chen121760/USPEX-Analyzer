@@ -179,7 +179,7 @@ export function DashboardPage() {
   return (
     <div className="fade-in">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{t('dashboard.title')}</h2>
+        <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{t('dashboard.title')}</h1>
         <button className="btn btn-ghost btn-sm" onClick={toggleDashboard}>
           {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
           {collapsed ? t('dashboard.expand') : t('dashboard.collapse')}

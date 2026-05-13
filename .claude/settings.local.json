@@ -7,7 +7,8 @@
       "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
       "Bash(npm install *)",
       "Bash(npx vite *)",
-      "Bash(npx eslint *)"
+      "Bash(npx eslint *)",
+      "Bash(python3:*)"
     ]
   }
 }

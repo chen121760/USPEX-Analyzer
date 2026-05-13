@@ -719,7 +719,7 @@ export function BetaExplorerPage() {
   return (
     <div className="fade-in">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{t('beta.title')}</h2>
+        <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{t('beta.title')}</h1>
         <div style={{ display: 'flex', gap: 8 }}>
           <ExportDataButton onClick={handleExportHV} label="Export HV Data" />
           <ExportDataButton onClick={handleExportScatter} label="Export Scatter" />
