@@ -2,6 +2,15 @@
 
 ## 版本更新记录
 
+### V1.3.2
+
+凸包工作台 — 结构查看与标记修复
+
+- 修复 Hull Workshop 图表点击点查看 JSmol 时匹配到当前项目结构而非组内结构的 bug：图表组件新增 `onStructureClick` 回调，点击时传递完整 `Structure` 对象，`StructureViewerModal` 优先使用直接传入的结构数据
+- 修复多组数据中出现相同 EA ID 时点击查找错误的 bug：合并时为每个结构分配唯一 `_mergeSeq`，图表 `customdata` 与点击查找均基于该字段区分
+- 修复 Mark on Chart by EA ID 在 Hull Workshop 中不显示的 bug：将五角星覆盖轨迹拆分为 `tagOverlayTraces`（受 `showTags` 控制）和 `eaOverlayTraces`（始终生效）
+- 修复 `@import` 顺序导致的 PostCSS 警告：Google Fonts 改为 `index.html` 中 `<link>` 加载
+
 ### V1.3.1
 
 凸包工作台 — 修复与优化

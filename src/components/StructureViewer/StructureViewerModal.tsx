@@ -42,6 +42,7 @@ export function StructureViewerModal() {
   const { t } = useTranslation();
   const viewerStructureId = useUIStore((s) => s.viewerStructureId);
   const closeViewer = useUIStore((s) => s.closeViewer);
+  const viewerWorkshopStructure = useUIStore((s) => s.viewerWorkshopStructure);
   const structures = useProjectStore((s) => s.structures);
   const tags = useProjectStore((s) => s.tags);
   const updateStructureTags = useProjectStore((s) => s.updateStructureTags);
@@ -75,7 +76,10 @@ export function StructureViewerModal() {
   // Don't render if no structure selected
   if (viewerStructureId === null) return null;
 
-  const structure = structures.find((s) => s.id === viewerStructureId);
+  // Hull Workshop: use the structure object passed directly (bypasses ID lookup)
+  const structure = viewerWorkshopStructure ?? structures.find((s) => s.id === viewerStructureId);
+  const isWorkshop = viewerWorkshopStructure !== null;
+
   if (!structure || !structure.poscarData) {
     return (
       <ModalShell onClose={closeViewer} title={`EA${viewerStructureId}`}>
@@ -249,8 +253,8 @@ export function StructureViewerModal() {
             ))}
           </div>
 
-          {/* 标签 Tags */}
-          <Section title="标签 Tags">
+          {/* 标签 Tags — only for project structures (workshop structures skip this) */}
+          {!isWorkshop && <Section title="标签 Tags">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {tags.map((tag) => {
                 const active = structure.tags.includes(tag.id);
@@ -276,7 +280,7 @@ export function StructureViewerModal() {
                 );
               })}
             </div>
-          </Section>
+          </Section>}
           {/* 截图 */}
           <Section title="导出 Export">
             <button

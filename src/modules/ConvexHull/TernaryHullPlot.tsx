@@ -47,9 +47,11 @@ interface Props {
   oldHullEdges?: { p1: [number, number]; p2: [number, number] }[];
   /** Whether user-added structures expanded the hull */
   hullExpanded?: boolean;
+  /** Called when a structure point is clicked (HullWorkshop: pass full structure, not just ID) */
+  onStructureClick?: (structure: Structure) => void;
 }
 
-export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport = true, showTags = true, showFooter = true, oldHullEdges }: Props) {
+export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport = true, showTags = true, showFooter = true, oldHullEdges, onStructureClick }: Props) {
   const { t } = useTranslation();
   const openViewer = useUIStore((s) => s.openViewer);
   const markActiveTags  = useUIStore((s) => s.markActiveTags);
@@ -132,8 +134,8 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
     return map;
   }, [unstableWithCoords, uniqueStableFull, userAddedWithCoords]);
 
-  // --- Mark overlay traces ---
-  const overlayTraces = useMemo(() => {
+  // --- Mark overlay traces: tag-based (controlled by showTags) ---
+  const tagOverlayTraces = useMemo(() => {
     const result: PlotlyData[] = [];
 
     for (const tagId of markActiveTags) {
@@ -152,6 +154,12 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
         showlegend: true,
       });
     }
+    return result;
+  }, [structures, coordMap, markActiveTags, allTags, t]);
+
+  // --- Mark overlay traces: EA-ID search (always active) ---
+  const eaOverlayTraces = useMemo(() => {
+    const result: PlotlyData[] = [];
 
     const eaIds = parseEaIds(markEaInput);
     if (eaIds.size > 0) {
@@ -182,7 +190,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
       }
     }
     return result;
-  }, [structures, coordMap, markActiveTags, markEaInput, allTags, t]);
+  }, [structures, coordMap, markEaInput, t]);
 
   // Triangle vertices
   const triVerts = [[0, 0], [0.5, Math.sqrt(3) / 2], [1, 0], [0, 0]];
@@ -232,7 +240,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
           `Origin: ${s.origin}`,
       ),
       hoverinfo: 'text' as const,
-      customdata: unstableWithCoords.map((s) => s.id),
+      customdata: unstableWithCoords.map((s: any) => s._mergeSeq ?? s.id),
     },
 
     // Tie-lines (concatenated with null separators)
@@ -288,7 +296,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
         );
       }),
       hoverinfo: 'text' as const,
-      customdata: uniqueStableFull.map((p) => p.id),
+      customdata: uniqueStableFull.map((p: any) => p.full?._mergeSeq ?? p.id),
     },
     // User-added structures — white circles with black border
     {
@@ -314,9 +322,10 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
         );
       }),
       hoverinfo: 'text' as const,
-      customdata: userAddedWithCoords.map((u) => u.id),
+      customdata: userAddedWithCoords.map((u: any) => u.s._mergeSeq ?? u.id),
     },
-    ...(showTags ? overlayTraces : []),
+    ...(showTags ? tagOverlayTraces : []),
+    ...eaOverlayTraces,
   ];
 
   // Element labels at triangle corners
@@ -441,8 +450,14 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
             clickTimerRef.current = setTimeout(() => {
               clickTimerRef.current = null;
               const point = event.points?.[0];
-              if (point?.customdata) {
-                openViewer(Number(point.customdata));
+              if (point?.customdata !== undefined) {
+                if (onStructureClick) {
+                  const cdata = point.customdata;
+                  const structure = structures.find((s: any) => (s._mergeSeq ?? s.id) == cdata);
+                  if (structure) onStructureClick(structure);
+                } else {
+                  openViewer(Number(point.customdata));
+                }
               }
             }, 300);
           }}

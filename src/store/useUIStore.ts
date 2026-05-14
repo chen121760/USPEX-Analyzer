@@ -18,7 +18,7 @@ import { create } from 'zustand';
 // persist 是 Zustand 提供的"持久化中间件"
 // 它会自动把 store 的数据存到 localStorage，并在页面加载时恢复
 import { persist } from 'zustand/middleware';
-import type { FilterCondition, UnifiedCondition, TableFilterCondition, UnifiedConditionGroup, TableFilterGroup, CustomNamePart } from '@/types/structure';
+import type { Structure, FilterCondition, UnifiedCondition, TableFilterCondition, UnifiedConditionGroup, TableFilterGroup, CustomNamePart } from '@/types/structure';
 
 // -------------------------------------------------------
 // 类型定义：描述整个 UI store 里有哪些数据和操作
@@ -33,6 +33,10 @@ interface UIState {
   viewerStructureId: number | null;
   openViewer: (id: number) => void;
   closeViewer: () => void;
+
+  // Hull Workshop 点击结构时，直接传递完整结构对象（绕过 ID 查找）
+  viewerWorkshopStructure: Structure | null;
+  openWorkshopViewer: (structure: Structure) => void;
 
   // --- 结构对比模式（最多选 4 个） ---
   compareIds: number[];
@@ -204,7 +208,12 @@ export const useUIStore = create<UIState>()(
       // 但放在这里统一管理更方便
       viewerStructureId: null,
       openViewer: (id) => set({ viewerStructureId: id }),
-      closeViewer: () => set({ viewerStructureId: null }),
+      closeViewer: () => set({ viewerStructureId: null, viewerWorkshopStructure: null }),
+
+      // Hull Workshop viewer — 直接传入结构对象，不需要 ID 查找
+      viewerWorkshopStructure: null,
+      openWorkshopViewer: (structure) =>
+        set({ viewerStructureId: structure.id, viewerWorkshopStructure: structure }),
 
       // --- 对比模式 ---
       compareIds: [],
