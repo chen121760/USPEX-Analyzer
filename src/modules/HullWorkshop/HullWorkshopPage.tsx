@@ -11,6 +11,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useWorkshopStore } from '@/store/useWorkshopStore';
+import { useUIStore } from '@/store/useUIStore';
 import type { Structure, SystemInfo } from '@/types/structure';
 import { BinaryHullPlot } from '@/modules/ConvexHull/BinaryHullPlot';
 import { TernaryHullPlot } from '@/modules/ConvexHull/TernaryHullPlot';
@@ -73,10 +74,11 @@ export function HullWorkshopPage() {
 
   /* ── Derived: merged structures with groupName attached ── */
   const mergedStructuresWithGroup = useMemo(() => {
-    const result: (Structure & { groupName: string })[] = [];
+    const result: (Structure & { groupName: string; _mergeSeq: number })[] = [];
+    let seq = 0;
     for (const g of visibleGroups) {
       for (const s of g.structures) {
-        result.push({ ...s, groupName: g.name, groupColor: g.color });
+        result.push({ ...s as any, groupName: g.name, groupColor: g.color, _mergeSeq: seq++ });
       }
     }
     return result;
@@ -419,6 +421,16 @@ export function HullWorkshopPage() {
     [groups, addGroup, mergedSystemInfo],
   );
 
+  /* ── Action: structure click → open JSmol viewer with correct workshop structure ── */
+  const openWorkshopViewer = useUIStore((s) => s.openWorkshopViewer);
+
+  const handleStructureClick = useCallback(
+    (structure: Structure) => {
+      openWorkshopViewer(structure);
+    },
+    [openWorkshopViewer],
+  );
+
   /* ── Chart rendering ── */
   const renderChart = () => {
     if (!hullResult || !mergedSystemInfo) return null;
@@ -433,6 +445,7 @@ export function HullWorkshopPage() {
           systemInfo={mergedSystemInfo}
           showExport={false}
           showTags={false}
+          onStructureClick={handleStructureClick}
         />
       );
     }
@@ -445,6 +458,7 @@ export function HullWorkshopPage() {
           showTags={false}
           showFooter={false}
           oldHullEdges={hullResult.oldHullEdges}
+          onStructureClick={handleStructureClick}
         />
       );
     }
@@ -456,6 +470,7 @@ export function HullWorkshopPage() {
         showTags={false}
         showFooter={false}
         oldHullLine={hullResult.oldHullLine}
+        onStructureClick={handleStructureClick}
       />
     );
   };

@@ -47,9 +47,11 @@ interface Props {
   showExport?: boolean;
   /** Show tag buttons in MarkPanel (default true) */
   showTags?: boolean;
+  /** Called when a structure point is clicked (HullWorkshop: pass full structure, not just ID) */
+  onStructureClick?: (structure: Structure) => void;
 }
 
-export function EnergyRankingChart({ structures, systemInfo, groupMap, showExport = true, showTags = true }: Props) {
+export function EnergyRankingChart({ structures, systemInfo, groupMap, showExport = true, showTags = true, onStructureClick }: Props) {
   const { t } = useTranslation();
   const openViewer      = useUIStore((s) => s.openViewer);
   const markActiveTags  = useUIStore((s) => s.markActiveTags);
@@ -85,7 +87,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
         `Origin: ${s.origin}<br>` +
         `Gen: ${s.generation}`,
       ),
-      ids: top.map((s) => s.id),
+      ids: top.map((s: any) => s._mergeSeq ?? s.id),
     };
   }, [allSorted, displayCount]);
 
@@ -144,12 +146,12 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
       `Enthalpy: ${s.enthalpy.toFixed(4)} eV/atom`
     ),
     hoverinfo: 'text' as const,
-    customdata: userAdded.map((s) => s.id),
+    customdata: userAdded.map((s: any) => s._mergeSeq ?? s.id),
     showlegend: true,
   };
 
-  // --- Mark overlay traces ---
-  const overlayTraces = useMemo(() => {
+  // --- Mark overlay traces: tag-based (controlled by showTags) ---
+  const tagOverlayTraces = useMemo(() => {
     const result: PlotlyData[] = [];
     const visible = allSorted.slice(0, displayCount);
 
@@ -169,6 +171,13 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
         showlegend: true,
       });
     }
+    return result;
+  }, [allSorted, displayCount, rankMap, markActiveTags, allTags, t]);
+
+  // --- Mark overlay traces: EA-ID search (always active) ---
+  const eaOverlayTraces = useMemo(() => {
+    const result: PlotlyData[] = [];
+    const visible = allSorted.slice(0, displayCount);
 
     const eaIds = parseEaIds(markEaInput);
     if (eaIds.size > 0) {
@@ -199,7 +208,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
       }
     }
     return result;
-  }, [allSorted, displayCount, rankMap, markActiveTags, markEaInput, allTags, t]);
+  }, [allSorted, displayCount, rankMap, markEaInput, t]);
 
 
   const pt = getPlotlyTheme(theme);
@@ -338,7 +347,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <Plot
-          data={[trace, userAddedTrace, ...(showTags ? overlayTraces : [])]}
+          data={[trace, userAddedTrace, ...(showTags ? tagOverlayTraces : []), ...eaOverlayTraces]}
           layout={layout}
           config={{ responsive: true, displayModeBar: true }}
           style={{ width: '100%', height: layout.height }}
@@ -351,8 +360,14 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
             clickTimerRef.current = setTimeout(() => {
               clickTimerRef.current = null;
               const point = event.points?.[0];
-              if (point?.customdata) {
-                openViewer(Number(point.customdata));
+              if (point?.customdata !== undefined) {
+                if (onStructureClick) {
+                  const cdata = point.customdata;
+                  const structure = structures.find((s: any) => (s._mergeSeq ?? s.id) == cdata);
+                  if (structure) onStructureClick(structure);
+                } else {
+                  openViewer(Number(point.customdata));
+                }
               }
             }, 300);
           }}

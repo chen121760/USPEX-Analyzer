@@ -36,6 +36,8 @@ interface Props {
   oldHullLine?: { x: number; y: number }[];
   /** Whether user-added structures expanded the hull */
   hullExpanded?: boolean;
+  /** Called when a structure point is clicked (HullWorkshop: pass full structure, not just ID) */
+  onStructureClick?: (structure: Structure) => void;
 }
 
 function makeStarTrace(
@@ -53,7 +55,7 @@ function makeStarTrace(
   };
 }
 
-export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = true, showTags = true, showFooter = true, oldHullLine, hullExpanded }: Props) {
+export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = true, showTags = true, showFooter = true, oldHullLine, hullExpanded, onStructureClick }: Props) {
   const { t } = useTranslation();
   const openViewer = useUIStore((s) => s.openViewer);
   const markActiveTags  = useUIStore((s) => s.markActiveTags);
@@ -84,8 +86,8 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
   const { stable, unstable, userAdded, hullLine } = plotData;
   const elements = systemInfo.elements;
 
-  // --- Mark overlay traces ---
-  const overlayTraces = useMemo(() => {
+  // --- Mark overlay traces: tag-based (controlled by showTags) ---
+  const tagOverlayTraces = useMemo(() => {
     const result: PlotlyData[] = [];
     const allVisible = [...stable, ...unstable, ...userAdded];
 
@@ -102,6 +104,13 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
         tagged.map((s) => s.id),
       ));
     }
+    return result;
+  }, [stable, unstable, markActiveTags, allTags, t]);
+
+  // --- Mark overlay traces: EA-ID search (always active) ---
+  const eaOverlayTraces = useMemo(() => {
+    const result: PlotlyData[] = [];
+    const allVisible = [...stable, ...unstable, ...userAdded];
 
     const eaIds = parseEaIds(markEaInput);
     if (eaIds.size > 0) {
@@ -129,7 +138,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
       }
     }
     return result;
-  }, [stable, unstable, markActiveTags, markEaInput, allTags, t]);
+  }, [stable, unstable, markEaInput, t]);
 
   function handleExport() {
     const hasGroup = groupMap != null || structures.some((s) => s.groupName != null);
@@ -197,7 +206,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
           `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>` +
           `Origin: ${s.origin}`,
       ),
-      customdata: unstable.map((s) => s.id),
+      customdata: unstable.map((s: any) => s._mergeSeq ?? s.id),
       hoverinfo: 'text' as const,
     },
     {
@@ -238,7 +247,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
           `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>` +
           `Origin: ${s.origin}`,
       ),
-      customdata: stable.map((s) => s.id),
+      customdata: stable.map((s: any) => s._mergeSeq ?? s.id),
       hoverinfo: 'text' as const,
     },
     // User-added structures — white circles with black border
@@ -263,9 +272,10 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
           `Fitness: ${s.fitness.toFixed(4)} eV/atom`,
       ),
       hoverinfo: 'text' as const,
-      customdata: userAdded.map((s) => s.id),
+      customdata: userAdded.map((s: any) => s._mergeSeq ?? s.id),
     },
-    ...(showTags ? overlayTraces : []),
+    ...(showTags ? tagOverlayTraces : []),
+    ...eaOverlayTraces,
   ];
 
   const axisStyle = {
@@ -332,8 +342,14 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
             clickTimerRef.current = setTimeout(() => {
               clickTimerRef.current = null;
               const point = event.points?.[0];
-              if (point?.customdata) {
-                openViewer(Number(point.customdata));
+              if (point?.customdata !== undefined) {
+                if (onStructureClick) {
+                  const cdata = point.customdata;
+                  const structure = structures.find((s: any) => (s._mergeSeq ?? s.id) == cdata);
+                  if (structure) onStructureClick(structure);
+                } else {
+                  openViewer(Number(point.customdata));
+                }
               }
             }, 300);
           }}
