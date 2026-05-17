@@ -9,6 +9,7 @@
 - 重构 Individuals 解析器：改为基于表头列名映射（`headerUtils.ts`）按名取值，不再依赖硬编码列顺序。可灵活适配 3D bulk、2D、以及未来任意变体格式
 - 重构 extended_convex_hull 解析器：同样使用表头列名映射，按名提取 Enthalpies / Volumes / Thickness / Fitness / SYMM / X / Y 等字段
 - 新增二维结构搜索（2D structure search）文件支持：自动识别并正确解析 Individuals 中的 Thick (Å)、Surf_area (Å²)、Spec_surf_area (m²/g)、Fitness 列，以及 extended_convex_hull 中的 Thickness 列，存入 extraProps 动态列
+- 修复 Hull Workshop 三元相图中多组数据 EA ID 碰撞导致点击/悬停/导出结构错误的 bug：`TernaryHullInput` 新增 `_mergeSeq` 字段贯穿 hull 去重流程，`structureMap` 改用唯一序列号作为 key
 
 ### V1.3.2
 

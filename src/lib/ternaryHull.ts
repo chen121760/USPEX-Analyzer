@@ -20,6 +20,7 @@ export interface TernaryHullInput {
   enthalpy: number;
   cartX: number;
   cartY: number;
+  _mergeSeq?: number; // unique sequence number for workshop multi-group dedup
 }
 
 export interface TernaryHullEdge {

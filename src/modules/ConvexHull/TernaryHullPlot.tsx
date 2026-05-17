@@ -94,7 +94,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
       .filter((s) => s.fitness === 0)
       .map((s) => {
         const [cx, cy] = ternaryToCartesian(s.composition);
-        return { id: s.id, composition: s.composition, enthalpy: s.enthalpy, cartX: cx, cartY: cy };
+        return { id: s.id, composition: s.composition, enthalpy: s.enthalpy, cartX: cx, cartY: cy, _mergeSeq: (s as any)._mergeSeq };
       });
 
     // Compute tie-lines from all on-hull structures
@@ -103,15 +103,19 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
     // Display-only stable points (non-user-added, for diamond markers)
     const stableInputs: TernaryHullInput[] = stable.map((s) => {
       const [cx, cy] = ternaryToCartesian(s.composition);
-      return { id: s.id, composition: s.composition, enthalpy: s.enthalpy, cartX: cx, cartY: cy };
+      return { id: s.id, composition: s.composition, enthalpy: s.enthalpy, cartX: cx, cartY: cy, _mergeSeq: (s as any)._mergeSeq };
     });
 
     // Unique stable points for display — join back to full Structure for hover info
     const uniqueStable = uniqueHullPoints(stableInputs);
-    const structureMap = new Map(structures.map((s) => [s.id, s]));
+    const structureMap = new Map<number, Structure>();
+    for (const s of structures) {
+      const key = (s as any)._mergeSeq ?? s.id;
+      structureMap.set(key, s);
+    }
     const uniqueStableFull = uniqueStable.map((p) => ({
       ...p,
-      full: structureMap.get(p.id),
+      full: structureMap.get(p._mergeSeq ?? p.id),
     }));
 
     // User-added in cartesian
