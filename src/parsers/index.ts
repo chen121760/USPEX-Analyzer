@@ -206,6 +206,9 @@ export function parseAllFiles(
       symm: ind.symm,
       x: [0], // no meaningful composition coordinate
       y: 0,
+      thickness: ind.thickness / Math.max(1, totalAtoms(ind.composition)),
+      surfArea: ind.surfArea / Math.max(1, totalAtoms(ind.composition)),
+      extras: {},
     }));
   } else if (hullData.length === 0 && !individualsResult) {
     warnings.push('No extended_convex_hull or Individuals file found — very limited functionality');
@@ -264,7 +267,7 @@ export function parseAllFiles(
       poscar?.formula ??
       (elements.length > 0 ? buildFormula(hull.composition, elements) : `ID${hull.id}`);
 
-    // Build dynamic extraProps from second objective values
+    // Build dynamic extraProps from second objective values and 2D fields
     const extraProps: Record<string, number> = {};
     if (secondObjectiveName) {
       if (ind !== undefined) {
@@ -273,6 +276,22 @@ export function parseAllFiles(
       if (pareto !== undefined) {
         extraProps[`${secondObjectiveName}-Pareto_ranking`] = pareto.secondObjectiveValue;
       }
+    }
+    // 2D structure search fields — use header-detected column names,
+    // not value > 0, so that legitimate zero values are preserved.
+    const indMidCols = individualsResult?.midColNames;
+    const hasIndCol = (name: string) => indMidCols?.includes(name) ?? false;
+    // hull (per-atom) takes precedence
+    if (hull.thickness) extraProps['Thick'] = hull.thickness;
+    if (hull.surfArea) extraProps['Surf_area'] = hull.surfArea;
+    Object.assign(extraProps, hull.extras);
+    // Individuals fields (won't override same-key if hull already set)
+    if (ind) {
+      if (hasIndCol('Thick') && !extraProps['Thick']) extraProps['Thick'] = ind.thickness;
+      if (hasIndCol('Surf_area') && !extraProps['Surf_area']) extraProps['Surf_area'] = ind.surfArea;
+      if (hasIndCol('Spec_surf_area')) extraProps['Spec_surf_area'] = ind.specSurfArea;
+      if (hasIndCol('Fitness')) extraProps['Fitness-Individuals'] = ind.indFitness;
+      Object.assign(extraProps, ind.extras);
     }
 
     const structure: Structure = {
@@ -386,11 +405,19 @@ export function parseAllFiles(
         density: ind.density ?? pareto?.density ?? 0,
         paretoFront: pareto?.paretoFront ?? -1,
         extraProps: (() => {
-          if (!secondObjectiveName) return undefined;
           const ep: Record<string, number> = {};
-          ep[`${secondObjectiveName}-Individuals`] = ind.secondObjectiveValue;
-          if (pareto !== undefined) ep[`${secondObjectiveName}-Pareto_ranking`] = pareto.secondObjectiveValue;
-          return ep;
+          if (secondObjectiveName) {
+            ep[`${secondObjectiveName}-Individuals`] = ind.secondObjectiveValue;
+            if (pareto !== undefined) ep[`${secondObjectiveName}-Pareto_ranking`] = pareto.secondObjectiveValue;
+          }
+          // 2D fields — check header-detected column names, not value > 0
+          const midCols = individualsResult.midColNames;
+          if (midCols.includes('Thick')) ep['Thick'] = ind.thickness;
+          if (midCols.includes('Surf_area')) ep['Surf_area'] = ind.surfArea;
+          if (midCols.includes('Spec_surf_area')) ep['Spec_surf_area'] = ind.specSurfArea;
+          if (midCols.includes('Fitness')) ep['Fitness-Individuals'] = ind.indFitness;
+          Object.assign(ep, ind.extras);
+          return Object.keys(ep).length > 0 ? ep : undefined;
         })(),
         bulkModulus: ml?.bulkModulus ?? -1,
         shearModulus: ml?.shearModulus ?? -1,

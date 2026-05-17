@@ -243,11 +243,16 @@ export interface ParsedExtendedHull {
   id: number;
   composition: number[];
   enthalpy: number;
-  volume: number;
+  volume: number;           // 3D: Volumes, 2D: 0 (no such column)
   fitness: number;
   symm: number;
   x: number[];              // [x] for binary, [x1, x2] for ternary
   y: number;
+  /** 2D structure search fields (0 when not present) */
+  thickness: number;        // Thickness (Å)
+  surfArea: number;         // Surf_Area / Surf_area from hull
+  /** Any extra numeric columns not covered by the standard set */
+  extras: Record<string, number>;
 }
 
 export interface ParsedIndividual {
@@ -256,9 +261,16 @@ export interface ParsedIndividual {
   origin: OriginMethod;
   composition: number[];
   enthalpy: number;       // total eV
-  volume: number;         // total Å³
-  density: number;        // g/cm³
+  volume: number;         // total Å³ (3D) / 0 for 2D
+  density: number;        // g/cm³ (3D) / 0 for 2D
   secondObjectiveValue: number;
+  /** 2D structure search fields (0 when not present) */
+  thickness: number;      // Thick (Å)
+  surfArea: number;       // Surf_area (Å²)
+  specSurfArea: number;   // Spec_surf_area (m²/g)
+  indFitness: number;     // Fitness from Individuals (differs from hull fitness)
+  /** Any extra numeric columns not covered by the standard set */
+  extras: Record<string, number>;
   kpoints: number[];
   symm: number;
   qEntropy: number;
