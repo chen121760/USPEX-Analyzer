@@ -2,6 +2,14 @@
 
 ## 版本更新记录
 
+### V1.3.3
+
+解析器重构 — 二维结构预测适配
+
+- 重构 Individuals 解析器：改为基于表头列名映射（`headerUtils.ts`）按名取值，不再依赖硬编码列顺序。可灵活适配 3D bulk、2D、以及未来任意变体格式
+- 重构 extended_convex_hull 解析器：同样使用表头列名映射，按名提取 Enthalpies / Volumes / Thickness / Fitness / SYMM / X / Y 等字段
+- 新增二维结构搜索（2D structure search）文件支持：自动识别并正确解析 Individuals 中的 Thick (Å)、Surf_area (Å²)、Spec_surf_area (m²/g)、Fitness 列，以及 extended_convex_hull 中的 Thickness 列，存入 extraProps 动态列
+
 ### V1.3.2
 
 凸包工作台 — 结构查看与标记修复

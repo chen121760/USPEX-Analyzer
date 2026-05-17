@@ -30,13 +30,13 @@ function getFieldOptions(
   elements: string[],
   structureMap: Map<number, Structure>,
   isVarcomp: boolean,
+  hasVolume: boolean,
+  hasDensity: boolean,
 ): FieldOption[] {
   const opts: FieldOption[] = [
     { key: 'enthalpy', label: t('col.enthalpy'), accessor: (s) => s.enthalpy, type: 'numeric' },
     { key: 'enthalpyTotal', label: t('col.enthalpyTotal'), accessor: (s) => s.enthalpyTotal, type: 'numeric' },
     { key: 'fitness', label: t('col.fitness'), accessor: (s) => (s.fitness >= 0 ? s.fitness : undefined), type: 'numeric' },
-    { key: 'volume', label: t('col.volume'), accessor: (s) => s.volume, type: 'numeric' },
-    { key: 'density', label: t('col.density'), accessor: (s) => (s.density > 0 ? s.density : undefined), type: 'numeric' },
     { key: 'spaceGroup', label: t('col.spaceGroup'), accessor: (s) => s.spaceGroup, type: 'numeric' },
     { key: 'generation', label: t('col.generation'), accessor: (s) => s.generation, type: 'numeric' },
     { key: 'qEntropy', label: t('col.qEntropy'), accessor: (s) => s.qEntropy, type: 'numeric' },
@@ -45,6 +45,13 @@ function getFieldOptions(
     { key: 'origin', label: t('col.origin'), accessor: (s) => s.origin, type: 'categorical' },
     { key: 'formula', label: t('col.formula'), accessor: (s) => s.formula, type: 'categorical' },
   ];
+
+  if (hasVolume) {
+    opts.push({ key: 'volume', label: t('col.volume'), accessor: (s) => s.volume, type: 'numeric' });
+  }
+  if (hasDensity) {
+    opts.push({ key: 'density', label: t('col.density'), accessor: (s) => (s.density > 0 ? s.density : undefined), type: 'numeric' });
+  }
 
   for (const [i, el] of elements.entries()) {
     opts.push({
@@ -131,6 +138,8 @@ export function BetaExplorerPage() {
   const hasML     = structures.some((s) => s.youngModulus >= 0);
   const hasPareto = systemInfo?.optimizationType === 'multi';
   const isVarcomp = systemInfo?.compositionMode === 'varcomp';
+  const hasVolume  = structures.some((s) => s.volume > 0);
+  const hasDensity = structures.some((s) => s.density > 0);
 
   const extraPropKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -145,8 +154,8 @@ export function BetaExplorerPage() {
   }, [structures]);
 
   const fields = useMemo(
-    () => getFieldOptions(t, hasML, hasPareto, extraPropKeys, systemInfo?.elements ?? [], structureMap, isVarcomp),
-    [t, hasML, hasPareto, extraPropKeys, systemInfo, structureMap, isVarcomp],
+    () => getFieldOptions(t, hasML, hasPareto, extraPropKeys, systemInfo?.elements ?? [], structureMap, isVarcomp, hasVolume, hasDensity),
+    [t, hasML, hasPareto, extraPropKeys, systemInfo, structureMap, isVarcomp, hasVolume, hasDensity],
   );
 
   // --- Beta Explorer UIStore state ---
