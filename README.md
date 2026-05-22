@@ -20,6 +20,24 @@ A browser-based analysis tool for USPEX crystal structure prediction outputs. Su
 - Times New Roman typography for all Latin text and numbers across the UI and charts
 - **Page Guide** — Right-side guide drawer with feature overview and background knowledge for key pages; guide state is project-wide and remembered across pages
 
+## Demo
+
+| Upload & Load | Data Table |
+|---|---|
+| ![Upload](public/GIF/01-update-ezgif.com-video-to-gif-converter.gif) | ![Data Table](public/GIF/02-Table-ezgif.com-video-to-gif-converter.gif) |
+
+| Convex Hull | Hull Workshop |
+|---|---|
+| ![Convex Hull](public/GIF/03-ConvexHull-ezgif.com-video-to-gif-converter.gif) | ![Hull Workshop](public/GIF/08-HullWorkshop-ezgif.com-video-to-gif-converter.gif) |
+
+| Pareto Front | Explorer |
+|---|---|
+| ![Pareto Front](public/GIF/04-Pareto_front-ezgif.com-video-to-gif-converter.gif) | ![Explorer](public/GIF/05--ezgif.com-video-to-gif-converter.gif) |
+
+| Genealogy / Tags / Filter | HV Tracker |
+|---|---|
+| ![Genealogy / Tags / Filter](public/GIF/06--ezgif.com-video-to-gif-converter.gif) | ![HV Tracker](public/GIF/07-HV-ezgif.com-video-to-gif-converter.gif) |
+
 ## Supported USPEX Files
 
 For best results, please upload the core USPEX output files for every calculation:
