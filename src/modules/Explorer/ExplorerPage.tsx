@@ -6,7 +6,7 @@ import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT, getPlotlyTheme } from '@/lib/constants';
+import { PLOTLY_FONT, getPlotlyTheme, ML_FIELD_KEYS, ML_FIELD_I18N } from '@/lib/constants';
 import GIF from 'gif.js';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadCsv } from '@/lib/exportCsv';
@@ -55,13 +55,14 @@ function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: bo
   }
 
   if (hasML) {
-    opts.push(
-      { key: 'youngModulus', label: t('col.young'), accessor: (s) => s.youngModulus, type: 'numeric' },
-      { key: 'bulkModulus', label: t('col.bulk'), accessor: (s) => s.bulkModulus, type: 'numeric' },
-      { key: 'shearModulus', label: t('col.shear'), accessor: (s) => s.shearModulus, type: 'numeric' },
-      { key: 'poissonRatio', label: t('col.poisson'), accessor: (s) => s.poissonRatio, type: 'numeric' },
-      { key: 'vickersHardness', label: t('col.hardness'), accessor: (s) => s.vickersHardness, type: 'numeric' },
-    );
+    for (const key of ML_FIELD_KEYS) {
+      opts.push({
+        key,
+        label: t(ML_FIELD_I18N[key]),
+        accessor: (s) => s[key],
+        type: 'numeric',
+      });
+    }
   }
 
   if (hasPareto) {
@@ -81,31 +82,20 @@ function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: bo
     opts.push({ key: `extra_${key}`, label: key, accessor: (s) => s.extraProps?.[key], type: 'numeric' });
   }
 
-  opts.push({
-    key: 'deltaE',
-    label: t('col.deltaE'),
-    accessor: (s) => {
-      if (s.parentIds.length === 0) return undefined;
-      const delta = s.enthalpy - s.parentEnthalpy;
-      return isFinite(delta) ? delta : undefined;
-    },
-    type: 'numeric',
-  });
-
-  for (const key of extraPropKeys) {
+  // Generate Δ (delta) variants for all numeric fields
+  const numericFields = opts.filter((f) => f.type === 'numeric');
+  for (const field of numericFields) {
     opts.push({
-      key: `deltaObj_${key}`,
-      label: `${t('col.deltaObj')} (${key})`,
+      key: `delta_${field.key}`,
+      label: `Δ ${field.label}`,
       accessor: (s) => {
         if (s.parentIds.length === 0) return undefined;
-        const childVal = s.extraProps?.[key];
-        if (childVal == null) return undefined;
-        const parentVals = s.parentIds
-          .map((pid) => structureMap.get(pid)?.extraProps?.[key])
-          .filter((v): v is number => v != null);
-        if (parentVals.length === 0) return undefined;
-        const avg = parentVals.reduce((a, b) => a + b, 0) / parentVals.length;
-        return childVal - avg;
+        const parent = structureMap.get(s.parentIds[0]);
+        if (!parent) return undefined;
+        const childVal = field.accessor(s);
+        const parentVal = field.accessor(parent);
+        if (childVal == null || parentVal == null || !isFinite(childVal as number) || !isFinite(parentVal as number)) return undefined;
+        return (childVal as number) - (parentVal as number);
       },
       type: 'numeric',
     });

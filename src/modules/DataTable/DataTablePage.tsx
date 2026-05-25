@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { LineagePanel } from './LineagePanel';
 import { FormulaDisplay } from '@/components/FormulaDisplay';
+import { ML_FIELD_KEYS, ML_FIELD_I18N } from '@/lib/constants';
 import type {
   Structure,
   NumericFilterColumn,
@@ -327,8 +328,7 @@ export function DataTablePage() {
   // Columns where -1 is the sentinel for "no data"
   const SENTINEL_COLS = useMemo(() => new Set([
     'paretoFront', 'eForm', 'eHullRecons',
-    'bulkModulus', 'shearModulus', 'youngModulus',
-    'poissonRatio', 'pughRatio', 'vickersHardness', 'fractureToughness',
+    ...ML_FIELD_KEYS,
     'aOrder', 'sOrder',
   ]), []);
 
@@ -366,13 +366,9 @@ export function DataTablePage() {
     }
     if (hasPareto)     base.push({ key: 'paretoFront',       label: t('col.paretoFront') });
     if (hasML) {
-      base.push({ key: 'bulkModulus',       label: t('col.bulk') });
-      base.push({ key: 'shearModulus',      label: t('col.shear') });
-      base.push({ key: 'youngModulus',      label: t('col.young') });
-      base.push({ key: 'poissonRatio',      label: t('col.poisson') });
-      base.push({ key: 'pughRatio',         label: t('col.pugh') });
-      base.push({ key: 'vickersHardness',   label: t('col.hardness') });
-      base.push({ key: 'fractureToughness', label: t('col.toughness') });
+      for (const key of ML_FIELD_KEYS) {
+        base.push({ key, label: t(ML_FIELD_I18N[key]) });
+      }
     }
     if (hasFingerprint) {
       base.push({ key: 'qEntropy', label: t('col.qEntropy') });

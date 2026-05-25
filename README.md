@@ -1,4 +1,4 @@
-# USPEX Analyzer —— v1.3.3
+# USPEX Analyzer —— v1.3.4
 
 A browser-based analysis tool for USPEX crystal structure prediction outputs. Supports 3D bulk, 2D structure search, and variable/fixed-composition calculations. Upload your USPEX output files and interactively explore, visualize, filter, and export your results — all without installing anything.
 
@@ -22,20 +22,28 @@ A browser-based analysis tool for USPEX crystal structure prediction outputs. Su
 
 ## Demo
 
+**Upload & Load**
 ![Upload & Load](public/GIF/01-update-ezgif.com-video-to-gif-converter.gif)
 
+**Data Table**
 ![Data Table](public/GIF/02-Table-ezgif.com-video-to-gif-converter.gif)
 
+**Convex Hull**
 ![Convex Hull](public/GIF/03-ConvexHull-ezgif.com-video-to-gif-converter.gif)
 
+**Hull Workshop**
 ![Hull Workshop](public/GIF/08-HullWorkshop-ezgif.com-video-to-gif-converter.gif)
 
+**Pareto Front**
 ![Pareto Front](public/GIF/04-Pareto_front-ezgif.com-video-to-gif-converter.gif)
 
+**Explorer**
 ![Explorer](public/GIF/05--ezgif.com-video-to-gif-converter.gif)
 
+**Filter**
 ![Filter](public/GIF/06--ezgif.com-video-to-gif-converter.gif)
 
+**HV Tracker**
 ![HV Tracker](public/GIF/07-HV-ezgif.com-video-to-gif-converter.gif)
 
 ## Supported USPEX Files

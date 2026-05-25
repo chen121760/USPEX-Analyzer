@@ -122,3 +122,27 @@ export const COLORSCALES = [
   'Viridis', 'Plasma', 'Inferno', 'Magma', 'Cividis',
   'Blues', 'Reds', 'YlOrRd', 'RdYlGn', 'Spectral',
 ];
+
+/** MLProperties field keys in USPEX canonical column order */
+export const ML_FIELD_KEYS = [
+  'bulkModulus',
+  'shearModulus',
+  'youngModulus',
+  'poissonRatio',
+  'pughRatio',
+  'vickersHardness',
+  'fractureToughness',
+] as const;
+
+export type MLFieldKey = typeof ML_FIELD_KEYS[number];
+
+/** Map ML field key → i18n key */
+export const ML_FIELD_I18N: Record<MLFieldKey, string> = {
+  bulkModulus: 'col.bulk',
+  shearModulus: 'col.shear',
+  youngModulus: 'col.young',
+  poissonRatio: 'col.poisson',
+  pughRatio: 'col.pugh',
+  vickersHardness: 'col.hardness',
+  fractureToughness: 'col.toughness',
+};
