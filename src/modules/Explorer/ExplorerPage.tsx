@@ -6,7 +6,7 @@ import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT, getPlotlyTheme } from '@/lib/constants';
+import { PLOTLY_FONT, getPlotlyTheme, ML_FIELD_KEYS, ML_FIELD_I18N } from '@/lib/constants';
 import GIF from 'gif.js';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadCsv } from '@/lib/exportCsv';
@@ -55,13 +55,14 @@ function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: bo
   }
 
   if (hasML) {
-    opts.push(
-      { key: 'youngModulus', label: t('col.young'), accessor: (s) => s.youngModulus, type: 'numeric' },
-      { key: 'bulkModulus', label: t('col.bulk'), accessor: (s) => s.bulkModulus, type: 'numeric' },
-      { key: 'shearModulus', label: t('col.shear'), accessor: (s) => s.shearModulus, type: 'numeric' },
-      { key: 'poissonRatio', label: t('col.poisson'), accessor: (s) => s.poissonRatio, type: 'numeric' },
-      { key: 'vickersHardness', label: t('col.hardness'), accessor: (s) => s.vickersHardness, type: 'numeric' },
-    );
+    for (const key of ML_FIELD_KEYS) {
+      opts.push({
+        key,
+        label: t(ML_FIELD_I18N[key]),
+        accessor: (s) => s[key],
+        type: 'numeric',
+      });
+    }
   }
 
   if (hasPareto) {

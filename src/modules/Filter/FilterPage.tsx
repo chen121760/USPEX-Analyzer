@@ -7,6 +7,7 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { buildSeedsFile, structuresToCSV } from '@/lib/poscarWriter';
 import { FormulaDisplay } from '@/components/FormulaDisplay';
+import { ML_FIELD_KEYS } from '@/lib/constants';
 import type { Structure, UnifiedCondition, NumericOperator, CompOperator, UnifiedConditionGroup, CustomNamePart } from '@/types/structure';
 
 
@@ -26,7 +27,7 @@ function applyCondition(s: Structure, cond: UnifiedCondition, elements: string[]
     if (val == null) return false;
     const num = Number(val);
     // Sentinel -1 means "no data" for these fields
-    if (num === -1 && new Set(['paretoFront', 'eForm', 'eHullRecons', 'bulkModulus', 'shearModulus', 'youngModulus', 'poissonRatio', 'pughRatio', 'vickersHardness', 'fractureToughness', 'aOrder', 'sOrder']).has(cond.field)) return false;
+    if (num === -1 && new Set(['paretoFront', 'eForm', 'eHullRecons', ...ML_FIELD_KEYS, 'aOrder', 'sOrder']).has(cond.field)) return false;
     if (isNaN(num)) return false;
     const target = cond.value;
     switch (cond.operator) {
@@ -132,7 +133,7 @@ export function FilterPage() {
   const numericFields = useMemo(() => {
     const base = ['fitness', 'enthalpy', 'volume', 'density', 'spaceGroup', 'generation'];
     if (hasPareto)      base.push('paretoFront');
-    if (hasML)          base.push('youngModulus', 'bulkModulus', 'shearModulus', 'poissonRatio', 'vickersHardness', 'fractureToughness');
+    if (hasML)          base.push(...ML_FIELD_KEYS);
     if (hasFingerprint) base.push('qEntropy', 'aOrder', 'sOrder');
     return base;
   }, [hasPareto, hasML, hasFingerprint]);
