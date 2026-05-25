@@ -28,7 +28,6 @@ function getFieldOptions(
   hasPareto: boolean,
   extraPropKeys: string[],
   elements: string[],
-  structureMap: Map<number, Structure>,
   isVarcomp: boolean,
   hasVolume: boolean,
   hasDensity: boolean,
@@ -90,36 +89,6 @@ function getFieldOptions(
     opts.push({ key: `extra_${key}`, label: key, accessor: (s) => s.extraProps?.[key], type: 'numeric' });
   }
 
-  opts.push({
-    key: 'deltaE',
-    label: t('col.deltaE'),
-    accessor: (s) => {
-      if (s.parentIds.length === 0) return undefined;
-      const delta = s.enthalpy - s.parentEnthalpy;
-      return isFinite(delta) ? delta : undefined;
-    },
-    type: 'numeric',
-  });
-
-  for (const key of extraPropKeys) {
-    opts.push({
-      key: `deltaObj_${key}`,
-      label: `${t('col.deltaObj')} (${key})`,
-      accessor: (s) => {
-        if (s.parentIds.length === 0) return undefined;
-        const childVal = s.extraProps?.[key];
-        if (childVal == null) return undefined;
-        const parentVals = s.parentIds
-          .map((pid) => structureMap.get(pid)?.extraProps?.[key])
-          .filter((v): v is number => v != null);
-        if (parentVals.length === 0) return undefined;
-        const avg = parentVals.reduce((a, b) => a + b, 0) / parentVals.length;
-        return childVal - avg;
-      },
-      type: 'numeric',
-    });
-  }
-
   return opts;
 }
 
@@ -147,15 +116,9 @@ export function BetaExplorerPage() {
     return Array.from(keys).sort();
   }, [structures]);
 
-  const structureMap = useMemo(() => {
-    const m = new Map<number, Structure>();
-    structures.forEach((s) => m.set(s.id, s));
-    return m;
-  }, [structures]);
-
   const fields = useMemo(
-    () => getFieldOptions(t, hasML, hasPareto, extraPropKeys, systemInfo?.elements ?? [], structureMap, isVarcomp, hasVolume, hasDensity),
-    [t, hasML, hasPareto, extraPropKeys, systemInfo, structureMap, isVarcomp, hasVolume, hasDensity],
+    () => getFieldOptions(t, hasML, hasPareto, extraPropKeys, systemInfo?.elements ?? [], isVarcomp, hasVolume, hasDensity),
+    [t, hasML, hasPareto, extraPropKeys, systemInfo, isVarcomp, hasVolume, hasDensity],
   );
 
   // --- Beta Explorer UIStore state ---

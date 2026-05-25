@@ -2,6 +2,12 @@
 
 ## 版本更新记录
 
+### V1.3.4
+
+Explorer — 全字段 Δ 值自动计算
+
+- Δ 值统一通过 `structureMap` 查找父代结构后计算差值（子代 − 父代），取代原先 `deltaE` 直接用 `parentEnthalpy`、`deltaObj` 取父代均值的方式。父代不在当前数据集中的结构返回 `undefined`
+
 ### V1.3.3
 
 解析器重构 — 二维结构预测适配
