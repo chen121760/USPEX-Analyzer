@@ -55,7 +55,8 @@ export function buildExportFilename(
   }
 
   for (const cp of customNameParts) {
-    const raw = (structure as unknown as Record<string, unknown>)[cp.field];
+    const direct = (structure as unknown as Record<string, unknown>)[cp.field];
+    const raw = direct !== undefined ? direct : structure.extraProps?.[cp.field];
     if (raw == null) continue;
     const num = Number(raw);
     if (isNaN(num)) continue;

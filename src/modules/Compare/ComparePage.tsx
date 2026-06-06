@@ -78,6 +78,19 @@ export function ComparePage() {
       .filter(Boolean) as Structure[];
   }, [compareIds, structures]);
 
+  // 动态检测：ML 属性与指纹数据是否存在
+  const hasML          = structures.some((s) => s.bulkModulus >= 0);
+  const hasFingerprint = structures.some((s) => s.qEntropy > 0);
+
+  // 收集所有 extraProps 的 key，使 Compare 能自适应未知字段
+  const extraPropKeys = useMemo(() => {
+    const keys = new Set<string>();
+    structures.forEach((s) => {
+      if (s.extraProps) Object.keys(s.extraProps).forEach((k) => keys.add(k));
+    });
+    return Array.from(keys).sort();
+  }, [structures]);
+
   if (compareStructures.length === 0) {
     return (
       <div className="fade-in" style={{ padding: 60, textAlign: 'center' }}>
@@ -163,25 +176,41 @@ export function ComparePage() {
             )}
 
             {/* ML Properties */}
-            {compareStructures.some((s) => s.youngModulus >= 0) && (
+            {hasML && compareStructures.some((s) => s.youngModulus >= 0) && (
               <>
                 <tr><td colSpan={compareStructures.length + 1} style={{ padding: '10px 12px 4px', fontSize: 11, fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: 1 }}>Elastic Properties (ML)</td></tr>
                 <PropRow label={t('col.young')} values={compareStructures.map((s) => s.youngModulus)} fmt={numFmt(1)} />
                 <PropRow label={t('col.bulk')} values={compareStructures.map((s) => s.bulkModulus)} fmt={numFmt(1)} />
                 <PropRow label={t('col.shear')} values={compareStructures.map((s) => s.shearModulus)} fmt={numFmt(1)} />
                 <PropRow label={t('col.poisson')} values={compareStructures.map((s) => s.poissonRatio)} fmt={numFmt(3)} />
+                <PropRow label={t('col.pugh')} values={compareStructures.map((s) => s.pughRatio)} fmt={numFmt(3)} />
                 <PropRow label={t('col.hardness')} values={compareStructures.map((s) => s.vickersHardness)} fmt={numFmt(1)} />
                 <PropRow label={t('col.toughness')} values={compareStructures.map((s) => s.fractureToughness)} fmt={numFmt(2)} />
               </>
             )}
 
             {/* Fingerprint */}
-            {compareStructures.some((s) => s.qEntropy > 0) && (
+            {hasFingerprint && compareStructures.some((s) => s.qEntropy > 0) && (
               <>
                 <tr><td colSpan={compareStructures.length + 1} style={{ padding: '10px 12px 4px', fontSize: 11, fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: 1 }}>Fingerprint</td></tr>
                 <PropRow label={t('col.qEntropy')} values={compareStructures.map((s) => s.qEntropy)} fmt={numFmt(3)} />
                 <PropRow label={t('col.aOrder')} values={compareStructures.map((s) => s.aOrder)} fmt={numFmt(3)} />
                 <PropRow label={t('col.sOrder')} values={compareStructures.map((s) => s.sOrder)} fmt={numFmt(3)} />
+              </>
+            )}
+
+            {/* Dynamic extraProps — 自适应所有未知字段 */}
+            {extraPropKeys.length > 0 && compareStructures.some((s) => s.extraProps != null) && (
+              <>
+                <tr><td colSpan={compareStructures.length + 1} style={{ padding: '10px 12px 4px', fontSize: 11, fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: 1 }}>Extra Properties</td></tr>
+                {extraPropKeys.map((key) => (
+                  <PropRow
+                    key={key}
+                    label={key}
+                    values={compareStructures.map((s) => s.extraProps?.[key])}
+                    fmt={numFmt(4)}
+                  />
+                ))}
               </>
             )}
           </tbody>
