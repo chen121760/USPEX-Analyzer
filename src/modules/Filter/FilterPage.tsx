@@ -21,9 +21,19 @@ function toSortableNumber(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
 }
 
+/**
+ * 从 Structure 获取任意字段的值 —— 先查直接属性，再查 extraProps。
+ * 这是 Filter 能处理未知字段（如 Property_X、Thick 等）的关键。
+ */
+function getStructureValue(s: Structure, field: string): unknown {
+  const direct = (s as unknown as Record<string, unknown>)[field];
+  if (direct !== undefined) return direct;
+  return s.extraProps?.[field];
+}
+
 function applyCondition(s: Structure, cond: UnifiedCondition, elements: string[]): boolean {
   if (cond.kind === 'numeric') {
-    const val = (s as unknown as Record<string, unknown>)[cond.field];
+    const val = getStructureValue(s, cond.field);
     if (val == null) return false;
     const num = Number(val);
     // Sentinel -1 means "no data" for these fields
@@ -91,7 +101,7 @@ function buildFilename(index: number, s: Structure, nameParts: number[], padding
     }
   }
   for (const cp of customNameParts) {
-    const raw = (s as unknown as Record<string, unknown>)[cp.field];
+    const raw = getStructureValue(s, cp.field);
     if (raw == null) continue;
     const num = Number(raw);
     if (isNaN(num)) continue;
@@ -126,17 +136,29 @@ export function FilterPage() {
   const secondObjPrefix = 'Obj';
 
   // 动态数值字段列表（根据实际数据判断）
+  const isVarcomp     = systemInfo?.compositionMode === 'varcomp';
   const hasPareto      = systemInfo?.optimizationType === 'multi';
   const hasML          = structures.some((s) => s.bulkModulus >= 0);
   const hasFingerprint = structures.some((s) => s.qEntropy > 0);
 
+  // 收集所有 extraProps 的 key，使 Filter 能自适应未知字段
+  const extraPropKeys = useMemo(() => {
+    const keys = new Set<string>();
+    structures.forEach((s) => {
+      if (s.extraProps) Object.keys(s.extraProps).forEach((k) => keys.add(k));
+    });
+    return Array.from(keys).sort();
+  }, [structures]);
+
   const numericFields = useMemo(() => {
-    const base = ['fitness', 'enthalpy', 'volume', 'density', 'spaceGroup', 'generation'];
+    const base = ['fitness', 'enthalpy', 'enthalpyTotal', 'volume', 'density', 'spaceGroup', 'generation'];
+    if (isVarcomp)      base.push('eForm', 'eHullRecons');
     if (hasPareto)      base.push('paretoFront');
     if (hasML)          base.push(...ML_FIELD_KEYS);
     if (hasFingerprint) base.push('qEntropy', 'aOrder', 'sOrder');
+    base.push(...extraPropKeys);
     return base;
-  }, [hasPareto, hasML, hasFingerprint]);
+  }, [isVarcomp, hasPareto, hasML, hasFingerprint, extraPropKeys]);
 
   // 条件组 — 接入 UIStore
   const groups    = useUIStore((s) => s.filterConditionGroups);
@@ -230,8 +252,8 @@ export function FilterPage() {
   // 排序
   const sortedStructures = useMemo(() => {
     const sorted = [...filteredStructures].sort((a, b) => {
-      const av = (a as unknown as Record<string, unknown>)[sortKey];
-      const bv = (b as unknown as Record<string, unknown>)[sortKey];
+      const av = getStructureValue(a, sortKey);
+      const bv = getStructureValue(b, sortKey);
       return toSortableNumber(av) - toSortableNumber(bv);
     });
     return sortReverse ? sorted.reverse() : sorted;
@@ -595,7 +617,7 @@ export function FilterPage() {
                     <td>{s.fitness != null && s.fitness >= 0 ? s.fitness.toFixed(4) : '—'}</td>
                     <td>{s.origin}</td>
                     {extraFields.map((f) => {
-                      const v = Number((s as unknown as Record<string, unknown>)[f]);
+                      const v = Number(getStructureValue(s, f));
                       return (
                         <td key={f} style={{ color: 'var(--color-primary)' }}>
                           {isNaN(v) ? '—' : v < 900 ? v.toFixed(4) : v.toFixed(1)}

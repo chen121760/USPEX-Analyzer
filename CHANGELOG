@@ -2,6 +2,17 @@
 
 ## 版本更新记录
 
+### V1.3.5
+
+USPEX 10.6 兼容 — 自适应未知参数列
+
+- USPEX 10.6 允许用户自定义额外物性列（如 `Property_X`），这些字段可能同时出现在 Individuals 和 Pareto_ranking 文件中。本版本全面适配此类未知列
+- **Pareto 模块自动启用**：当上传的 Pareto_ranking 文件包含数据（即使 `Parameters.txt` 的 `optType` 仅为 `1`），自动将系统类型识别为多目标优化，侧边栏显示 Pareto Front 入口
+- **Filter 页面自适应**：数值字段列表动态包含所有 `extraProps` 键（如 `Property_X`、`Thick`、`Surf_area` 等），支持条件筛选、排序、自定义文件名段。修复 `applyCondition` 直接访问 `s[field]` 导致 extraProps 字段永远返回 false 的 bug —— 新增 `getStructureValue()` 优先查直接属性、fallback 到 `s.extraProps`
+- **Compare 页面自适应**：新增 Dynamic Extra Properties 对比区块，自动展示所有 `extraProps` 字段；补全此前遗漏的 Pugh's ratio（`pughRatio`）
+- **CSV / ZIP 导出自适应**：`buildExportFilename` 中自定义字段名段同步支持 extraProps fallback
+- **Filter 字段补全**：`eForm`、`eHullRecons`（变组分）、`enthalpyTotal` 加入可选字段列表
+
 ### V1.3.4
 
 Explorer — 全字段 Δ 值自动计算

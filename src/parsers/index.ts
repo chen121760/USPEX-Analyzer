@@ -184,6 +184,14 @@ export function parseAllFiles(
     individualsResult?.secondObjectiveName ??
     '';
 
+  // If Pareto-ranking data is present, treat as multi-objective even when
+  // Parameters.txt has single optType (e.g. "1 min_x").  This covers runs
+  // where Property_X or similar extra columns were added to the ranking file
+  // without changing the optType declaration.
+  if (optimizationType === 'single' && paretoResult !== null && paretoResult.data.length > 0) {
+    optimizationType = 'multi';
+  }
+
   // ---- Step 1c: If no extended_convex_hull but have Individuals, build from Individuals ----
 
   if (hullData.length === 0 && individualsResult) {
@@ -271,7 +279,12 @@ export function parseAllFiles(
     const extraProps: Record<string, number> = {};
     if (secondObjectiveName) {
       if (ind !== undefined) {
-        extraProps[`${secondObjectiveName}-Individuals`] = ind.secondObjectiveValue;
+        // Individuals parser only detects ML_* columns as second objective.
+        // If the global secondObjectiveName comes from Pareto (e.g. Property_X),
+        // the Individuals parser would have put the value in extras instead.
+        // Fall back to extras to avoid storing a spurious 0.
+        extraProps[`${secondObjectiveName}-Individuals`] =
+          ind.extras[secondObjectiveName] ?? ind.secondObjectiveValue;
       }
       if (pareto !== undefined) {
         extraProps[`${secondObjectiveName}-Pareto_ranking`] = pareto.secondObjectiveValue;
@@ -407,7 +420,10 @@ export function parseAllFiles(
         extraProps: (() => {
           const ep: Record<string, number> = {};
           if (secondObjectiveName) {
-            ep[`${secondObjectiveName}-Individuals`] = ind.secondObjectiveValue;
+            // Same fallback logic as Step 3: if Individuals didn't recognise
+            // the column as ML_* it stored the value in extras instead.
+            ep[`${secondObjectiveName}-Individuals`] =
+              ind.extras[secondObjectiveName] ?? ind.secondObjectiveValue;
             if (pareto !== undefined) ep[`${secondObjectiveName}-Pareto_ranking`] = pareto.secondObjectiveValue;
           }
           // 2D fields — check header-detected column names, not value > 0
