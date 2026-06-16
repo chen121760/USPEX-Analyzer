@@ -1,6 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useUIStore } from '@/store/useUIStore';
+import { useLayoutStore } from '@/store/useLayoutStore';
 import { useProjectStore } from '@/store/useProjectStore';
 import { X } from 'lucide-react';
 
@@ -133,8 +133,8 @@ function Card({ children, style }: { children: React.ReactNode; style?: React.CS
 
 // ── Main drawer ──────────────────────────────────────────────
 export function HintDrawer() {
-  const hintPanelOpen  = useUIStore((s) => s.hintPanelOpen);
-  const setHintPanelOpen = useUIStore((s) => s.setHintPanelOpen);
+  const hintPanelOpen  = useLayoutStore((s) => s.hintPanelOpen);
+  const setHintPanelOpen = useLayoutStore((s) => s.setHintPanelOpen);
   const { t } = useTranslation();
   const hint = usePageHint();
 

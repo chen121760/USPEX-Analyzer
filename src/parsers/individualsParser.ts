@@ -16,7 +16,13 @@
  */
 
 import type { ParsedIndividual, OriginMethod } from '@/types/structure';
-import { tokenizeHeader } from './headerUtils';
+import {
+  buildNormalizedColumnIndex,
+  getTokenByColumnAliases,
+  parseBracketedNumbers,
+  tokenizeDataRow,
+  tokenizeHeader,
+} from './headerUtils.ts';
 
 export interface IndividualsParseResult {
   data: ParsedIndividual[];
@@ -126,10 +132,157 @@ function collectExtras(
   return extras;
 }
 
+const USPEX25_CORE_COLUMNS = new Set([
+  'generation',
+  'number',
+  'num_atoms_all',
+  'energy',
+  'cell_volume',
+  'density',
+  'space_group',
+  'space_group_symbol',
+  'origin',
+  'expected_origin',
+  'parents',
+  'e_above_hull',
+  'quasi_entropy',
+  'a_order',
+  's_order',
+]);
+
+function parseNumber(value: string | undefined): number {
+  if (value === undefined) return 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getUspex25Value(
+  rowTokens: string[],
+  columnMap: Map<string, number>,
+  aliases: string[],
+): string | undefined {
+  return getTokenByColumnAliases(rowTokens, columnMap, aliases);
+}
+
+function collectUspex25Extras(
+  rowTokens: string[],
+  headerTokens: string[],
+): Record<string, number> {
+  const extras: Record<string, number> = {};
+
+  headerTokens.forEach((name, idx) => {
+    const normalizedName = name.toLowerCase();
+    if (USPEX25_CORE_COLUMNS.has(normalizedName)) return;
+
+    const raw = rowTokens[idx];
+    if (raw === undefined || raw.startsWith('[')) return;
+
+    const value = Number(raw);
+    if (Number.isFinite(value)) {
+      extras[name] = value;
+    }
+  });
+
+  return extras;
+}
+
+function parseUspex25Individuals(
+  lines: string[],
+  headerLine: string,
+): IndividualsParseResult {
+  const headerTokens = tokenizeHeader(headerLine);
+  const columnMap = buildNormalizedColumnIndex(headerTokens);
+  const results: ParsedIndividual[] = [];
+  let maxGeneration = 0;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    if (trimmed === headerLine || trimmed.toLowerCase().startsWith('generation')) continue;
+
+    const rowTokens = tokenizeDataRow(trimmed);
+    const generation = parseInt(
+      getUspex25Value(rowTokens, columnMap, ['generation', 'Gen']) ?? '',
+      10,
+    );
+    const id = parseInt(
+      getUspex25Value(rowTokens, columnMap, ['number', 'ID']) ?? '',
+      10,
+    );
+
+    if (!Number.isFinite(generation) || !Number.isFinite(id)) continue;
+
+    const composition = parseBracketedNumbers(
+      getUspex25Value(rowTokens, columnMap, ['num_atoms_all', 'Composition']),
+    );
+    if (composition.length === 0) continue;
+
+    const origin =
+      getUspex25Value(rowTokens, columnMap, ['origin', 'expected_origin']) ??
+      'Unknown';
+    const parentIds = parseBracketedNumbers(
+      getUspex25Value(rowTokens, columnMap, ['parents', 'Parent-ID']),
+    ).filter((parentId) => parentId > 0);
+
+    const enthalpy = parseNumber(getUspex25Value(rowTokens, columnMap, ['energy', 'Enthalpy']));
+    const volume = parseNumber(getUspex25Value(rowTokens, columnMap, ['cell_volume', 'Volume']));
+    const density = parseNumber(getUspex25Value(rowTokens, columnMap, ['density']));
+    const symm = parseNumber(getUspex25Value(rowTokens, columnMap, ['space_group', 'SYMM']));
+    const indFitness = parseNumber(getUspex25Value(rowTokens, columnMap, ['e_above_hull', 'Fitness']));
+    const qEntropy = parseNumber(getUspex25Value(rowTokens, columnMap, ['quasi_entropy', 'Q_entr']));
+    const aOrder = parseNumber(getUspex25Value(rowTokens, columnMap, ['a_order', 'A_order']));
+    const sOrder = parseNumber(getUspex25Value(rowTokens, columnMap, ['s_order', 'S_order']));
+
+    if (generation > maxGeneration) maxGeneration = generation;
+
+    results.push({
+      generation,
+      id,
+      origin: origin as OriginMethod,
+      composition,
+      enthalpy,
+      volume,
+      density,
+      parentIds,
+      secondObjectiveValue: 0,
+      thickness: 0,
+      surfArea: 0,
+      specSurfArea: 0,
+      indFitness,
+      extras: collectUspex25Extras(rowTokens, headerTokens),
+      kpoints: [],
+      symm,
+      qEntropy,
+      aOrder,
+      sOrder,
+    });
+  }
+
+  return {
+    data: results,
+    secondObjectiveName: '',
+    maxGeneration,
+    midColNames: headerTokens,
+  };
+}
+
 // ── Main parser ──────────────────────────────────────────────
 
 export function parseIndividuals(content: string): IndividualsParseResult {
   const lines = content.split('\n');
+
+  const uspex25Header = lines
+    .map((line) => line.trim())
+    .find((line) => {
+      const normalized = line.toLowerCase();
+      return normalized.startsWith('generation') &&
+        normalized.includes('number') &&
+        normalized.includes('num_atoms_all');
+    });
+
+  if (uspex25Header) {
+    return parseUspex25Individuals(lines, uspex25Header);
+  }
 
   // ── Step 1: find header line & build mapping ──
   let mapping: HeaderMapping | null = null;

@@ -7,14 +7,17 @@ import type { USPEXFileType, DetectedFile } from '@/types/structure';
 
 /** Exact filename → type mapping */
 const FILENAME_MAP: Record<string, USPEXFileType> = {
-  'Parameters.txt': 'parameters',
+  'parameters.txt': 'parameters',
+  'parameters': 'parameters',
+  'parameter': 'parameters',
   'extended_convex_hull': 'extended_convex_hull',
-  'Individuals': 'individuals',
-  'Pareto_ranking': 'pareto_ranking',
-  'MLProperties': 'ml_properties',
+  'individuals': 'individuals',
+  'pareto_ranking': 'pareto_ranking',
+  'mlproperties': 'ml_properties',
   'origin': 'origin',
-  'gatheredPOSCARS': 'gathered_poscars',
-  'gatheredPOSCARS_unrelaxed': 'gathered_poscars_unrelaxed',
+  'gatheredposcars': 'gathered_poscars',
+  'gatheredposcars_unrelaxed': 'gathered_poscars_unrelaxed',
+  'gatheredposcars_unrelaxed_all': 'gathered_poscars_unrelaxed',
   'convex_hull': 'convex_hull',
 };
 
@@ -40,16 +43,18 @@ export function detectFileType(file: File, content: string): DetectedFile {
   const base: Omit<DetectedFile, 'type' | 'confidence' | 'displayName' | 'description'> = {
     file,
   };
+  const baseName = file.name.split(/[\\/]/).pop() ?? file.name;
+  const normalizedName = baseName.toLowerCase();
 
   // 1. Exact filename match (highest confidence)
-  const nameType = FILENAME_MAP[file.name];
+  const nameType = FILENAME_MAP[normalizedName];
   if (nameType) {
     const info = FILE_INFO[nameType];
     return { ...base, type: nameType, confidence: 1.0, displayName: info.displayKey, description: info.descKey };
   }
 
   // 2. JSON project file
-  if (file.name.endsWith('.json')) {
+  if (normalizedName.endsWith('.json')) {
     try {
       const json = JSON.parse(content);
       if (json.version && json.systemInfo && json.structures) {
@@ -62,9 +67,19 @@ export function detectFileType(file: File, content: string): DetectedFile {
   // 3. Content-based heuristics
   const firstKB = content.substring(0, 4096); // check first 4KB
 
-  if (firstKB.includes('atomType') && firstKB.includes('%')) {
+  if (
+    (firstKB.includes('atomType') && firstKB.includes('%')) ||
+    (/parameters?/.test(normalizedName) && firstKB.includes('calculationType'))
+  ) {
     const info = FILE_INFO.parameters;
     return { ...base, type: 'parameters', confidence: 0.9, displayName: info.displayKey, description: info.descKey };
+  }
+
+  if (/^\s*generation\s+number\s+num_atoms_all\s+energy/m.test(firstKB)) {
+    const isHullLike = /\bformation_energy\b/.test(firstKB) && !/\bquasi_entropy\b/.test(firstKB);
+    const ft: USPEXFileType = isHullLike ? 'extended_convex_hull' : 'individuals';
+    const info = FILE_INFO[ft];
+    return { ...base, type: ft, confidence: 0.75, displayName: info.displayKey, description: info.descKey };
   }
 
   if (firstKB.includes('Fitness') && firstKB.includes('eV/block')) {
@@ -93,9 +108,9 @@ export function detectFileType(file: File, content: string): DetectedFile {
     return { ...base, type: 'origin', confidence: 0.9, displayName: info.displayKey, description: info.descKey };
   }
 
-  if (/^EA\d+\s+/.test(firstKB)) {
+  if (/^EA\d+\s+/m.test(firstKB) || /^number=\d+\b/m.test(firstKB)) {
     // Check if unrelaxed by filename hint
-    const isUnrelaxed = file.name.toLowerCase().includes('unrelax');
+    const isUnrelaxed = normalizedName.includes('unrelax');
     const ft: USPEXFileType = isUnrelaxed ? 'gathered_poscars_unrelaxed' : 'gathered_poscars';
     const info = FILE_INFO[ft];
     return { ...base, type: ft, confidence: 0.85, displayName: info.displayKey, description: info.descKey };

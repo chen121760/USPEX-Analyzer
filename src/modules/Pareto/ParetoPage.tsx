@@ -1,28 +1,32 @@
 import { useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
-import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import { useUIStore } from '@/store/useUIStore';
+import { useChartSettingsStore } from '@/store/useChartSettingsStore';
+import { useThemeStore } from '@/theme/themeStore';
+import { useMarkStore } from '@/store/useMarkStore';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT, getPlotlyTheme } from '@/lib/constants';
+import { PLOTLY_FONT } from '@/lib/constants';
+import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadWideCsv } from '@/lib/exportCsv';
+import { PlotFrame } from '@/charts/shared/PlotFrame';
+import { usePlotlyStructurePointClick } from '@/charts/shared/usePlotlyStructurePointClick';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyData = any;
-
-const FRONT_COLORS = ['#dc2626', '#f59e0b', '#16a34a', '#2563eb', '#8b5cf6', '#ec4899', '#06b6d4', '#6b7280'];
 
 export function ParetoPage() {
   const { t } = useTranslation();
   const openViewer      = useUIStore((s) => s.openViewer);
-  const markActiveTags  = useUIStore((s) => s.markActiveTags);
-  const markEaInput     = useUIStore((s) => s.markEaInput);
+  const markActiveTags  = useMarkStore((s) => s.markActiveTags);
+  const markEaInput     = useMarkStore((s) => s.markEaInput);
   const allTags         = useProjectStore((s) => s.tags);
   const structures      = useProjectStore((s) => s.structures);
   const systemInfo      = useProjectStore((s) => s.systemInfo);
-  const theme           = useUIStore((s) => s.theme);
+  const theme           = useThemeStore((s) => s.theme);
+  const plotTheme       = useMemo(() => getPlotlyTheme(theme), [theme]);
 
   const isMulti = systemInfo?.optimizationType === 'multi';
   const objName = systemInfo?.secondObjectiveName || 'Second Objective';
@@ -37,17 +41,17 @@ export function ParetoPage() {
     return Array.from(fronts).sort((a, b) => a - b);
   }, [structures]);
 
-  // 从 UIStore 读取 Pareto 页面状态，切换页面后不会丢失
-  const selectedFrontsArr    = useUIStore((s) => s.paretoSelectedFronts);
-  const setSelectedFrontsArr = useUIStore((s) => s.setParetoSelectedFronts);
-  const showLines            = useUIStore((s) => s.paretoShowLines);
-  const setShowLines         = useUIStore((s) => s.setParetoShowLines);
+  // 从 ChartSettingsStore 读取 Pareto 页面状态，切换页面后不会丢失
+  const selectedFrontsArr    = useChartSettingsStore((s) => s.paretoSelectedFronts);
+  const setSelectedFrontsArr = useChartSettingsStore((s) => s.setParetoSelectedFronts);
+  const showLines            = useChartSettingsStore((s) => s.paretoShowLines);
+  const setShowLines         = useChartSettingsStore((s) => s.setParetoShowLines);
 
-  // UIStore 里存的是普通数组（因为 Set 无法被 JSON 序列化存到 localStorage）
+  // ChartSettingsStore 里存的是普通数组（因为 Set 无法被 JSON 序列化存到 localStorage）
   // 这里把数组转回 Set，方便后面用 .has() 判断
   const selectedFronts = new Set(selectedFrontsArr);
 
-  // 把 Set 转回数组再存进 UIStore 的辅助函数
+  // 把 Set 转回数组再存进 ChartSettingsStore 的辅助函数
   const setSelectedFronts = (next: Set<number>) => {
     setSelectedFrontsArr(Array.from(next));
   };
@@ -66,43 +70,42 @@ export function ParetoPage() {
     setSelectedFronts(next);
   };
 
-  if (!isMulti) {
+  const getStructureHoverText = (s: typeof structures[number]) => {
+    const objectiveValue = paretoKey != null ? s.extraProps?.[paretoKey] : undefined;
+
     return (
-      <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)' }}>
-        {t('pareto.singleObjectiveHint')}
-      </div>
+      `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
+      `Fitness: ${s.fitness.toFixed(4)}<br>` +
+      `${objName}: ${typeof objectiveValue === 'number' ? objectiveValue.toFixed(3) : '—'}<br>` +
+      `SG: ${s.spaceGroup} | Origin: ${s.origin}`
     );
-  }
+  };
 
   const traces: PlotlyData[] = [];
 
-  for (const front of frontNumbers) {
-    if (!selectedFronts.has(front)) continue;
+  if (paretoKey != null) {
+    for (const front of frontNumbers) {
+      if (!selectedFronts.has(front)) continue;
 
-    const pts = structures
-      .filter((s) => s.paretoFront === front && paretoKey != null && s.extraProps?.[paretoKey] != null)
-      .sort((a, b) => (a.fitness ?? 0) - (b.fitness ?? 0));
+      const pts = structures
+        .filter((s) => s.paretoFront === front && s.extraProps?.[paretoKey] != null)
+        .sort((a, b) => (a.fitness ?? 0) - (b.fitness ?? 0));
 
-    const color = FRONT_COLORS[(front - 1) % FRONT_COLORS.length];
+      const color = plotTheme.frontColors[(front - 1) % plotTheme.frontColors.length];
 
-    traces.push({
-      x: pts.map((s) => s.fitness),
-      y: pts.map((s) => s.extraProps![paretoKey!]),
-      mode: showLines ? ('markers+lines' as const) : ('markers' as const),
-      type: 'scatter' as const,
-      name: `Front ${front}`,
-      marker: { color, size: 8 },
-      line: showLines ? { color, width: 1.5, dash: 'dot' } : undefined,
-      text: pts.map(
-        (s) =>
-          `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
-          `Fitness: ${s.fitness.toFixed(4)}<br>` +
-          `${objName}: ${s.extraProps![paretoKey!].toFixed(3)}<br>` +
-          `SG: ${s.spaceGroup} | Origin: ${s.origin}`,
-      ),
-      hoverinfo: 'text' as const,
-      customdata: pts.map((s) => s.id),
-    });
+      traces.push({
+        x: pts.map((s) => s.fitness),
+        y: pts.map((s) => s.extraProps![paretoKey]),
+        mode: showLines ? ('markers+lines' as const) : ('markers' as const),
+        type: 'scatter' as const,
+        name: `Front ${front}`,
+        marker: { color, size: 8 },
+        line: showLines ? { color, width: 1.5, dash: 'dot' } : undefined,
+        text: pts.map(getStructureHoverText),
+        hoverinfo: 'text' as const,
+        customdata: pts.map((s) => s.id),
+      });
+    }
   }
 
   // --- Mark overlay traces ---
@@ -122,7 +125,8 @@ export function ParetoPage() {
         mode: 'markers', type: 'scatter',
         name: `★ ${t(tagDef.nameKey)}`,
         marker: { symbol: 'star', size: 14, color: tagDef.color, line: { width: 1, color: 'white' } },
-        hoverinfo: 'skip',
+        text: tagged.map(getStructureHoverText),
+        hoverinfo: 'text',
         customdata: tagged.map((s) => s.id),
         showlegend: true,
       });
@@ -138,7 +142,8 @@ export function ParetoPage() {
           mode: 'markers', type: 'scatter',
           name: t('mark.eaSearchName'),
           marker: { symbol: 'star', size: 14, color: '#FFD700', line: { width: 1, color: 'white' } },
-          hoverinfo: 'skip',
+          text: eaMarked.map(getStructureHoverText),
+          hoverinfo: 'text',
           customdata: eaMarked.map((s) => s.id),
           showlegend: true,
         });
@@ -164,11 +169,28 @@ export function ParetoPage() {
     yaxis: { title: { text: objName, font: titleFont }, ...axisStyle },
     hovermode: 'closest' as const,
     showlegend: true,
-    legend: { bgcolor: 'rgba(255,255,255,0.4)', font: { size: 11, color: pt.legendColor } },
+    legend: {
+      bgcolor: theme === 'dark' ? 'rgba(24, 24, 37, 0.86)' : 'rgba(255,255,255,0.4)',
+      bordercolor: theme === 'dark' ? '#313244' : '#e2e8f0',
+      font: { size: 11, color: pt.legendColor },
+    },
     margin: { t: 50, l: 60, b: 60 },
     plot_bgcolor: pt.plotBg,
     paper_bgcolor: pt.paperBg,
   };
+
+  const structurePointClick = usePlotlyStructurePointClick({
+    traces,
+    onStructureClick: openViewer,
+  });
+
+  if (!isMulti) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)' }}>
+        {t('pareto.singleObjectiveHint')}
+      </div>
+    );
+  }
 
   function handleExport() {
     if (paretoKey == null) return;
@@ -205,17 +227,14 @@ export function ParetoPage() {
       </div>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 16 }}>
-        <Plot
-          data={traces}
+        <PlotFrame
+          data={structurePointClick.plotTraces}
           layout={layout}
-          config={{ responsive: true }}
           style={{ width: '100%', height: 550 }}
-          onClick={(event: PlotMouseEvent) => {
-            const point = event.points?.[0];
-            if (point?.customdata) {
-              openViewer(Number(point.customdata));
-            }
-          }}
+          boundaryStyle={{ width: '100%', height: 550 }}
+          boundaryHandlers={structurePointClick.boundaryHandlers}
+          hoverTooltip={structurePointClick.hoverTooltip}
+          {...structurePointClick.plotHandlers}
         />
       </div>
 
@@ -233,7 +252,12 @@ export function ParetoPage() {
                 key={n}
                 className={`btn btn-sm ${selectedFronts.has(n) ? 'btn-primary' : 'btn-outline'}`}
                 onClick={() => toggleFront(n)}
-                style={selectedFronts.has(n) ? { background: FRONT_COLORS[(n - 1) % FRONT_COLORS.length] } : {}}
+                style={selectedFronts.has(n)
+                  ? {
+                      background: plotTheme.frontColors[(n - 1) % plotTheme.frontColors.length],
+                      color: theme === 'dark' ? 'var(--color-primary-contrast)' : '#fff',
+                    }
+                  : {}}
               >
                 Front {n}
               </button>

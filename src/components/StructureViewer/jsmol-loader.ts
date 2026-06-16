@@ -20,6 +20,20 @@ declare global {
 }
 
 let loadPromise: Promise<typeof window.Jmol> | null = null;
+let preloadRequested = false;
+
+export function preloadJSmol(): void {
+  if (preloadRequested || typeof document === 'undefined') return;
+  if (typeof window !== 'undefined' && (window.Jmol || loadPromise)) return;
+
+  preloadRequested = true;
+
+  const link = document.createElement('link');
+  link.rel = 'prefetch';
+  link.as = 'script';
+  link.href = JSMOL_SCRIPT;
+  document.head.appendChild(link);
+}
 
 export function loadJSmol(): Promise<typeof window.Jmol> {
   if (loadPromise) return loadPromise;

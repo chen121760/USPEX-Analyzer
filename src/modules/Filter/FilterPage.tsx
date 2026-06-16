@@ -1,116 +1,18 @@
 import { useMemo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
-import { useUIStore } from '@/store/useUIStore';
-import { X, Plus, Download } from 'lucide-react';
+import { useFilterStore } from '@/store/useFilterStore';
+import { X, Plus } from 'lucide-react';
 import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
-import { buildSeedsFile, structuresToCSV } from '@/lib/poscarWriter';
-import { FormulaDisplay } from '@/components/FormulaDisplay';
+import { structuresToCSV } from '@/export/csvExport';
+import { downloadBlob } from '@/export/exportFileNames';
+import { buildExportFilename, buildSeedsFile } from '@/export/poscarExport';
 import { ML_FIELD_KEYS } from '@/lib/constants';
-import type { Structure, UnifiedCondition, NumericOperator, CompOperator, UnifiedConditionGroup, CustomNamePart } from '@/types/structure';
-
-
-const NUMERIC_OPS: NumericOperator[] = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq'];
-const COMP_OPS: CompOperator[] = ['>', '>=', '<', '<=', '='];
-
-// ── 辅助函数 ──────────────────────────────────────────────────
-function toSortableNumber(value: unknown): number {
-  if (value == null) return Number.POSITIVE_INFINITY;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
-}
-
-/**
- * 从 Structure 获取任意字段的值 —— 先查直接属性，再查 extraProps。
- * 这是 Filter 能处理未知字段（如 Property_X、Thick 等）的关键。
- */
-function getStructureValue(s: Structure, field: string): unknown {
-  const direct = (s as unknown as Record<string, unknown>)[field];
-  if (direct !== undefined) return direct;
-  return s.extraProps?.[field];
-}
-
-function applyCondition(s: Structure, cond: UnifiedCondition, elements: string[]): boolean {
-  if (cond.kind === 'numeric') {
-    const val = getStructureValue(s, cond.field);
-    if (val == null) return false;
-    const num = Number(val);
-    // Sentinel -1 means "no data" for these fields
-    if (num === -1 && new Set(['paretoFront', 'eForm', 'eHullRecons', ...ML_FIELD_KEYS, 'aOrder', 'sOrder']).has(cond.field)) return false;
-    if (isNaN(num)) return false;
-    const target = cond.value;
-    switch (cond.operator) {
-      case 'eq':  return num === target;
-      case 'neq': return num !== target;
-      case 'gt':  return num > target;
-      case 'gte': return num >= target;
-      case 'lt':  return num < target;
-      case 'lte': return num <= target;
-    }
-  }
-  if (cond.kind === 'nComponents') {
-    return s.composition.filter((c) => c > 0).length === cond.value;
-  }
-  if (cond.kind === 'elementFraction') {
-    const elIdx = elements.indexOf(cond.element);
-    if (elIdx === -1) return true;
-    const total = s.composition.reduce((a, b) => a + b, 0);
-    if (total === 0) return false;
-    const frac = s.composition[elIdx] / total;
-    switch (cond.operator) {
-      case '>':  return frac > cond.value;
-      case '<':  return frac < cond.value;
-      case '>=': return frac >= cond.value;
-      case '<=': return frac <= cond.value;
-      case '=':  return Math.abs(frac - cond.value) < 0.001;
-    }
-  }
-  return true;
-}
-
-function conditionLabel(cond: UnifiedCondition, t: (k: string) => string): string {
-  if (cond.kind === 'numeric') {
-    const opLabel: Record<NumericOperator, string> = {
-      gt: '>', gte: '≥', lt: '<', lte: '≤', eq: '=', neq: '≠',
-    };
-    return `${t(`col.${cond.field}`) || cond.field} ${opLabel[cond.operator]} ${cond.value}`;
-  }
-  if (cond.kind === 'nComponents') {
-    return ({ 1: t('table.filterUnary'), 2: t('table.filterBinary'), 3: t('table.filterTernary') })[cond.value];
-  }
-  return `x(${cond.element}) ${cond.operator} ${cond.value}`;
-}
-
-function buildFilename(index: number, s: Structure, nameParts: number[], padding: number, prefix: string, customNameParts: CustomNamePart[] = []): string {
-  const segments: string[] = [];
-  for (const part of nameParts) {
-    switch (part) {
-      case 1: segments.push(String(index + 1).padStart(padding, '0')); break;
-      case 2: segments.push(`EA${s.id}`); break;
-      case 3: segments.push(`SG${s.spaceGroup}`); break;
-      case 4: segments.push(`Ed${s.fitness >= 0 ? s.fitness.toFixed(4) : 'NA'}`); break;
-      case 5: {
-        const paretoVal = s.extraProps
-          ? Object.entries(s.extraProps).find(([k]) => k.endsWith('-Pareto_ranking'))?.[1]
-          : undefined;
-        segments.push(`${prefix}${paretoVal != null ? paretoVal.toFixed(1) : 'NA'}`);
-        break;
-      }
-      case 6: segments.push(s.formula || 'Unknown'); break;
-    }
-  }
-  for (const cp of customNameParts) {
-    const raw = getStructureValue(s, cp.field);
-    if (raw == null) continue;
-    const num = Number(raw);
-    if (isNaN(num)) continue;
-    const formatted = Number.isInteger(num) ? String(num) : num.toFixed(3);
-    const p = cp.label.trim();
-    segments.push(p ? `${p}${formatted}` : formatted);
-  }
-  return segments.join('-') + '.vasp';
-}
+import { collectDynamicFieldKeys, getStructureFieldValue } from '@/domain/structure/dynamicFields';
+import type { UnifiedCondition, NumericOperator, CompOperator, UnifiedConditionGroup } from '@/types/structure';
+import { COMP_OPS, NUMERIC_OPS, applyCondition, conditionLabel, toSortableNumber } from './filterLogic';
+import { FilterExportPanel } from './components/FilterExportPanel';
+import { FilterPreviewTable } from './components/FilterPreviewTable';
 
 // ── 主组件 ────────────────────────────────────────────────────
 export function FilterPage() {
@@ -120,18 +22,18 @@ export function FilterPage() {
   const tags = useProjectStore((s) => s.tags);
   const elements = systemInfo?.elements ?? [];
 
-  const tagStates       = useUIStore((s) => s.filterTagStates);
-  const setTagStates    = useUIStore((s) => s.setFilterTagStates);
-  const exportFormat    = useUIStore((s) => s.filterExportFormat);
-  const setExportFormat = useUIStore((s) => s.setFilterExportFormat);
-  const nameParts          = useUIStore((s) => s.filterNameParts);
-  const setNameParts       = useUIStore((s) => s.setFilterNameParts);
-  const customNameParts    = useUIStore((s) => s.filterCustomNameParts);
-  const setCustomNameParts = useUIStore((s) => s.setFilterCustomNameParts);
-  const sortKey            = useUIStore((s) => s.filterSortKey);
-  const setSortKey      = useUIStore((s) => s.setFilterSortKey);
-  const sortReverse     = useUIStore((s) => s.filterSortReverse);
-  const setSortReverse  = useUIStore((s) => s.setFilterSortReverse);
+  const tagStates       = useFilterStore((s) => s.filterTagStates);
+  const setTagStates    = useFilterStore((s) => s.setFilterTagStates);
+  const exportFormat    = useFilterStore((s) => s.filterExportFormat);
+  const setExportFormat = useFilterStore((s) => s.setFilterExportFormat);
+  const nameParts          = useFilterStore((s) => s.filterNameParts);
+  const setNameParts       = useFilterStore((s) => s.setFilterNameParts);
+  const customNameParts    = useFilterStore((s) => s.filterCustomNameParts);
+  const setCustomNameParts = useFilterStore((s) => s.setFilterCustomNameParts);
+  const sortKey            = useFilterStore((s) => s.filterSortKey);
+  const setSortKey      = useFilterStore((s) => s.setFilterSortKey);
+  const sortReverse     = useFilterStore((s) => s.filterSortReverse);
+  const setSortReverse  = useFilterStore((s) => s.setFilterSortReverse);
 
   const secondObjPrefix = 'Obj';
 
@@ -141,14 +43,7 @@ export function FilterPage() {
   const hasML          = structures.some((s) => s.bulkModulus >= 0);
   const hasFingerprint = structures.some((s) => s.qEntropy > 0);
 
-  // 收集所有 extraProps 的 key，使 Filter 能自适应未知字段
-  const extraPropKeys = useMemo(() => {
-    const keys = new Set<string>();
-    structures.forEach((s) => {
-      if (s.extraProps) Object.keys(s.extraProps).forEach((k) => keys.add(k));
-    });
-    return Array.from(keys).sort();
-  }, [structures]);
+  const extraPropKeys = useMemo(() => collectDynamicFieldKeys(structures), [structures]);
 
   const numericFields = useMemo(() => {
     const base = ['fitness', 'enthalpy', 'enthalpyTotal', 'volume', 'density', 'spaceGroup', 'generation'];
@@ -160,9 +55,9 @@ export function FilterPage() {
     return base;
   }, [isVarcomp, hasPareto, hasML, hasFingerprint, extraPropKeys]);
 
-  // 条件组 — 接入 UIStore
-  const groups    = useUIStore((s) => s.filterConditionGroups);
-  const setGroups = useUIStore((s) => s.setFilterConditionGroups);
+  // 条件组 — 接入 FilterStore
+  const groups    = useFilterStore((s) => s.filterConditionGroups);
+  const setGroups = useFilterStore((s) => s.setFilterConditionGroups);
 
   // 当前追加目标组 ID（null = 追加到最后一组，或新建）
   const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
@@ -252,8 +147,8 @@ export function FilterPage() {
   // 排序
   const sortedStructures = useMemo(() => {
     const sorted = [...filteredStructures].sort((a, b) => {
-      const av = getStructureValue(a, sortKey);
-      const bv = getStructureValue(b, sortKey);
+      const av = getStructureFieldValue(a, sortKey);
+      const bv = getStructureFieldValue(b, sortKey);
       return toSortableNumber(av) - toSortableNumber(bv);
     });
     return sortReverse ? sorted.reverse() : sorted;
@@ -267,18 +162,18 @@ export function FilterPage() {
       const zip = new JSZip();
       sortedStructures.forEach((s, i) => {
         if (!s.poscarData) return;
-        zip.file(buildFilename(i, s, nameParts, padding, secondObjPrefix, customNameParts), s.poscarData);
+        zip.file(buildExportFilename(i, s, nameParts, padding, secondObjPrefix, customNameParts), s.poscarData);
       });
-      saveAs(await zip.generateAsync({ type: 'blob' }), `uspex-structures-${sortedStructures.length}.zip`);
+      downloadBlob(await zip.generateAsync({ type: 'blob' }), `uspex-structures-${sortedStructures.length}.zip`);
     } else if (exportFormat === 'seeds') {
-      saveAs(new Blob([buildSeedsFile(sortedStructures)], { type: 'text/plain' }), 'seeds.txt');
+      downloadBlob(new Blob([buildSeedsFile(sortedStructures)], { type: 'text/plain' }), 'seeds.txt');
     } else if (exportFormat === 'csv') {
-      saveAs(new Blob([structuresToCSV(sortedStructures, { hasPareto, hasML, hasFingerprint })], { type: 'text/csv' }), 'structures.csv');
+      downloadBlob(new Blob([structuresToCSV(sortedStructures, { hasPareto, hasML, hasFingerprint })], { type: 'text/csv' }), 'structures.csv');
     } else if (exportFormat === 'json') {
       const project = useProjectStore.getState().exportProjectFile();
-      saveAs(new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' }), `uspex-project-${systemInfo?.elements.join('-') ?? 'data'}.json`);
+      downloadBlob(new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' }), `uspex-project-${systemInfo?.elements.join('-') ?? 'data'}.json`);
     }
-  }, [sortedStructures, exportFormat, nameParts, customNameParts, secondObjPrefix, systemInfo]);
+  }, [sortedStructures, exportFormat, nameParts, customNameParts, secondObjPrefix, hasPareto, hasML, hasFingerprint, systemInfo]);
 
   const toggleNamePart = (part: number) => {
     setNameParts(nameParts.includes(part) ? nameParts.filter((p) => p !== part) : [...nameParts, part].sort());
@@ -291,7 +186,7 @@ export function FilterPage() {
   const inputStyle: React.CSSProperties = { ...selectStyle, width: 100 };
 
   const previewName = sortedStructures.length > 0
-    ? buildFilename(0, sortedStructures[0], nameParts, String(sortedStructures.length).length, secondObjPrefix, customNameParts)
+    ? buildExportFilename(0, sortedStructures[0], nameParts, String(sortedStructures.length).length, secondObjPrefix, customNameParts)
     : '001-EA2-Ti10H28-SG82.vasp';
 
   return (
@@ -417,7 +312,7 @@ export function FilterPage() {
                         {ci > 0 && <span style={{ fontSize: 10, color: 'var(--color-text-muted)', margin: '0 2px' }}>AND</span>}
                         <span style={{
                           fontSize: 11, padding: '2px 7px', borderRadius: 10,
-                          background: 'var(--color-primary)', color: '#fff',
+                          background: 'var(--color-primary)', color: 'var(--color-primary-contrast)',
                           display: 'flex', alignItems: 'center', gap: 3,
                         }}>
                           {conditionLabel(cond, t)}
@@ -472,170 +367,26 @@ export function FilterPage() {
           </div>
         </div>
 
-        {/* ── 右：导出选项 ── */}
-        <div className="card">
-          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{t('export.title')}</h3>
-
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 6 }}>{t('export.format')}</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {(['zip', 'seeds', 'csv', 'json'] as const).map((fmt) => (
-                <button key={fmt} className={`btn btn-sm ${exportFormat === fmt ? 'btn-primary' : 'btn-outline'}`}
-                  onClick={() => setExportFormat(fmt)}>
-                  {t(`export.format${fmt.charAt(0).toUpperCase() + fmt.slice(1)}`)}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {exportFormat === 'zip' && (
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 6 }}>{t('export.naming')}</div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {([
-                  [1, t('export.nameParts.index')], [2, t('export.nameParts.id')],
-                  [3, t('export.nameParts.sg')], [4, t('export.nameParts.fitness')],
-                  [5, t('export.nameParts.secondObj')], [6, t('export.nameParts.formula')],
-                ] as [number, string][]).map(([n, label]) => (
-                  <button key={n} className={`btn btn-sm ${nameParts.includes(n) ? 'btn-primary' : 'btn-outline'}`}
-                    onClick={() => toggleNamePart(n)}>
-                    [{n}] {label}
-                  </button>
-                ))}
-              </div>
-
-              {/* 自定义命名段 */}
-              <div style={{ marginTop: 8 }}>
-                <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-                  {t('export.customNameParts')}
-                </div>
-                {customNameParts.map((cp) => (
-                  <div key={cp.id} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 4 }}>
-                    <input
-                      type="text"
-                      value={cp.label}
-                      placeholder={t('export.customLabel')}
-                      style={{ padding: '5px 8px', border: '1px solid var(--color-border)', borderRadius: 6,
-                               fontSize: 12, background: 'var(--color-bg)', color: 'var(--color-text)', width: 70 }}
-                      onChange={(e) => setCustomNameParts(
-                        customNameParts.map((p) => p.id === cp.id ? { ...p, label: e.target.value } : p)
-                      )}
-                    />
-                    <select
-                      value={cp.field}
-                      style={selectStyle}
-                      onChange={(e) => setCustomNameParts(
-                        customNameParts.map((p) => p.id === cp.id ? { ...p, field: e.target.value } : p)
-                      )}
-                    >
-                      {numericFields.map((f) => (
-                        <option key={f} value={f}>{t(`col.${f}`) || f}</option>
-                      ))}
-                    </select>
-                    <button
-                      className="btn btn-sm btn-outline"
-                      style={{ padding: '3px 7px', color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
-                      onClick={() => setCustomNameParts(customNameParts.filter((p) => p.id !== cp.id))}
-                    >×</button>
-                  </div>
-                ))}
-                <button
-                  className="btn btn-sm btn-outline"
-                  style={{ fontSize: 11, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}
-                  onClick={() => setCustomNameParts([
-                    ...customNameParts,
-                    { id: crypto.randomUUID(), label: '', field: numericFields[0] ?? 'generation' },
-                  ])}
-                >
-                  <Plus size={12} /> {t('export.addCustomPart')}
-                </button>
-              </div>
-
-              <div style={{ fontSize: 12, marginTop: 8, color: 'var(--color-text-muted)' }}>
-                {t('export.preview')}: <code style={{ background: 'var(--color-bg-tertiary)', padding: '2px 6px', borderRadius: 4 }}>{previewName}</code>
-              </div>
-            </div>
-          )}
-
-          <div style={{ marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{t('export.sortBy')}:</span>
-            <select value={sortKey} onChange={(e) => setSortKey(e.target.value)} style={selectStyle}>
-              {numericFields.map((f) => <option key={f} value={f}>{t(`col.${f}`) || f}</option>)}
-            </select>
-            <button className="btn btn-outline btn-sm" onClick={() => setSortReverse(!sortReverse)}>
-              {sortReverse ? t('export.descending') : t('export.ascending')}
-            </button>
-          </div>
-
-          <button className="btn btn-primary" onClick={handleExport} disabled={filteredStructures.length === 0}
-            style={{ width: '100%', padding: '10px 20px', fontSize: 14, opacity: filteredStructures.length > 0 ? 1 : 0.4 }}>
-            <Download size={16} />
-            {t('export.exportCount', { count: filteredStructures.length })}
-          </button>
-        </div>
+        <FilterExportPanel
+          t={t}
+          exportFormat={exportFormat}
+          setExportFormat={setExportFormat}
+          nameParts={nameParts}
+          customNameParts={customNameParts}
+          setCustomNameParts={setCustomNameParts}
+          numericFields={numericFields}
+          sortKey={sortKey}
+          sortReverse={sortReverse}
+          previewName={previewName}
+          filteredCount={filteredStructures.length}
+          toggleNamePart={toggleNamePart}
+          setSortKey={setSortKey}
+          setSortReverse={setSortReverse}
+          handleExport={handleExport}
+        />
       </div>
 
-      {/* 预览表格 */}
-      {sortedStructures.length > 0 && (
-        <div className="card" style={{ marginTop: 16, maxHeight: 300, overflow: 'auto' }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>ID</th>
-                <th>{t('col.formula')}</th>
-                <th>SG</th>
-                <th>{t('col.enthalpy')}</th>
-                <th>{t('col.fitness')}</th>
-                <th>{t('col.origin')}</th>
-                {groups
-                  .flatMap((g) => g.conditions)
-                  .filter((c): c is { kind: 'numeric'; field: string; operator: NumericOperator; value: number } => c.kind === 'numeric')
-                  .map((c) => c.field)
-                  .filter((f, i, arr) => arr.indexOf(f) === i && !['enthalpy', 'fitness', 'spaceGroup'].includes(f))
-                  .map((f) => (
-                    <th key={f} style={{ color: 'var(--color-primary)', fontStyle: 'italic' }}>
-                      {t(`col.${f}`) || f}
-                    </th>
-                  ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sortedStructures.slice(0, 50).map((s, i) => {
-                const extraFields = groups
-                  .flatMap((g) => g.conditions)
-                  .filter((c): c is { kind: 'numeric'; field: string; operator: NumericOperator; value: number } => c.kind === 'numeric')
-                  .map((c) => c.field)
-                  .filter((f, idx, arr) => arr.indexOf(f) === idx && !['enthalpy', 'fitness', 'spaceGroup'].includes(f));
-                return (
-                  <tr key={s.id}>
-                    <td>{i + 1}</td>
-                    <td style={{ fontWeight: 600 }}>EA{s.id}</td>
-                    <td><FormulaDisplay formula={s.formula} /></td>
-                    <td>{s.spaceGroup}</td>
-                    <td>{s.enthalpyTotal <= 900 ? s.enthalpy.toFixed(4) : '—'}</td>
-                    <td>{s.fitness != null && s.fitness >= 0 ? s.fitness.toFixed(4) : '—'}</td>
-                    <td>{s.origin}</td>
-                    {extraFields.map((f) => {
-                      const v = Number(getStructureValue(s, f));
-                      return (
-                        <td key={f} style={{ color: 'var(--color-primary)' }}>
-                          {isNaN(v) ? '—' : v < 900 ? v.toFixed(4) : v.toFixed(1)}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          {sortedStructures.length > 50 && (
-            <div style={{ padding: 8, textAlign: 'center', fontSize: 12, color: 'var(--color-text-muted)' }}>
-              ... and {sortedStructures.length - 50} more
-            </div>
-          )}
-        </div>
-      )}
+      <FilterPreviewTable sortedStructures={sortedStructures} groups={groups} t={t} />
     </div>
   );
 }

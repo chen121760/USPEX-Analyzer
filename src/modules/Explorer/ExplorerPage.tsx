@@ -2,14 +2,23 @@ import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useUIStore } from '@/store/useUIStore';
-import Plot, { type PlotMouseEvent } from 'react-plotly.js';
+import { useChartSettingsStore } from '@/store/useChartSettingsStore';
+import { useThemeStore } from '@/theme/themeStore';
+import { useMarkStore } from '@/store/useMarkStore';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT, getPlotlyTheme, ML_FIELD_KEYS, ML_FIELD_I18N } from '@/lib/constants';
-import GIF from 'gif.js';
+import { PLOTLY_FONT, ML_FIELD_KEYS, ML_FIELD_I18N } from '@/lib/constants';
+import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
+import { exportAnimatedPlotlyGif } from '@/export/chartImageExport';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadCsv } from '@/lib/exportCsv';
+import { PlotFrame } from '@/charts/shared/PlotFrame';
+import { usePlotlyStructurePointClick } from '@/charts/shared/usePlotlyStructurePointClick';
+import { RangeInputs } from '@/charts/shared/RangeControls';
+import { buildXMarginalTraces, buildYMarginalTraces } from '@/charts/shared/marginalTraces';
+import { collectDynamicFieldKeys } from '@/domain/structure/dynamicFields';
+import { ExplorerControls } from './components/ExplorerControls';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyData = any;
 import type { Structure } from '@/types/structure';
@@ -107,9 +116,9 @@ function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: bo
 export function ExplorerPage() {
   const { t } = useTranslation();
   const openViewer      = useUIStore((s) => s.openViewer);
-  const markActiveTags  = useUIStore((s) => s.markActiveTags);
-  const markEaInput     = useUIStore((s) => s.markEaInput);
-  const theme           = useUIStore((s) => s.theme);
+  const markActiveTags  = useMarkStore((s) => s.markActiveTags);
+  const markEaInput     = useMarkStore((s) => s.markEaInput);
+  const theme           = useThemeStore((s) => s.theme);
   const allTags         = useProjectStore((s) => s.tags);
   const structures      = useProjectStore((s) => s.structures);
   const systemInfo      = useProjectStore((s) => s.systemInfo);
@@ -120,11 +129,7 @@ export function ExplorerPage() {
   const hasVolume  = structures.some((s) => s.volume > 0);
   const hasDensity = structures.some((s) => s.density > 0);
 
-  const extraPropKeys = useMemo(() => {
-    const keys = new Set<string>();
-    structures.forEach((s) => { if (s.extraProps) Object.keys(s.extraProps).forEach((k) => keys.add(k)); });
-    return Array.from(keys).sort();
-  }, [structures]);
+  const extraPropKeys = useMemo(() => collectDynamicFieldKeys(structures), [structures]);
 
   const structureMap = useMemo(() => {
     const m = new Map<number, Structure>();
@@ -137,22 +142,22 @@ export function ExplorerPage() {
     [t, hasML, hasPareto, extraPropKeys, systemInfo, structureMap, isVarcomp, hasVolume, hasDensity],
   );
 
-  const xKey      = useUIStore((s) => s.explorerXKey);
-  const setXKey   = useUIStore((s) => s.setExplorerXKey);
-  const yKey      = useUIStore((s) => s.explorerYKey);
-  const setYKey   = useUIStore((s) => s.setExplorerYKey);
-  const colorKey  = useUIStore((s) => s.explorerColorKey);
-  const setColorKey = useUIStore((s) => s.setExplorerColorKey);
-  const showXMarginal    = useUIStore((s) => s.explorerShowXMarginal);
-  const setShowXMarginal = useUIStore((s) => s.setExplorerShowXMarginal);
-  const showYMarginal    = useUIStore((s) => s.explorerShowYMarginal);
-  const setShowYMarginal = useUIStore((s) => s.setExplorerShowYMarginal);
-  const marginalBins     = useUIStore((s) => s.explorerMarginalBins);
-  const setMarginalBins  = useUIStore((s) => s.setExplorerMarginalBins);
-  const xExcludeZero     = useUIStore((s) => s.explorerXMarginalExcludeZero);
-  const setXExcludeZero  = useUIStore((s) => s.setExplorerXMarginalExcludeZero);
-  const yExcludeZero     = useUIStore((s) => s.explorerYMarginalExcludeZero);
-  const setYExcludeZero  = useUIStore((s) => s.setExplorerYMarginalExcludeZero);
+  const xKey      = useChartSettingsStore((s) => s.explorerXKey);
+  const setXKey   = useChartSettingsStore((s) => s.setExplorerXKey);
+  const yKey      = useChartSettingsStore((s) => s.explorerYKey);
+  const setYKey   = useChartSettingsStore((s) => s.setExplorerYKey);
+  const colorKey  = useChartSettingsStore((s) => s.explorerColorKey);
+  const setColorKey = useChartSettingsStore((s) => s.setExplorerColorKey);
+  const showXMarginal    = useChartSettingsStore((s) => s.explorerShowXMarginal);
+  const setShowXMarginal = useChartSettingsStore((s) => s.setExplorerShowXMarginal);
+  const showYMarginal    = useChartSettingsStore((s) => s.explorerShowYMarginal);
+  const setShowYMarginal = useChartSettingsStore((s) => s.setExplorerShowYMarginal);
+  const marginalBins     = useChartSettingsStore((s) => s.explorerMarginalBins);
+  const setMarginalBins  = useChartSettingsStore((s) => s.setExplorerMarginalBins);
+  const xExcludeZero     = useChartSettingsStore((s) => s.explorerXMarginalExcludeZero);
+  const setXExcludeZero  = useChartSettingsStore((s) => s.setExplorerXMarginalExcludeZero);
+  const yExcludeZero     = useChartSettingsStore((s) => s.explorerYMarginalExcludeZero);
+  const setYExcludeZero  = useChartSettingsStore((s) => s.setExplorerYMarginalExcludeZero);
 
   const xField = fields.find((f) => f.key === xKey) ?? fields[0];
   const yField = fields.find((f) => f.key === yKey) ?? fields[1];
@@ -223,7 +228,7 @@ export function ExplorerPage() {
     setIsPlaying(false);
   }, []);
 
-  // GIF export: bypass React state — compute each frame directly and force-render via Plotly.react()
+  // GIF export: compute each frame directly and render it on an offscreen Plotly host.
   // If upper limit is already at max, start from min so the GIF captures the full animation.
   const handleExportGif = useCallback(async () => {
     if (!colorDataRange || !plotRef.current) return;
@@ -239,118 +244,94 @@ export function ExplorerPage() {
     if (frames.length === 0) return;
 
     setIsExporting(true);
-    const PlotlyModule = await import('plotly.js-dist-min');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const Plotly = (PlotlyModule as any).default ?? PlotlyModule;
-    const graphDiv = plotRef.current.querySelector('.js-plotly-plot') as HTMLElement;
-    if (!graphDiv) { setIsExporting(false); return; }
+    try {
+      await exportAnimatedPlotlyGif({
+        filename: 'explorer.gif',
+        sourceElement: plotRef.current,
+        frames,
+        delayMs: frameDelay,
+        layout: { ...layoutRef.current },
+        buildFrameData: (hi) => {
+          // Compute filtered data for this frame directly (no React state)
+          const frameData = structures.filter((s) => {
+            const xv = xField.accessor(s);
+            const yv = yField.accessor(s);
+            if (xv == null || yv == null || s.enthalpyTotal > 900) return false;
+            if (colorField && colorField.type === 'numeric') {
+              const cv = colorField.accessor(s) as number;
+              if (cv == null || !isFinite(cv)) return false;
+              if (cv < fixedLow || cv > hi) return false;
+            }
+            return true;
+          });
 
-    const baseLayout = { ...layoutRef.current };
+          // Build trace for this frame
+          let frameTraces: PlotlyData[];
+          if (!colorField || colorField.type === 'numeric') {
+            frameTraces = [{
+              x: frameData.map((s) => xField.accessor(s) as number),
+              y: frameData.map((s) => yField.accessor(s) as number),
+              mode: 'markers', type: 'scatter',
+              marker: {
+                color: colorField ? frameData.map((s) => (colorField.accessor(s) as number) ?? 0) : getPlotlyTheme(theme).defaultMarkerColor,
+                colorscale: 'Viridis',
+                cmin: colorDataRange.min,
+                cmax: colorDataRange.max,
+                colorbar: colorField ? { title: colorField.label, thickness: 15 } : undefined,
+                size: 6, opacity: 0.7,
+              },
+              hoverinfo: 'none',
+            }];
+          } else {
+            const groups = new Map<string, typeof frameData>();
+            for (const s of frameData) {
+              const cat = String(colorField.accessor(s) ?? 'Unknown');
+              if (!groups.has(cat)) groups.set(cat, []);
+              groups.get(cat)!.push(s);
+            }
+            const colors = getPlotlyTheme(theme).categoricalColors;
+            frameTraces = Array.from(groups.entries()).map(([cat, pts], i) => ({
+              x: pts.map((s) => xField.accessor(s) as number),
+              y: pts.map((s) => yField.accessor(s) as number),
+              mode: 'markers', type: 'scatter', name: cat,
+              marker: { color: colors[i % colors.length], size: 6, opacity: 0.7 },
+              hoverinfo: 'none',
+            }));
+          }
 
-    const gif = new GIF({
-      workers: 2,
-      quality: 10,
-      workerScript: `${import.meta.env.BASE_URL}gif.worker.js`,
-    });
+          // Add marginal traces for this frame
+          if (showXMarginal) {
+            const xRangeMin = xMin !== '' ? parseFloat(xMin) : null;
+            const xRangeMax = xMax !== '' ? parseFloat(xMax) : null;
+            const xVals = frameData.map((s) => xField.accessor(s) as number).filter((v) => {
+              if (v == null || !isFinite(v)) return false;
+              if (xExcludeZero && v === 0) return false;
+              if (xRangeMin !== null && v < xRangeMin) return false;
+              if (xRangeMax !== null && v > xRangeMax) return false;
+              return true;
+            });
+            frameTraces = [...frameTraces, ...buildXMarginalTraces(xVals, marginalBins, xField.label, 0, theme)];
+          }
+          if (showYMarginal) {
+            const yRangeMin = yMin !== '' ? parseFloat(yMin) : null;
+            const yRangeMax = yMax !== '' ? parseFloat(yMax) : null;
+            const yVals = frameData.map((s) => yField.accessor(s) as number).filter((v) => {
+              if (v == null || !isFinite(v)) return false;
+              if (yExcludeZero && v === 0) return false;
+              if (yRangeMin !== null && v < yRangeMin) return false;
+              if (yRangeMax !== null && v > yRangeMax) return false;
+              return true;
+            });
+            frameTraces = [...frameTraces, ...buildYMarginalTraces(yVals, marginalBins, yField.label, 0, theme)];
+          }
 
-    for (const hi of frames) {
-      // Compute filtered data for this frame directly (no React state)
-      const frameData = structures.filter((s) => {
-        const xv = xField.accessor(s);
-        const yv = yField.accessor(s);
-        if (xv == null || yv == null || s.enthalpyTotal > 900) return false;
-        if (colorField && colorField.type === 'numeric') {
-          const cv = colorField.accessor(s) as number;
-          if (cv == null || !isFinite(cv)) return false;
-          if (cv < fixedLow || cv > hi) return false;
-        }
-        return true;
+          return frameTraces;
+        },
       });
-
-      // Build trace for this frame
-      let frameTraces: PlotlyData[];
-      if (!colorField || colorField.type === 'numeric') {
-        frameTraces = [{
-          x: frameData.map((s) => xField.accessor(s) as number),
-          y: frameData.map((s) => yField.accessor(s) as number),
-          mode: 'markers', type: 'scatter',
-          marker: {
-            color: colorField ? frameData.map((s) => (colorField.accessor(s) as number) ?? 0) : '#6366f1',
-            colorscale: 'Viridis',
-            cmin: colorDataRange.min,
-            cmax: colorDataRange.max,
-            colorbar: colorField ? { title: colorField.label, thickness: 15 } : undefined,
-            size: 6, opacity: 0.7,
-          },
-          hoverinfo: 'none',
-        }];
-      } else {
-        const groups = new Map<string, typeof frameData>();
-        for (const s of frameData) {
-          const cat = String(colorField.accessor(s) ?? 'Unknown');
-          if (!groups.has(cat)) groups.set(cat, []);
-          groups.get(cat)!.push(s);
-        }
-        const COLORS = ['#6366f1', '#ec4899', '#f97316', '#14b8a6', '#8b5cf6', '#eab308', '#06b6d4', '#6b7280', '#dc2626', '#16a34a'];
-        frameTraces = Array.from(groups.entries()).map(([cat, pts], i) => ({
-          x: pts.map((s) => xField.accessor(s) as number),
-          y: pts.map((s) => yField.accessor(s) as number),
-          mode: 'markers', type: 'scatter', name: cat,
-          marker: { color: COLORS[i % COLORS.length], size: 6, opacity: 0.7 },
-          hoverinfo: 'none',
-        }));
-      }
-
-      // Add marginal traces for this frame
-      if (showXMarginal) {
-        const xRangeMin = xMin !== '' ? parseFloat(xMin) : null;
-        const xRangeMax = xMax !== '' ? parseFloat(xMax) : null;
-        const xVals = frameData.map((s) => xField.accessor(s) as number).filter((v) => {
-          if (v == null || !isFinite(v)) return false;
-          if (xExcludeZero && v === 0) return false;
-          if (xRangeMin !== null && v < xRangeMin) return false;
-          if (xRangeMax !== null && v > xRangeMax) return false;
-          return true;
-        });
-        frameTraces = [...frameTraces, ...buildXMarginalTraces(xVals, marginalBins, xField.label)];
-      }
-      if (showYMarginal) {
-        const yRangeMin = yMin !== '' ? parseFloat(yMin) : null;
-        const yRangeMax = yMax !== '' ? parseFloat(yMax) : null;
-        const yVals = frameData.map((s) => yField.accessor(s) as number).filter((v) => {
-          if (v == null || !isFinite(v)) return false;
-          if (yExcludeZero && v === 0) return false;
-          if (yRangeMin !== null && v < yRangeMin) return false;
-          if (yRangeMax !== null && v > yRangeMax) return false;
-          return true;
-        });
-        frameTraces = [...frameTraces, ...buildYMarginalTraces(yVals, marginalBins, yField.label)];
-      }
-
-      await Plotly.react(graphDiv, frameTraces, baseLayout);
-      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-
-      const dataUrl: string = await Plotly.toImage(graphDiv, {
-        format: 'png',
-        width: graphDiv.offsetWidth,
-        height: graphDiv.offsetHeight,
-      });
-      const img = new Image();
-      await new Promise<void>((resolve) => { img.onload = () => resolve(); img.src = dataUrl; });
-      gif.addFrame(img, { delay: frameDelay });
-    }
-
-    gif.on('finished', (blob: Blob) => {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'explorer.gif';
-      a.click();
-      URL.revokeObjectURL(url);
+    } finally {
       setIsExporting(false);
-    });
-    gif.render();
-  }, [colorDataRange, cMin, cMax, playStep, playFps, structures, xField, yField, colorField, showXMarginal, showYMarginal, marginalBins, xExcludeZero, yExcludeZero, xMin, xMax, yMin, yMax]);
+    }
+  }, [colorDataRange, cMin, cMax, playStep, playFps, structures, xField, yField, colorField, showXMarginal, showYMarginal, marginalBins, xExcludeZero, yExcludeZero, xMin, xMax, yMin, yMax, theme]);
 
   useEffect(() => () => { if (playTimerRef.current) clearTimeout(playTimerRef.current); }, []);
 
@@ -379,7 +360,7 @@ export function ExplorerPage() {
         mode: 'markers' as const,
         type: 'scatter' as const,
         marker: {
-          color: colorField ? filteredData.map((s) => (colorField.accessor(s) as number) ?? 0) : '#6366f1',
+          color: colorField ? filteredData.map((s) => (colorField.accessor(s) as number) ?? 0) : getPlotlyTheme(theme).defaultMarkerColor,
           colorscale: 'Viridis',
           cmin: colorField && colorDataRange ? colorDataRange.min : undefined,
           cmax: colorField && colorDataRange ? colorDataRange.max : undefined,
@@ -406,7 +387,7 @@ export function ExplorerPage() {
       groups.get(cat)!.push(s);
     }
 
-    const COLORS = ['#6366f1', '#ec4899', '#f97316', '#14b8a6', '#8b5cf6', '#eab308', '#06b6d4', '#6b7280', '#dc2626', '#16a34a'];
+    const colors = getPlotlyTheme(theme).categoricalColors;
 
     return Array.from(groups.entries()).map(([cat, pts], i) => ({
       x: pts.map((s) => xField.accessor(s) as number),
@@ -414,7 +395,7 @@ export function ExplorerPage() {
       mode: 'markers' as const,
       type: 'scatter' as const,
       name: cat,
-      marker: { color: COLORS[i % COLORS.length], size: 6, opacity: 0.7 },
+      marker: { color: colors[i % colors.length], size: 6, opacity: 0.7 },
       text: pts.map(
         (s) =>
           `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
@@ -425,11 +406,16 @@ export function ExplorerPage() {
       hoverinfo: 'text' as const,
       customdata: pts.map((s) => s.id),
     }));
-  }, [filteredData, xField, yField, colorField, colorDataRange]);
+  }, [filteredData, xField, yField, colorField, colorDataRange, theme]);
 
   // Mark overlay traces
   const overlayTraces: PlotlyData[] = useMemo(() => {
     const result: PlotlyData[] = [];
+    const hoverText = (s: Structure) =>
+      `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
+      `${xField.label}: ${xField.accessor(s)}<br>` +
+      `${yField.label}: ${yField.accessor(s)}<br>` +
+      `SG: ${s.spaceGroup} | Origin: ${s.origin}`;
 
     for (const tagId of markActiveTags) {
       const tagDef = allTags.find((tg) => tg.id === tagId);
@@ -442,7 +428,8 @@ export function ExplorerPage() {
         mode: 'markers', type: 'scatter',
         name: `★ ${t(tagDef.nameKey)}`,
         marker: { symbol: 'star', size: 14, color: tagDef.color, line: { width: 1, color: 'white' } },
-        hoverinfo: 'skip',
+        text: tagged.map(hoverText),
+        hoverinfo: 'text',
         customdata: tagged.map((s) => s.id),
         showlegend: true,
       });
@@ -458,7 +445,8 @@ export function ExplorerPage() {
           mode: 'markers', type: 'scatter',
           name: t('mark.eaSearchName'),
           marker: { symbol: 'star', size: 14, color: '#FFD700', line: { width: 1, color: 'white' } },
-          hoverinfo: 'skip',
+          text: eaMarked.map(hoverText),
+          hoverinfo: 'text',
           customdata: eaMarked.map((s) => s.id),
           showlegend: true,
         });
@@ -485,7 +473,7 @@ export function ExplorerPage() {
           if (xRangeMax !== null && v > xRangeMax) return false;
           return true;
         });
-      result.push(...buildXMarginalTraces(xVals, marginalBins, xField.label));
+      result.push(...buildXMarginalTraces(xVals, marginalBins, xField.label, 0, theme));
     }
     if (showYMarginal) {
       const yVals = filteredData
@@ -497,10 +485,10 @@ export function ExplorerPage() {
           if (yRangeMax !== null && v > yRangeMax) return false;
           return true;
         });
-      result.push(...buildYMarginalTraces(yVals, marginalBins, yField.label));
+      result.push(...buildYMarginalTraces(yVals, marginalBins, yField.label, 0, theme));
     }
     return result;
-  }, [filteredData, xField, yField, showXMarginal, showYMarginal, marginalBins, xExcludeZero, yExcludeZero, xMin, xMax, yMin, yMax]);
+  }, [filteredData, xField, yField, showXMarginal, showYMarginal, marginalBins, xExcludeZero, yExcludeZero, xMin, xMax, yMin, yMax, theme]);
 
   const inputStyle: React.CSSProperties = {
     width: 72,
@@ -554,8 +542,11 @@ export function ExplorerPage() {
       },
       hovermode: 'closest' as const,
       showlegend: true,
-      legend: { bgcolor: 'rgba(255,255,255,0.4)', font: { size: 11, color: pt.legendColor } },
-      dragmode: 'lasso' as const,
+      legend: {
+        bgcolor: theme === 'dark' ? 'rgba(24, 24, 37, 0.86)' : 'rgba(255,255,255,0.4)',
+        bordercolor: theme === 'dark' ? '#313244' : '#e2e8f0',
+        font: { size: 11, color: pt.legendColor },
+      },
       margin: { t: showXMarginal ? 10 : 50, r: showYMarginal ? 10 : 20, l: 60, b: 60 },
       plot_bgcolor: pt.plotBg,
       paper_bgcolor: pt.paperBg,
@@ -590,10 +581,14 @@ export function ExplorerPage() {
     }
 
     return base;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [xField, yField, xMin, xMax, yMin, yMax, showXMarginal, showYMarginal, theme]);
 
   layoutRef.current = layout;
+  const scatterTraces = [...traces, ...overlayTraces, ...marginalTraces];
+  const structurePointClick = usePlotlyStructurePointClick({
+    traces: scatterTraces,
+    onStructureClick: openViewer,
+  });
 
   function handleExportData() {
     const headers = ['EA_ID', 'Formula', xField.label, yField.label];
@@ -618,15 +613,6 @@ export function ExplorerPage() {
     downloadCsv(`${elements}_explorer_${xLabel}_vs_${yLabel}`, headers, rows);
   }
 
-  const selectStyle: React.CSSProperties = {
-    padding: '5px 8px',
-    border: '1px solid var(--color-border)',
-    borderRadius: 6,
-    fontSize: 12,
-    background: 'var(--color-bg)',
-    color: 'var(--color-text)',
-  };
-
   return (
     <div className="fade-in">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -634,149 +620,59 @@ export function ExplorerPage() {
         <ExportDataButton onClick={handleExportData} />
       </div>
 
-      {/* Axis selectors */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-          {t('explorer.xAxis')}:
-          <select value={xKey} onChange={(e) => setXKey(e.target.value)} style={selectStyle}>
-            {fields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
-          </select>
-          <button
-            onClick={() => setShowXMarginal(!showXMarginal)}
-            title="Toggle X distribution"
-            style={{
-              fontSize: 11, padding: '2px 7px', borderRadius: 4, cursor: 'pointer',
-              border: '1px solid var(--color-border)',
-              background: showXMarginal ? 'var(--color-primary)' : 'transparent',
-              color: showXMarginal ? '#fff' : 'var(--color-text-muted)',
-            }}
-          >∫ dist</button>
-          {showXMarginal && (
-            <button
-              onClick={() => setXExcludeZero(!xExcludeZero)}
-              title="Exclude zero values from X distribution"
-              style={{
-                fontSize: 11, padding: '2px 7px', borderRadius: 4, cursor: 'pointer',
-                border: '1px solid var(--color-border)',
-                background: xExcludeZero ? '#f59e0b' : 'transparent',
-                color: xExcludeZero ? '#fff' : 'var(--color-text-muted)',
-              }}
-            >≠0</button>
-          )}
-        </label>
-
-        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-          {t('explorer.yAxis')}:
-          <select value={yKey} onChange={(e) => setYKey(e.target.value)} style={selectStyle}>
-            {fields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
-          </select>
-          <button
-            onClick={() => setShowYMarginal(!showYMarginal)}
-            title="Toggle Y distribution"
-            style={{
-              fontSize: 11, padding: '2px 7px', borderRadius: 4, cursor: 'pointer',
-              border: '1px solid var(--color-border)',
-              background: showYMarginal ? 'var(--color-primary)' : 'transparent',
-              color: showYMarginal ? '#fff' : 'var(--color-text-muted)',
-            }}
-          >∫ dist</button>
-          {showYMarginal && (
-            <button
-              onClick={() => setYExcludeZero(!yExcludeZero)}
-              title="Exclude zero values from Y distribution"
-              style={{
-                fontSize: 11, padding: '2px 7px', borderRadius: 4, cursor: 'pointer',
-                border: '1px solid var(--color-border)',
-                background: yExcludeZero ? '#f59e0b' : 'transparent',
-                color: yExcludeZero ? '#fff' : 'var(--color-text-muted)',
-              }}
-            >≠0</button>
-          )}
-        </label>
-
-        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-          {t('explorer.colorBy')}:
-          <select value={colorKey} onChange={(e) => setColorKey(e.target.value)} style={selectStyle}>
-            <option value="">{t('explorer.none')}</option>
-            {fields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
-          </select>
-        </label>
-
-        {(showXMarginal || showYMarginal) && (
-          <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--color-text-muted)' }}>
-            bins
-            <input
-              type="number" min={5} max={200} step={1} value={marginalBins}
-              onChange={(e) => setMarginalBins(Math.max(5, Math.min(200, Number(e.target.value))))}
-              style={{ width: 48, padding: '2px 4px', border: '1px solid var(--color-border)', borderRadius: 4, fontSize: 11, background: 'var(--color-bg)', color: 'var(--color-text)' }}
-            />
-            {showXMarginal && (() => {
-              const xRangeMin = xMin !== '' ? parseFloat(xMin) : null;
-              const xRangeMax = xMax !== '' ? parseFloat(xMax) : null;
-              const n = filteredData.map((s) => xField.accessor(s) as number).filter((v) => {
-                if (v == null || !isFinite(v)) return false;
-                if (xExcludeZero && v === 0) return false;
-                if (xRangeMin !== null && v < xRangeMin) return false;
-                if (xRangeMax !== null && v > xRangeMax) return false;
-                return true;
-              }).length;
-              return <span style={{ color: 'var(--color-text-muted)' }}>X: n={n}</span>;
-            })()}
-            {showYMarginal && (() => {
-              const yRangeMin = yMin !== '' ? parseFloat(yMin) : null;
-              const yRangeMax = yMax !== '' ? parseFloat(yMax) : null;
-              const n = filteredData.map((s) => yField.accessor(s) as number).filter((v) => {
-                if (v == null || !isFinite(v)) return false;
-                if (yExcludeZero && v === 0) return false;
-                if (yRangeMin !== null && v < yRangeMin) return false;
-                if (yRangeMax !== null && v > yRangeMax) return false;
-                return true;
-              }).length;
-              return <span style={{ color: 'var(--color-text-muted)' }}>Y: n={n}</span>;
-            })()}
-          </label>
-        )}
-
-        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-          {filteredData.length} pts
-        </span>
-      </div>
-
-      {/* Color range dual slider */}
-      {colorField && colorField.type === 'numeric' && colorDataRange && (
-        <div style={{ marginBottom: 12 }}>
-          <DualRangeSlider
-            label={`Color: ${colorField.label}`}
-            dataMin={colorDataRange.min}
-            dataMax={colorDataRange.max}
-            low={cMin ?? colorDataRange.min}
-            high={cMax ?? colorDataRange.max}
-            onChange={(lo, hi) => { setCMin(lo); setCMax(hi); }}
-            isPlaying={isPlaying}
-            isExporting={isExporting}
-            onPlay={handlePlay}
-            onStop={handleStop}
-            onExportGif={handleExportGif}
-            playStep={playStep}
-            playFps={playFps}
-            onPlayStepChange={setPlayStep}
-            onPlayFpsChange={setPlayFps}
-          />
-        </div>
-      )}
+      <ExplorerControls
+        t={t}
+        fields={fields}
+        xKey={xKey}
+        yKey={yKey}
+        colorKey={colorKey}
+        xField={xField}
+        yField={yField}
+        colorField={colorField}
+        showXMarginal={showXMarginal}
+        showYMarginal={showYMarginal}
+        xExcludeZero={xExcludeZero}
+        yExcludeZero={yExcludeZero}
+        marginalBins={marginalBins}
+        filteredData={filteredData}
+        xMin={xMin}
+        xMax={xMax}
+        yMin={yMin}
+        yMax={yMax}
+        filteredCount={filteredData.length}
+        colorDataRange={colorDataRange}
+        cMin={cMin}
+        cMax={cMax}
+        isPlaying={isPlaying}
+        isExporting={isExporting}
+        playStep={playStep}
+        playFps={playFps}
+        setXKey={setXKey}
+        setYKey={setYKey}
+        setColorKey={setColorKey}
+        setShowXMarginal={setShowXMarginal}
+        setShowYMarginal={setShowYMarginal}
+        setXExcludeZero={setXExcludeZero}
+        setYExcludeZero={setYExcludeZero}
+        setMarginalBins={setMarginalBins}
+        setCMin={setCMin}
+        setCMax={setCMax}
+        handlePlay={handlePlay}
+        handleStop={handleStop}
+        handleExportGif={handleExportGif}
+        setPlayStep={setPlayStep}
+        setPlayFps={setPlayFps}
+      />
 
       <div className="card" ref={plotRef} style={{ padding: 0, overflow: 'hidden' }}>
-        <Plot
-          data={[...traces, ...overlayTraces, ...marginalTraces]}
+        <PlotFrame
+          data={structurePointClick.plotTraces}
           layout={layout}
-          config={{ responsive: true, displayModeBar: true }}
           style={{ width: '100%', height: (showXMarginal || showYMarginal) ? 620 : 550 }}
-          onClick={(event: PlotMouseEvent) => {
-            const point = event.points?.[0];
-            if (point?.customdata) {
-              openViewer(Number(point.customdata));
-            }
-          }}
+          boundaryStyle={{ width: '100%', height: (showXMarginal || showYMarginal) ? 620 : 550 }}
+          boundaryHandlers={structurePointClick.boundaryHandlers}
+          hoverTooltip={structurePointClick.hoverTooltip}
+          {...structurePointClick.plotHandlers}
         />
       </div>
 
@@ -787,212 +683,6 @@ export function ExplorerPage() {
       </div>
 
       <MarkPanel />
-    </div>
-  );
-}
-
-// ── KDE helpers ──────────────────────────────────────────────────────────────
-
-function silvermanBandwidth(values: number[]): number {
-  const n = values.length;
-  if (n < 2) return 1;
-  const mean = values.reduce((a, b) => a + b, 0) / n;
-  const std = Math.sqrt(values.reduce((a, v) => a + (v - mean) ** 2, 0) / (n - 1));
-  return 0.9 * std * Math.pow(n, -0.2);
-}
-
-function evalKDE(values: number[], bw: number, pts: number[]): number[] {
-  const inv = 1 / (values.length * bw * Math.sqrt(2 * Math.PI));
-  return pts.map((x) =>
-    inv * values.reduce((acc, v) => acc + Math.exp(-0.5 * ((x - v) / bw) ** 2), 0),
-  );
-}
-
-function linspace(lo: number, hi: number, n: number): number[] {
-  const step = (hi - lo) / (n - 1);
-  return Array.from({ length: n }, (_, i) => lo + i * step);
-}
-
-/** Build X-marginal traces (histogram + KDE) for subplot xaxis2/yaxis2 */
-function buildXMarginalTraces(xVals: number[], bins: number, label: string): PlotlyData[] {
-  if (xVals.length < 2) return [];
-  const bw = silvermanBandwidth(xVals);
-  const lo = Math.min(...xVals);
-  const hi = Math.max(...xVals);
-  const pts = linspace(lo, hi, 200);
-  const density = evalKDE(xVals, bw, pts);
-
-  return [
-    {
-      x: xVals,
-      type: 'histogram',
-      nbinsx: bins,
-      histnorm: 'probability density',
-      marker: { color: 'rgba(99,102,241,0.45)', line: { color: 'rgba(99,102,241,0.8)', width: 1 } },
-      name: `${label} dist`,
-      showlegend: false,
-      xaxis: 'x',
-      yaxis: 'y2',
-      hoverinfo: 'skip',
-    },
-    {
-      x: pts,
-      y: density,
-      type: 'scatter',
-      mode: 'lines',
-      line: { color: '#6366f1', width: 2 },
-      name: `${label} KDE`,
-      showlegend: false,
-      xaxis: 'x',
-      yaxis: 'y2',
-      hoverinfo: 'skip',
-    },
-  ];
-}
-
-/** Build Y-marginal traces (horizontal histogram + KDE) for subplot xaxis3/yaxis3 */
-function buildYMarginalTraces(yVals: number[], bins: number, label: string): PlotlyData[] {
-  if (yVals.length < 2) return [];
-  const bw = silvermanBandwidth(yVals);
-  const lo = Math.min(...yVals);
-  const hi = Math.max(...yVals);
-  const pts = linspace(lo, hi, 200);
-  const density = evalKDE(yVals, bw, pts);
-
-  return [
-    {
-      y: yVals,
-      type: 'histogram',
-      nbinsy: bins,
-      histnorm: 'probability density',
-      orientation: 'h',
-      marker: { color: 'rgba(236,72,153,0.45)', line: { color: 'rgba(236,72,153,0.8)', width: 1 } },
-      name: `${label} dist`,
-      showlegend: false,
-      xaxis: 'x3',
-      yaxis: 'y',
-      hoverinfo: 'skip',
-    },
-    {
-      x: density,
-      y: pts,
-      type: 'scatter',
-      mode: 'lines',
-      line: { color: '#ec4899', width: 2 },
-      name: `${label} KDE`,
-      showlegend: false,
-      xaxis: 'x3',
-      yaxis: 'y',
-      hoverinfo: 'skip',
-    },
-  ];
-}
-
-
-function RangeInputs({ label, min, max, onMin, onMax, inputStyle }: {
-  label: string;
-  min: string; max: string;
-  onMin: (v: string) => void;
-  onMax: (v: string) => void;
-  inputStyle: React.CSSProperties;
-}) {
-  return (
-    <span style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--color-text-muted)' }}>
-      {label}:
-      <input type="number" placeholder="min" value={min} onChange={(e) => onMin(e.target.value)} style={inputStyle} />
-      –
-      <input type="number" placeholder="max" value={max} onChange={(e) => onMax(e.target.value)} style={inputStyle} />
-    </span>
-  );
-}
-
-function DualRangeSlider({ label, dataMin, dataMax, low, high, onChange, isPlaying, isExporting, onPlay, onStop, onExportGif, playStep, playFps, onPlayStepChange, onPlayFpsChange }: {
-  label: string;
-  dataMin: number;
-  dataMax: number;
-  low: number;
-  high: number;
-  onChange: (low: number, high: number) => void;
-  isPlaying?: boolean;
-  isExporting?: boolean;
-  onPlay?: () => void;
-  onStop?: () => void;
-  onExportGif?: () => void;
-  playStep?: number;
-  playFps?: number;
-  onPlayStepChange?: (v: number) => void;
-  onPlayFpsChange?: (v: number) => void;
-}) {
-  const step = (dataMax - dataMin) / 200 || 1;
-  const fmt = (v: number) => v.toPrecision(4);
-  const numInputStyle: React.CSSProperties = {
-    width: 48, padding: '1px 4px', border: '1px solid var(--color-border)',
-    borderRadius: 4, fontSize: 10, background: 'var(--color-bg)', color: 'var(--color-text)',
-  };
-
-  return (
-    <div style={{ fontSize: 11, color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-      <span style={{ whiteSpace: 'nowrap' }}>{label}:</span>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 20, textAlign: 'right' }}>▼</span>
-          <input type="range" min={dataMin} max={dataMax} step={step} value={low}
-            onChange={(e) => onChange(Math.min(Number(e.target.value), high), high)}
-            style={{ width: 200 }}
-          />
-          <span style={{ minWidth: 60, color: 'var(--color-text)' }}>{fmt(low)}</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 20, textAlign: 'right' }}>▲</span>
-          <input type="range" min={dataMin} max={dataMax} step={step} value={high}
-            onChange={(e) => onChange(low, Math.max(Number(e.target.value), low))}
-            style={{ width: 200 }}
-          />
-          <span style={{ minWidth: 60, color: 'var(--color-text)' }}>{fmt(high)}</span>
-        </div>
-      </div>
-      <button
-        onClick={() => onChange(dataMin, dataMax)}
-        style={{ fontSize: 10, padding: '1px 6px', border: '1px solid var(--color-border)', borderRadius: 4, background: 'transparent', cursor: 'pointer', color: 'var(--color-text-muted)' }}
-      >
-        reset
-      </button>
-      {onPlayStepChange && (
-        <label style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-          step
-          <input type="number" min={0.001} step={0.1} value={playStep}
-            onChange={(e) => onPlayStepChange(Number(e.target.value))}
-            style={numInputStyle}
-          />
-        </label>
-      )}
-      {onPlayFpsChange && (
-        <label style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-          fps
-          <input type="number" min={1} max={60} step={1} value={playFps}
-            onChange={(e) => onPlayFpsChange(Number(e.target.value))}
-            style={numInputStyle}
-          />
-        </label>
-      )}
-      {onPlay && onStop && (
-        <button
-          onClick={isPlaying ? onStop : onPlay}
-          disabled={isExporting}
-          style={{ fontSize: 10, padding: '1px 6px', border: '1px solid var(--color-border)', borderRadius: 4, background: 'transparent', cursor: 'pointer', color: 'var(--color-text-muted)' }}
-        >
-          {isPlaying ? '⏹ stop' : '▶ play'}
-        </button>
-      )}
-      {onExportGif && (
-        <button
-          onClick={onExportGif}
-          disabled={isPlaying || isExporting}
-          style={{ fontSize: 10, padding: '1px 6px', border: '1px solid var(--color-border)', borderRadius: 4, background: 'transparent', cursor: isPlaying || isExporting ? 'not-allowed' : 'pointer', color: 'var(--color-text-muted)' }}
-        >
-          {isExporting ? '⏳ exporting…' : '🎞 export GIF'}
-        </button>
-      )}
     </div>
   );
 }

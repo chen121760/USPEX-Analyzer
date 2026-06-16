@@ -32,6 +32,17 @@ declare module 'react-plotly.js' {
   export default Plot;
 }
 
+declare module 'react-plotly.js/factory' {
+  import type Plot from 'react-plotly.js';
+  import type * as Plotly from 'plotly.js-dist-min';
+
+  export default function createPlotlyComponent(plotly: typeof Plotly): typeof Plot;
+}
+
 declare module 'plotly.js-dist-min' {
+  import type * as Plotly from 'plotly.js';
+
+  const PlotlyModule: typeof Plotly;
+  export default PlotlyModule;
   export * from 'plotly.js';
 }

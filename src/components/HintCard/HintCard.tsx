@@ -20,7 +20,8 @@ export function HintCard({ storageKey, line1, line2 }: HintCardProps) {
       <button
         onClick={() => setOpen(true)}
         title="Show page guide"
-        className="flex items-center justify-center w-7 h-7 rounded-full text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+        className="flex items-center justify-center w-7 h-7 rounded-full transition-colors"
+        style={{ color: 'var(--color-text-muted)' }}
       >
         <HelpCircle size={18} />
       </button>
@@ -28,15 +29,23 @@ export function HintCard({ storageKey, line1, line2 }: HintCardProps) {
   }
 
   return (
-    <div className="flex items-start gap-2 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40 text-sm text-blue-800 dark:text-blue-200 max-w-3xl">
-      <HelpCircle size={16} className="mt-0.5 shrink-0 text-blue-400" />
+    <div
+      className="flex items-start gap-2 px-3 py-2 rounded-lg border text-sm max-w-3xl"
+      style={{
+        background: 'color-mix(in srgb, var(--color-primary) 10%, var(--color-surface))',
+        borderColor: 'color-mix(in srgb, var(--color-primary) 32%, var(--color-border))',
+        color: 'var(--color-text)',
+      }}
+    >
+      <HelpCircle size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--color-primary)' }} />
       <div className="flex-1 space-y-0.5">
         <p>{line1}</p>
-        <p className="text-blue-600 dark:text-blue-300">{line2}</p>
+        <p style={{ color: 'var(--color-text-secondary)' }}>{line2}</p>
       </div>
       <button
         onClick={() => setOpen(false)}
-        className="shrink-0 text-blue-400 hover:text-blue-600 dark:hover:text-blue-200 transition-colors"
+        className="shrink-0 transition-colors"
+        style={{ color: 'var(--color-primary)' }}
         title="Dismiss"
       >
         <X size={14} />

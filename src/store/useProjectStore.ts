@@ -19,6 +19,13 @@ import type {
 import { parseAllFiles, type ParseResult } from '@/parsers';
 import { saveProject, makeProjectId } from '@/lib/projectStorage';
 import { useUIStore } from '@/store/useUIStore';
+import {
+  createEmptyParsedFileStatus,
+  EMPTY_PARSED_FILE_STATUS,
+  inferParsedFiles,
+  markParsedFileStatus,
+} from '@/domain/project/parsedFileStatus';
+import { normalizeStructure, normalizeStructures } from '@/domain/structure/normalizeStructure';
 
 // 这个函数负责把当前 store 的数据导出并存入 IndexedDB
 // get 是 zustand 提供的，可以拿到 store 当前的所有数据
@@ -79,37 +86,6 @@ interface ProjectState {
   reset: () => void;
 }
 
-const EMPTY_PARSED: ParsedFileStatus = {
-  parameters: false,
-  extended_convex_hull: false,
-  individuals: false,
-  pareto_ranking: false,
-  ml_properties: false,
-  origin: false,
-  gathered_poscars: false,
-  gathered_poscars_unrelaxed: false,
-  convex_hull: false,
-};
-
-/**
- * Infer which source files were parsed from the structures themselves.
- * Used when loading a saved project that doesn't carry parsedFiles.
- */
-function inferParsedFiles(structures: Structure[], sysInfo: SystemInfo | null, hullGenCount: number): ParsedFileStatus {
-  if (!structures.length) return { ...EMPTY_PARSED };
-  return {
-    parameters:                   !!sysInfo,
-    extended_convex_hull:         structures.some((s) => !isNaN(s.fitness)),
-    individuals:                  structures.some((s) => s.generation > 0),
-    pareto_ranking:               structures.some((s) => s.paretoFront >= 0),
-    ml_properties:                structures.some((s) => s.bulkModulus >= 0),
-    origin:                       structures.some((s) => s.origin !== 'Unknown'),
-    gathered_poscars:             structures.some((s) => !!s.poscarData),
-    gathered_poscars_unrelaxed:   false,   // cannot infer; treat as absent
-    convex_hull:                  hullGenCount > 0,
-  };
-}
-
 const DEFAULT_TAGS: TagDefinition[] = [
   { id: 'candidate', nameKey: 'tag.candidate', color: '#f59e0b' },
   { id: 'to-verify', nameKey: 'tag.toVerify', color: '#3b82f6' },
@@ -128,7 +104,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   tags: [...DEFAULT_TAGS],
   filterPresets: [],
   detectedFiles: [],
-  parsedFiles: { ...EMPTY_PARSED },
+  parsedFiles: createEmptyParsedFileStatus(),
   parseWarnings: [],
   isLoading: false,
   isDataLoaded: false,
@@ -145,13 +121,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     try {
       const result: ParseResult = parseAllFiles(detectedFiles, fileContents);
 
-      // Build parsed status
-      const parsedFiles: ParsedFileStatus = { ...EMPTY_PARSED };
-      for (const [type] of fileContents) {
-        if (type in parsedFiles) {
-          (parsedFiles as unknown as Record<string, boolean>)[type] = true;
-        }
-      }
+      const parsedFiles = markParsedFileStatus(fileContents);
 
       set({
         systemInfo: result.systemInfo,
@@ -176,13 +146,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   loadProjectFile: (project) => {
-    // Migrate old project files: hullX was number, now number[]
-    const migratedStructures = project.structures.map((s) => ({
-      ...s,
-      hullX: Array.isArray(s.hullX) ? s.hullX : [s.hullX as number],
-      eForm: s.eForm ?? -1,
-      eHullRecons: s.eHullRecons ?? -1,
-    }));
+    const migratedStructures = normalizeStructures(project.structures);
 
     // Ensure compositionMode exists (backward compat)
     const sysInfo = { ...project.systemInfo };
@@ -192,13 +156,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
     const hullGens = project.hullGenerations ?? [];
     const parsedFiles: ParsedFileStatus = project.parsedFiles
-      ? { ...EMPTY_PARSED, ...project.parsedFiles }
+      ? { ...EMPTY_PARSED_FILE_STATUS, ...project.parsedFiles }
       : inferParsedFiles(migratedStructures, sysInfo, hullGens.length);
 
     set({
       systemInfo: sysInfo,
       structures: migratedStructures,
-      userStructures: project.userAddedStructures ?? [],
+      userStructures: normalizeStructures(project.userAddedStructures ?? []),
       hullGenerations: hullGens,
       tags: project.tags?.length ? project.tags : [...DEFAULT_TAGS],
       filterPresets: project.filterPresets ?? [],
@@ -241,23 +205,23 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       ...userStructures.map((s) => s.id),
     );
 
-    const newStructure: Structure = {
+    const newStructure = normalizeStructure({
       id: maxId + 1,
-      formula: partial.formula ?? 'User',
-      composition: partial.composition ?? [],
+      formula: 'User',
+      composition: [],
       generation: 0,
-      enthalpy: partial.enthalpy ?? 0,
+      enthalpy: 0,
       enthalpyTotal: 0,
-      volume: partial.volume ?? 0,
+      volume: 0,
       volumeTotal: 0,
       fitness: -1,
-      spaceGroup: partial.spaceGroup ?? 0,
+      spaceGroup: 0,
       hullX: [],
       hullY: 0,
       origin: 'UserAdded',
       parentIds: [],
       parentEnthalpy: 0,
-      density: partial.density ?? 0,
+      density: 0,
       paretoFront: -1,
       bulkModulus: -1,
       eForm: -1,
@@ -273,10 +237,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       sOrder: 0,
       tags: [],
       isUserAdded: true,
-      notes: partial.notes ?? '',
-      poscarData: partial.poscarData,
+      notes: '',
       ...partial,
-    };
+    });
 
     set({ userStructures: [...userStructures, newStructure] });
   },
@@ -331,7 +294,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       tags: [...DEFAULT_TAGS],
       filterPresets: [],
       detectedFiles: [],
-      parsedFiles: { ...EMPTY_PARSED },
+      parsedFiles: createEmptyParsedFileStatus(),
       parseWarnings: [],
       isLoading: false,
       isDataLoaded: false,

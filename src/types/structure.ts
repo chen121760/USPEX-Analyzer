@@ -14,6 +14,20 @@ export type OptimizationType = 'single' | 'multi';
 /** Whether composition is variable or fixed */
 export type CompositionMode = 'varcomp' | 'fixed';
 
+/** Numeric parser columns not represented by first-class Structure fields. */
+export type ParserExtras = Record<string, number>;
+
+/** Where a dynamic field is exposed from after parser normalization. */
+export type DynamicFieldSource = 'structure' | 'extraProps' | 'parserExtras';
+
+/** Metadata for UI-discovered dynamic fields such as USPEX 10.6 extras or 2D fields. */
+export interface DynamicFieldMetadata {
+  key: string;
+  label: string;
+  source: DynamicFieldSource;
+  category: 'secondObjective' | '2d' | 'parserExtra' | 'ml' | 'core';
+}
+
 /** Complete structure record — merges all file sources */
 export interface Structure {
   // --- Identity ---
@@ -45,7 +59,7 @@ export interface Structure {
 
   // --- Dynamic extra properties (second objective, etc.) ---
   // Keys: "{name}-Individuals" and "{name}-Pareto_ranking"
-  extraProps?: Record<string, number>;
+  extraProps?: ParserExtras;
 
   // --- ML Elastic Properties ---
   bulkModulus: number;        // GPa
@@ -177,7 +191,7 @@ export type TableFilterCondition =
   | NComponentsFilterCondition
   | ElementFractionFilterCondition;
 
-// ── Filter 统一条件类型（FilterPage 使用，持久化到 UIStore）──
+// ── Filter 统一条件类型（FilterPage 使用，持久化到 FilterStore）──
 export type NumericOperator = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte';
 export type CompOperator = '>' | '<' | '>=' | '<=' | '=';
 
@@ -252,7 +266,7 @@ export interface ParsedExtendedHull {
   thickness: number;        // Thickness (Å)
   surfArea: number;         // Surf_Area / Surf_area from hull
   /** Any extra numeric columns not covered by the standard set */
-  extras: Record<string, number>;
+  extras: ParserExtras;
 }
 
 export interface ParsedIndividual {
@@ -263,6 +277,7 @@ export interface ParsedIndividual {
   enthalpy: number;       // total eV
   volume: number;         // total Å³ (3D) / 0 for 2D
   density: number;        // g/cm³ (3D) / 0 for 2D
+  parentIds?: number[];   // USPEX25 embeds parents directly in Individuals
   secondObjectiveValue: number;
   /** 2D structure search fields (0 when not present) */
   thickness: number;      // Thick (Å)
@@ -270,7 +285,7 @@ export interface ParsedIndividual {
   specSurfArea: number;   // Spec_surf_area (m²/g)
   indFitness: number;     // Fitness from Individuals (differs from hull fitness)
   /** Any extra numeric columns not covered by the standard set */
-  extras: Record<string, number>;
+  extras: ParserExtras;
   kpoints: number[];
   symm: number;
   qEntropy: number;

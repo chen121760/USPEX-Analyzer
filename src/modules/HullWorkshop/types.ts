@@ -73,7 +73,9 @@ export interface WorkshopJsonStructure {
   hullX: number[];
   hullY: number;
   eForm: number;
+  eHullRecons?: number;
   density: number;
+  extraProps?: Record<string, number>;
   parentIds: number[];
   parentEnthalpy: number;
   paretoFront: number;

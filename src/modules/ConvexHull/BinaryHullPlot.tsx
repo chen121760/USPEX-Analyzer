@@ -7,19 +7,25 @@ type PlotlyData = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyLayout = any;
 
-import { useMemo, useState, useRef } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import type { Structure, SystemInfo } from '@/types/structure';
 import { useUIStore } from '@/store/useUIStore';
+import { useThemeStore } from '@/theme/themeStore';
+import { useMarkStore } from '@/store/useMarkStore';
 import { useProjectStore } from '@/store/useProjectStore';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT, getPlotlyTheme } from '@/lib/constants';
+import { PLOTLY_FONT } from '@/lib/constants';
+import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadMultiSectionCsv } from '@/lib/exportCsv';
 import { computeLowerHull2D } from '@/lib/convexHullReconstruction';
+import { PlotFrame } from '@/charts/shared/PlotFrame';
+import { usePlotViewport } from '@/charts/shared/plotRange';
+import { usePlotlyStructurePointClick } from '@/charts/shared/usePlotlyStructurePointClick';
+import { CONVEX_HULL_PLOT_HEIGHT } from './plotSizing';
 
 interface Props {
   structures: Structure[];
@@ -41,7 +47,7 @@ interface Props {
 }
 
 function makeStarTrace(
-  x: number[], y: number[], color: string, name: string, ids: number[],
+  x: number[], y: number[], color: string, name: string, ids: number[], text: string[],
 ): PlotlyData {
   return {
     x, y,
@@ -49,7 +55,8 @@ function makeStarTrace(
     type: 'scatter',
     name,
     marker: { symbol: 'star', size: 14, color, line: { width: 1, color: 'white' } },
-    hoverinfo: 'skip',
+    text,
+    hoverinfo: 'text',
     customdata: ids,
     showlegend: true,
   };
@@ -58,9 +65,9 @@ function makeStarTrace(
 export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = true, showTags = true, showFooter = true, oldHullLine, hullExpanded, onStructureClick }: Props) {
   const { t } = useTranslation();
   const openViewer = useUIStore((s) => s.openViewer);
-  const markActiveTags  = useUIStore((s) => s.markActiveTags);
-  const markEaInput     = useUIStore((s) => s.markEaInput);
-  const theme           = useUIStore((s) => s.theme);
+  const markActiveTags  = useMarkStore((s) => s.markActiveTags);
+  const markEaInput     = useMarkStore((s) => s.markEaInput);
+  const theme           = useThemeStore((s) => s.theme);
   const allTags         = useProjectStore((s) => s.tags);
 
   const maxFitness = useMemo(() => {
@@ -85,6 +92,13 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
 
   const { stable, unstable, userAdded, hullLine } = plotData;
   const elements = systemInfo.elements;
+  const getStructureHoverText = (s: Structure) =>
+    (s.groupName || groupMap ? `Group: ${s.groupName ?? groupMap?.get(s.id) ?? '—'}<br>` : '') +
+    `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
+    `ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
+    `Fitness: ${s.fitness.toFixed(4)} eV/atom<br>` +
+    `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>` +
+    `Origin: ${s.origin}`;
 
   // --- Mark overlay traces: tag-based (controlled by showTags) ---
   const tagOverlayTraces = useMemo(() => {
@@ -102,10 +116,11 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
         tagDef.color,
         `★ ${t(tagDef.nameKey)}`,
         tagged.map((s) => s.id),
+        tagged.map(getStructureHoverText),
       ));
     }
     return result;
-  }, [stable, unstable, markActiveTags, allTags, t]);
+  }, [stable, unstable, userAdded, markActiveTags, allTags, groupMap, t]);
 
   // --- Mark overlay traces: EA-ID search (always active) ---
   const eaOverlayTraces = useMemo(() => {
@@ -133,12 +148,13 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
             color,
             name,
             structs.map((s) => s.id),
+            structs.map(getStructureHoverText),
           ));
         }
       }
     }
     return result;
-  }, [stable, unstable, markEaInput, t]);
+  }, [stable, unstable, userAdded, markEaInput, groupMap, t]);
 
   function handleExport() {
     const hasGroup = groupMap != null || structures.some((s) => s.groupName != null);
@@ -234,7 +250,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
       mode: 'markers+text' as const,
       type: 'scatter' as const,
       name: 'Stable',
-      marker: { color: '#dc2626', size: 10, symbol: 'diamond' },
+      marker: { color: getPlotlyTheme(theme).frontColors[0], size: 10, symbol: 'diamond' },
       text: stable.map((s) => formulaToHtml(s.formula)),
       textposition: 'top center' as const,
       textfont: { size: 10 },
@@ -258,10 +274,10 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
       type: 'scatter' as const,
       name: 'Manual',
       marker: {
-        color: '#ffffff',
+        color: getPlotlyTheme(theme).selectedMarkerFill,
         size: 10,
         symbol: 'circle' as const,
-        line: { width: 1.5, color: '#1e293b' },
+        line: { width: 1.5, color: getPlotlyTheme(theme).selectedMarkerLine },
       },
       text: userAdded.map(
         (s) =>
@@ -288,9 +304,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
   const titleFont = { size: 13, color: getPlotlyTheme(theme).axisTitleColor };
   const pt = getPlotlyTheme(theme);
 
-  // Persist viewport across re-renders (zoom/pan)
-  const viewRef = useRef<Partial<PlotlyLayout>>({});
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { viewportLayout, handleRelayout } = usePlotViewport();
 
   const layout: PlotlyLayout = {
     font: PLOTLY_FONT,
@@ -299,12 +313,35 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
     yaxis: { title: { text: t('hull.formationEnergy'), font: titleFont }, range: [-0.001, undefined], ...axisStyle },
     hovermode: 'closest' as const,
     showlegend: true,
-    legend: { x: 0.02, y: 0.02, xanchor: 'left', yanchor: 'bottom', bgcolor: 'rgba(255,255,255,0.4)', font: { size: 11, color: pt.legendColor } },
+    legend: {
+      x: 0.02,
+      y: 0.02,
+      xanchor: 'left',
+      yanchor: 'bottom',
+      bgcolor: theme === 'dark' ? 'rgba(24, 24, 37, 0.86)' : 'rgba(255,255,255,0.4)',
+      bordercolor: theme === 'dark' ? '#313244' : '#e2e8f0',
+      font: { size: 11, color: pt.legendColor },
+    },
     margin: { t: 50, r: 80, l: 60, b: 60 },
     plot_bgcolor: pt.plotBg,
     paper_bgcolor: pt.paperBg,
-    ...viewRef.current,
+    ...viewportLayout,
   };
+
+  const handleStructurePointClick = (structureId: number) => {
+    if (onStructureClick) {
+      const structure = structures.find((s) => Number((s as Structure & { _mergeSeq?: number })._mergeSeq ?? s.id) === structureId);
+      if (structure) onStructureClick(structure);
+      return;
+    }
+
+    openViewer(structureId);
+  };
+
+  const structurePointClick = usePlotlyStructurePointClick({
+    traces,
+    onStructureClick: handleStructurePointClick,
+  });
 
   return (
     <>
@@ -328,41 +365,15 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
         {showExport && <ExportDataButton onClick={handleExport} style={{ marginLeft: 'auto' }} />}
       </div>
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <Plot
-          data={traces}
+        <PlotFrame
+          data={structurePointClick.plotTraces}
           layout={layout}
-          config={{ responsive: true, displayModeBar: true }}
-          style={{ width: '100%', height: 550 }}
-          onClick={(event: PlotMouseEvent) => {
-            if (clickTimerRef.current) {
-              clearTimeout(clickTimerRef.current);
-              clickTimerRef.current = null;
-              return;
-            }
-            clickTimerRef.current = setTimeout(() => {
-              clickTimerRef.current = null;
-              const point = event.points?.[0];
-              if (point?.customdata !== undefined) {
-                if (onStructureClick) {
-                  const cdata = point.customdata;
-                  const structure = structures.find((s: any) => (s._mergeSeq ?? s.id) == cdata);
-                  if (structure) onStructureClick(structure);
-                } else {
-                  openViewer(Number(point.customdata));
-                }
-              }
-            }, 300);
-          }}
-          onRelayout={(e) => {
-            const v: Record<string, unknown> = {};
-            if (e['xaxis.range[0]'] !== undefined) {
-              v.xaxis = { range: [e['xaxis.range[0]'], e['xaxis.range[1]']] };
-            }
-            if (e['yaxis.range[0]'] !== undefined) {
-              v.yaxis = { range: [e['yaxis.range[0]'], e['yaxis.range[1]']] };
-            }
-            if (Object.keys(v).length > 0) viewRef.current = v;
-          }}
+          style={{ width: '100%', height: CONVEX_HULL_PLOT_HEIGHT }}
+          boundaryStyle={{ width: '100%', height: CONVEX_HULL_PLOT_HEIGHT }}
+          boundaryHandlers={structurePointClick.boundaryHandlers}
+          hoverTooltip={structurePointClick.hoverTooltip}
+          {...structurePointClick.plotHandlers}
+          onRelayout={handleRelayout}
         />
       </div>
 

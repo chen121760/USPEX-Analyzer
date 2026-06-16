@@ -28,10 +28,27 @@ export default defineConfig({
     emptyOutDir: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          plotly: ['plotly.js-dist-min'],
-          d3: ['d3'],
-          vendor: ['react', 'react-dom', 'react-router-dom'],
+        manualChunks(id) {
+          if (!id.includes('node_modules')) {
+            return undefined;
+          }
+          if (id.includes('plotly.js-dist-min')) {
+            return 'plotly';
+          }
+          if (id.includes('/d3/') || id.includes('\\d3\\')) {
+            return 'd3';
+          }
+          if (
+            id.includes('/react/') ||
+            id.includes('\\react\\') ||
+            id.includes('/react-dom/') ||
+            id.includes('\\react-dom\\') ||
+            id.includes('/react-router-dom/') ||
+            id.includes('\\react-router-dom\\')
+          ) {
+            return 'vendor';
+          }
+          return undefined;
         },
       },
     },

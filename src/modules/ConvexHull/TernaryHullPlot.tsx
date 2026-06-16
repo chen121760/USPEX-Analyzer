@@ -11,20 +11,25 @@ type PlotlyData = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyLayout = any;
 
-import { useMemo, useState, useRef } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import type { Structure, SystemInfo } from '@/types/structure';
 import { ternaryToCartesian, formulaToHtml } from '@/parsers/compositionUtils';
 import { useUIStore } from '@/store/useUIStore';
+import { useThemeStore } from '@/theme/themeStore';
+import { useMarkStore } from '@/store/useMarkStore';
 import { useProjectStore } from '@/store/useProjectStore';
 import { computeTernaryHullEdges, uniqueHullPoints, type TernaryHullInput } from '@/lib/ternaryHull';
-import { StructureViewerModal } from '@/components/StructureViewer/StructureViewerModal';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT, getPlotlyTheme } from '@/lib/constants';
+import { PLOTLY_FONT } from '@/lib/constants';
+import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadCsv } from '@/lib/exportCsv';
+import { PlotFrame } from '@/charts/shared/PlotFrame';
+import { usePlotViewport } from '@/charts/shared/plotRange';
+import { usePlotlyStructurePointClick } from '@/charts/shared/usePlotlyStructurePointClick';
+import { CONVEX_HULL_PLOT_HEIGHT } from './plotSizing';
 
 /** Structure with computed cartesian coordinates */
 interface StructureWithCoords extends Structure {
@@ -54,10 +59,10 @@ interface Props {
 export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport = true, showTags = true, showFooter = true, oldHullEdges, onStructureClick }: Props) {
   const { t } = useTranslation();
   const openViewer = useUIStore((s) => s.openViewer);
-  const markActiveTags  = useUIStore((s) => s.markActiveTags);
-  const markEaInput     = useUIStore((s) => s.markEaInput);
+  const markActiveTags  = useMarkStore((s) => s.markActiveTags);
+  const markEaInput     = useMarkStore((s) => s.markEaInput);
   const allTags         = useProjectStore((s) => s.tags);
-  const theme           = useUIStore((s) => s.theme);
+  const theme           = useThemeStore((s) => s.theme);
 
   const maxFitness = useMemo(() => {
     const vals = structures.filter((s) => s.fitness > 0 && s.enthalpyTotal <= 900).map((s) => s.fitness);
@@ -66,7 +71,6 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
 
   const [fitnessMax, setFitnessMax] = useState(() => maxFitness);
   const [revision, setRevision] = useState(0);
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function handleFitnessChange(val: number) {
     setFitnessMax(val);
@@ -128,6 +132,19 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
   }, [structures, systemInfo, fitnessMax]);
 
   const { unstableWithCoords, uniqueStableFull, edges, elements, userAddedWithCoords } = plotData;
+  const structureById = useMemo(() => new Map(structures.map((s) => [s.id, s])), [structures]);
+  const getStructureHoverText = (id: number, fallbackFormula = '') => {
+    const s = structureById.get(id);
+
+    return (
+      (s?.groupName || groupMap ? `Group: ${s?.groupName ?? groupMap?.get(id) ?? '—'}<br>` : '') +
+      `EA${id}: ${formulaToHtml(s?.formula ?? fallbackFormula)}<br>` +
+      `ΔH: ${s?.enthalpy.toFixed(4) ?? '—'} eV/atom<br>` +
+      `Fitness: ${s?.fitness.toFixed(4) ?? '—'} eV/atom<br>` +
+      `SG: ${s?.spaceGroup ?? '—'} | Gen: ${s?.generation ?? '—'}<br>` +
+      `Origin: ${s?.origin ?? '—'}`
+    );
+  };
 
   // Build coord lookup map for overlay traces
   const coordMap = useMemo(() => {
@@ -153,13 +170,14 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
         mode: 'markers', type: 'scatter',
         name: `★ ${t(tagDef.nameKey)}`,
         marker: { symbol: 'star', size: 14, color: tagDef.color, line: { width: 1, color: 'white' } },
-        hoverinfo: 'skip',
+        text: tagged.map((s) => getStructureHoverText(s.id, s.formula)),
+        hoverinfo: 'text',
         customdata: tagged.map((s) => s.id),
         showlegend: true,
       });
     }
     return result;
-  }, [structures, coordMap, markActiveTags, allTags, t]);
+  }, [structures, coordMap, markActiveTags, allTags, structureById, groupMap, t]);
 
   // --- Mark overlay traces: EA-ID search (always active) ---
   const eaOverlayTraces = useMemo(() => {
@@ -186,7 +204,8 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
             mode: 'markers', type: 'scatter',
             name,
             marker: { symbol: 'star', size: 14, color, line: { width: 1, color: 'white' } },
-            hoverinfo: 'skip',
+            text: structs.map((s) => getStructureHoverText(s.id, s.formula)),
+            hoverinfo: 'text',
             customdata: structs.map((s) => s.id),
             showlegend: true,
           });
@@ -194,7 +213,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
       }
     }
     return result;
-  }, [structures, coordMap, markEaInput, t]);
+  }, [structures, coordMap, markEaInput, structureById, groupMap, t]);
 
   // Triangle vertices
   const triVerts = [[0, 0], [0.5, Math.sqrt(3) / 2], [1, 0], [0, 0]];
@@ -230,7 +249,15 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
         ],
         cmin: 0,
         cmax: Math.max(maxFitness, 0.01),
-        colorbar: { title: 'Fitness\n(eV/block)', thickness: 15, len: 0.6 },
+        colorbar: {
+          title: 'Fitness\n(eV/block)',
+          thickness: 14,
+          len: 0.46,
+          x: 0.73,
+          xanchor: 'left' as const,
+          y: 0.52,
+          yanchor: 'middle' as const,
+        },
         size: 5,
         opacity: 0.6,
       },
@@ -275,7 +302,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
       mode: 'markers+text' as const,
       type: 'scatter' as const,
       name: 'Stable',
-      marker: { color: '#dc2626', size: 10, symbol: 'diamond' },
+      marker: { color: getPlotlyTheme(theme).frontColors[0], size: 10, symbol: 'diamond' },
       text: uniqueStableFull.map((p) => {
         if (elements.length >= 3) {
           const plain = elements.map((el, i) => {
@@ -310,10 +337,10 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
       type: 'scatter' as const,
       name: 'Manual',
       marker: {
-        color: '#ffffff',
+        color: getPlotlyTheme(theme).selectedMarkerFill,
         size: 10,
         symbol: 'circle' as const,
-        line: { width: 1.5, color: '#1e293b' },
+        line: { width: 1.5, color: getPlotlyTheme(theme).selectedMarkerLine },
       },
       text: userAddedWithCoords.map((u) => {
         const s = u.s;
@@ -340,8 +367,10 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
     { x: 0.5, y: Math.sqrt(3) / 2 + 0.06, text: labels[1], showarrow: false, font: { size: 13, color: pt.annotationColor, weight: 'bold' as const } },
     { x: 1.05, y: -0.05, text: labels[2], showarrow: false, font: { size: 13, color: pt.annotationColor, weight: 'bold' as const } },
   ];
+  const { viewportLayout, handleRelayout } = usePlotViewport();
 
   const layout: PlotlyLayout = {
+    autosize: true,
     font: PLOTLY_FONT,
     title: { text: `${elements.join('-')} ${t('hull.ternaryTitle', 'Ternary Phase Diagram')}`, font: { size: 15, color: pt.titleColor } },
     xaxis: {
@@ -349,27 +378,49 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
       showgrid: false,
       zeroline: false,
       showticklabels: false,
-      fixedrange: true,
+      constrain: 'domain',
     },
     yaxis: {
       range: [-0.12, Math.sqrt(3) / 2 + 0.12],
       showgrid: false,
       zeroline: false,
       showticklabels: false,
-      fixedrange: true,
       scaleanchor: 'x',
       scaleratio: 1,
+      constrain: 'domain',
     },
     annotations: labelAnnotations,
     hovermode: 'closest' as const,
     showlegend: true,
-    legend: { x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.4)', font: { size: 11, color: pt.legendColor } },
-    margin: { t: 50, r: 80 },
+    legend: {
+      x: 0.19,
+      y: 0.92,
+      xanchor: 'left',
+      yanchor: 'top',
+      bgcolor: theme === 'dark' ? 'rgba(24, 24, 37, 0.86)' : 'rgba(255,255,255,0.4)',
+      bordercolor: theme === 'dark' ? '#313244' : '#e2e8f0',
+      font: { size: 11, color: pt.legendColor },
+    },
+    margin: { t: 50, r: 64, l: 64, b: 64 },
     plot_bgcolor: pt.plotBg,
     paper_bgcolor: pt.paperBg,
-    width: 600,
-    height: 550,
+    ...viewportLayout,
   };
+
+  const handleStructurePointClick = (structureId: number) => {
+    if (onStructureClick) {
+      const structure = structures.find((s) => Number((s as Structure & { _mergeSeq?: number })._mergeSeq ?? s.id) === structureId);
+      if (structure) onStructureClick(structure);
+      return;
+    }
+
+    openViewer(structureId);
+  };
+
+  const structurePointClick = usePlotlyStructurePointClick({
+    traces,
+    onStructureClick: handleStructurePointClick,
+  });
 
   function handleExport() {
     const elA = elements[0] || 'A';
@@ -438,33 +489,17 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
         </span>
         {showExport && <ExportDataButton onClick={handleExport} style={{ marginLeft: 'auto' }} />}
       </div>
-      <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
-        <Plot
-          data={traces}
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <PlotFrame
+          data={structurePointClick.plotTraces}
           layout={layout}
           revision={revision}
-          config={{ responsive: true, displayModeBar: true }}
-          style={{ width: '100%', maxWidth: 700, height: 550 }}
-          onClick={(event: PlotMouseEvent) => {
-            if (clickTimerRef.current) {
-              clearTimeout(clickTimerRef.current);
-              clickTimerRef.current = null;
-              return;
-            }
-            clickTimerRef.current = setTimeout(() => {
-              clickTimerRef.current = null;
-              const point = event.points?.[0];
-              if (point?.customdata !== undefined) {
-                if (onStructureClick) {
-                  const cdata = point.customdata;
-                  const structure = structures.find((s: any) => (s._mergeSeq ?? s.id) == cdata);
-                  if (structure) onStructureClick(structure);
-                } else {
-                  openViewer(Number(point.customdata));
-                }
-              }
-            }, 300);
-          }}
+          style={{ width: '100%', height: CONVEX_HULL_PLOT_HEIGHT }}
+          boundaryStyle={{ width: '100%', height: CONVEX_HULL_PLOT_HEIGHT }}
+          boundaryHandlers={structurePointClick.boundaryHandlers}
+          hoverTooltip={structurePointClick.hoverTooltip}
+          {...structurePointClick.plotHandlers}
+          onRelayout={handleRelayout}
         />
       </div>
 

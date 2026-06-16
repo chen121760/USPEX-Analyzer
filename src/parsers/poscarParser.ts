@@ -18,6 +18,7 @@
 import type { ParsedPoscar, LatticeParams } from '@/types/structure';
 
 const EA_PATTERN = /^EA(\d+)\s+/;
+const NUMBER_PATTERN = /^number=(\d+)\b/;
 const SYM_PATTERN = /Sym\.group:\s*(\d+)/;
 
 /**
@@ -64,6 +65,50 @@ function parseLatticeFromHeader(header: string): LatticeParams | undefined {
   return undefined;
 }
 
+function vectorLength(vector: number[]): number {
+  return Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+}
+
+function vectorAngle(a: number[], b: number[]): number {
+  const dot = a.reduce((sum, value, index) => sum + value * (b[index] ?? 0), 0);
+  const lengths = vectorLength(a) * vectorLength(b);
+  if (lengths === 0) return 0;
+  const cosine = Math.max(-1, Math.min(1, dot / lengths));
+  return Math.acos(cosine) * (180 / Math.PI);
+}
+
+/**
+ * Extract lattice parameters from POSCAR scale and lattice vectors.
+ */
+function parseLatticeFromVectors(lines: string[]): LatticeParams | undefined {
+  if (lines.length < 5) return undefined;
+
+  const scale = Number(lines[1].trim());
+  if (!Number.isFinite(scale)) return undefined;
+
+  const vectors = lines.slice(2, 5).map((line) =>
+    line
+      .trim()
+      .split(/\s+/)
+      .map(Number)
+      .filter((value) => Number.isFinite(value))
+      .map((value) => value * scale),
+  );
+
+  if (vectors.length !== 3 || vectors.some((vector) => vector.length !== 3)) {
+    return undefined;
+  }
+
+  return {
+    a: vectorLength(vectors[0]),
+    b: vectorLength(vectors[1]),
+    c: vectorLength(vectors[2]),
+    alpha: vectorAngle(vectors[1], vectors[2]),
+    beta: vectorAngle(vectors[0], vectors[2]),
+    gamma: vectorAngle(vectors[0], vectors[1]),
+  };
+}
+
 /**
  * Parse a single POSCAR block into structured data.
  */
@@ -104,7 +149,7 @@ function parseSinglePoscar(
     poscarText: lines.join('\n'),
     symm,
     formula,
-    latticeParams: parseLatticeFromHeader(header),
+    latticeParams: parseLatticeFromHeader(header) ?? parseLatticeFromVectors(lines),
     elements,
     atomCounts,
   };
@@ -125,7 +170,7 @@ export function parseGatheredPoscars(content: string): Map<number, ParsedPoscar>
 
   for (const rawLine of allLines) {
     const line = rawLine; // keep original line breaks
-    const match = line.match(EA_PATTERN);
+    const match = line.match(EA_PATTERN) ?? line.match(NUMBER_PATTERN);
 
     if (match) {
       // Save previous block

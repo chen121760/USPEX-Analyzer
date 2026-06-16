@@ -1,11 +1,20 @@
+/**
+ * Structure viewer modal.
+ *
+ * Renders the single application-level JSmol viewer for the active structure ID
+ * selected from tables or Plotly charts.
+ */
+
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUIStore } from '@/store/useUIStore';
 import { useProjectStore } from '@/store/useProjectStore';
+import { useThemeStore } from '@/theme/themeStore';
 import { JSmolViewer } from './JSmolViewer';
 import type { JSmolViewerHandle } from './JSmolViewer';
 import { X } from 'lucide-react';
 import { formulaToHtml } from '@/parsers/compositionUtils';
+import { downloadStructurePoscar } from '@/export/poscarExport';
 
 /** Jmol script snippets for toolbar buttons */
 const SCRIPTS = {
@@ -36,16 +45,17 @@ const DEFAULT_DISPLAY_MODE = 'ballAndStick' as const;
 const DEFAULT_SUPERCELL: [number, number, number] = [1, 1, 1];
 const DEFAULT_SUPERCELL_INPUT = '1 1 1';
 const DEFAULT_MEASURE_MODE = 'off' as const;
-const DEFAULT_BG_COLOR = 'white' as const;
 
 export function StructureViewerModal() {
   const { t } = useTranslation();
+  const theme = useThemeStore((s) => s.theme);
   const viewerStructureId = useUIStore((s) => s.viewerStructureId);
   const closeViewer = useUIStore((s) => s.closeViewer);
   const viewerWorkshopStructure = useUIStore((s) => s.viewerWorkshopStructure);
   const structures = useProjectStore((s) => s.structures);
   const tags = useProjectStore((s) => s.tags);
   const updateStructureTags = useProjectStore((s) => s.updateStructureTags);
+  const themeBgColor = theme === 'dark' ? 'black' : 'white';
 
   // Toolbar state
   const [showUnitCell, setShowUnitCell] = useState(true);
@@ -58,7 +68,7 @@ export function StructureViewerModal() {
   const jsmolRef = useRef<JSmolViewerHandle>(null);
   const [scInput, setScInput] = useState(DEFAULT_SUPERCELL_INPUT);
   const [measureMode, setMeasureMode] = useState<'off' | 'distance' | 'angle'>(DEFAULT_MEASURE_MODE);
-  const [bgColor, setBgColor] = useState<'white' | 'black'>(DEFAULT_BG_COLOR);
+  const [bgColor, setBgColor] = useState<'white' | 'black'>(themeBgColor);
 
   useEffect(() => {
     setShowUnitCell(true);
@@ -70,8 +80,11 @@ export function StructureViewerModal() {
     setSupercell(DEFAULT_SUPERCELL);
     setScInput(DEFAULT_SUPERCELL_INPUT);
     setMeasureMode(DEFAULT_MEASURE_MODE);
-    setBgColor(DEFAULT_BG_COLOR);
   }, [viewerStructureId]);
+
+  useEffect(() => {
+    setBgColor(themeBgColor);
+  }, [themeBgColor, viewerStructureId]);
 
   // Don't render if no structure selected
   if (viewerStructureId === null) return null;
@@ -84,9 +97,7 @@ export function StructureViewerModal() {
     return (
       <ModalShell onClose={closeViewer} title={`EA${viewerStructureId}`}>
         <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>
-          该结构没有 POSCAR 数据。
-          <br />
-          No POSCAR data available for this structure.
+          {t('viewer.noPoscar')}
         </div>
       </ModalShell>
     );
@@ -138,15 +149,18 @@ export function StructureViewerModal() {
         color: 'var(--color-text-muted, #666)',
         borderBottom: '1px solid var(--color-border, #e5e7eb)',
         background: 'var(--color-bg, #f9fafb)',
+        position: 'relative',
+        zIndex: 3,
+        flexShrink: 0,
       }}>
         <span dangerouslySetInnerHTML={{ __html: formulaToHtml(structure.formula) }} />
         {infoSuffix && <>{'  |  '}{infoSuffix}</>}
       </div>
 
       {/* Main content: viewer + toolbar */}
-      <div style={{ display: 'flex', height: 'calc(100% - 80px)' }}>
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative', zIndex: 1 }}>
         {/* Viewer */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0, position: 'relative', zIndex: 0, overflow: 'hidden', isolation: 'isolate' }}>
           <JSmolViewer
             ref={jsmolRef}
             key={viewerKey}
@@ -154,6 +168,7 @@ export function StructureViewerModal() {
             script={initScript}
             loadScript={viewerLoadScript}
             height="100%"
+            backgroundColor={bgColor}
           />
         </div>
 
@@ -168,6 +183,9 @@ export function StructureViewerModal() {
           display: 'flex',
           flexDirection: 'column',
           gap: 10,
+          position: 'relative',
+          zIndex: 2,
+          flexShrink: 0,
         }}>
           {/* Display mode */}
           <Section title="显示模式 Display">
@@ -305,13 +323,7 @@ export function StructureViewerModal() {
             </button>
             <button
               onClick={() => {
-                const blob = new Blob([structure.poscarData!], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `EA${structure.id}-SG${structure.spaceGroup}.vasp`;
-                link.click();
-                URL.revokeObjectURL(url);
+                downloadStructurePoscar(structure);
               }}
               style={{
                 padding: '4px 12px', fontSize: 12, borderRadius: 4,
@@ -417,6 +429,8 @@ function ModalShell({ children, onClose, title }: {
           boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
           display: 'flex', flexDirection: 'column',
           overflow: 'hidden',
+          position: 'relative',
+          isolation: 'isolate',
         }}
       >
         {/* Title bar */}
@@ -425,6 +439,10 @@ function ModalShell({ children, onClose, title }: {
           padding: '10px 16px',
           borderBottom: '1px solid var(--color-border, #e5e7eb)',
           fontWeight: 600, fontSize: 15,
+          position: 'relative',
+          zIndex: 4,
+          flexShrink: 0,
+          background: 'var(--color-surface, #fff)',
         }}>
           <span>{title}</span>
           <button

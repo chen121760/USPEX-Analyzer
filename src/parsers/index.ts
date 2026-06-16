@@ -33,7 +33,7 @@ import { parseOrigin } from './originParser';
 import { parseGatheredPoscars } from './poscarParser';
 import { parseConvexHullGenerations } from './convexHullParser';
 import { buildFormula, totalAtoms } from './compositionUtils';
-import { reconstructConvexHull } from '@/lib/convexHullReconstruction';
+import { reconstructHullStructures } from '@/domain/hull/reconstructHull';
 
 // Re-export individual parsers for direct use
 export {
@@ -68,6 +68,48 @@ export interface ParseResult {
   warnings: string[];
 }
 
+function inferElementsFromPoscars(poscarMap: Map<number, ParsedPoscar>): string[] {
+  const elements: string[] = [];
+
+  for (const poscar of poscarMap.values()) {
+    for (const element of poscar.elements) {
+      if (!elements.includes(element)) {
+        elements.push(element);
+      }
+    }
+  }
+
+  return elements;
+}
+
+function inferSystemTypeFromCompositionLength(compositionLength: number): SystemType {
+  if (compositionLength <= 1) return 'unary';
+  if (compositionLength === 2) return 'binary';
+  return 'ternary';
+}
+
+function inferHullCoordinates(composition: number[], systemType: SystemType): number[] {
+  const nAtoms = totalAtoms(composition);
+  if (nAtoms <= 0) return [0];
+  if (systemType === 'binary' && composition.length === 2) {
+    return [composition[1] / nAtoms];
+  }
+  if (systemType === 'ternary' && composition.length >= 3) {
+    return composition.slice(1).map((count) => count / nAtoms);
+  }
+  return [0];
+}
+
+function inferCompositionModeFromIndividuals(
+  individualsResult: IndividualsParseResult | null,
+): CompositionMode {
+  if (!individualsResult || individualsResult.data.length <= 1) return 'fixed';
+  const compositions = new Set(
+    individualsResult.data.map((individual) => individual.composition.join(',')),
+  );
+  return compositions.size > 1 ? 'varcomp' : 'fixed';
+}
+
 /**
  * Run the full parsing pipeline on all detected files.
  */
@@ -86,7 +128,7 @@ export function parseAllFiles(
     paramsResult = parseParameters(paramContent);
   }
 
-  // Elements: primary from Parameters.txt
+  // Elements: primary from Parameters.txt, with POSCAR fallback below.
   let elements = paramsResult?.elements ?? [];
 
   // Extended convex hull (primary data source for varcomp)
@@ -133,6 +175,11 @@ export function parseAllFiles(
     warnings.push('gatheredPOSCARS not found — structure viewing will be unavailable');
   }
 
+  const poscarElements = inferElementsFromPoscars(poscarMap);
+  if (elements.length === 0 && poscarElements.length > 0) {
+    elements = poscarElements;
+  }
+
   // Convex hull generations
   let hullGenerations: HullGeneration[] = [];
   const hullGenContent = fileContents.get('convex_hull');
@@ -167,15 +214,23 @@ export function parseAllFiles(
       : individualsResult && individualsResult.data.length > 0
         ? individualsResult.data[0].composition.length
         : 0;
-    systemType = compLen <= 1 ? 'unary' : compLen === 2 ? 'binary' : 'ternary';
+    systemType = inferSystemTypeFromCompositionLength(compLen);
   }
 
   if (!paramsResult) {
-    // compositionMode from hull file presence
-    compositionMode = hullContent ? 'varcomp' : 'fixed';
+    // compositionMode from hull file presence or actual Individuals diversity
+    compositionMode = hullContent ? 'varcomp' : inferCompositionModeFromIndividuals(individualsResult);
     // optimizationType from Pareto file presence
     const hasPareto = paretoResult !== null && paretoResult.data.length > 0;
     optimizationType = hasPareto ? 'multi' : 'single';
+  } else {
+    const inferredCompositionMode = hullContent
+      ? 'varcomp'
+      : inferCompositionModeFromIndividuals(individualsResult);
+    if (inferredCompositionMode === 'varcomp' && compositionMode !== 'varcomp') {
+      warnings.push('Parameters indicate fixed composition, but parsed structures contain multiple compositions; using variable-composition mode');
+      compositionMode = 'varcomp';
+    }
   }
 
   // Second objective name from Pareto or Individuals
@@ -205,14 +260,19 @@ export function parseAllFiles(
         (ind) => ind.enthalpy / Math.max(1, totalAtoms(ind.composition))
       )
     );
+    const hasIndividualsFitness =
+      individualsResult.midColNames.includes('Fitness') ||
+      individualsResult.midColNames.includes('e_above_hull');
     hullData = individualsResult.data.map((ind) => ({
       id: ind.id,
       composition: ind.composition,
       enthalpy: ind.enthalpy / Math.max(1, totalAtoms(ind.composition)),
       volume: ind.volume / Math.max(1, totalAtoms(ind.composition)),
-      fitness: ind.enthalpy / Math.max(1, totalAtoms(ind.composition)) - minEnthalpy, // unknown / not meaningful for fixed
+      fitness: hasIndividualsFitness
+        ? ind.indFitness
+        : ind.enthalpy / Math.max(1, totalAtoms(ind.composition)) - minEnthalpy,
       symm: ind.symm,
-      x: [0], // no meaningful composition coordinate
+      x: inferHullCoordinates(ind.composition, systemType),
       y: 0,
       thickness: ind.thickness / Math.max(1, totalAtoms(ind.composition)),
       surfArea: ind.surfArea / Math.max(1, totalAtoms(ind.composition)),
@@ -225,9 +285,23 @@ export function parseAllFiles(
   // Override systemType from actual composition data if Parameters.txt was wrong/missing
   if (hullData.length > 0) {
     const actualCompLen = hullData[0].composition.length;
-    const inferred: SystemType = actualCompLen <= 1 ? 'unary' : actualCompLen === 2 ? 'binary' : 'ternary';
-    if (!paramsResult || paramsResult.numComponents === 0) {
+    const inferred = inferSystemTypeFromCompositionLength(actualCompLen);
+    if (!paramsResult || paramsResult.numComponents === 0 || paramsResult.numComponents !== actualCompLen) {
+      if (paramsResult && paramsResult.numComponents !== 0 && paramsResult.numComponents !== actualCompLen) {
+        warnings.push(
+          `Parameters element count (${paramsResult.numComponents}) does not match parsed composition length (${actualCompLen}); using parsed structure data`,
+        );
+      }
       systemType = inferred;
+    }
+
+    if (elements.length !== actualCompLen && poscarElements.length === actualCompLen) {
+      if (elements.length > 0) {
+        warnings.push(
+          `Parameter elements (${elements.join(', ')}) do not match POSCAR element order (${poscarElements.join(', ')}); using POSCAR element order`,
+        );
+      }
+      elements = poscarElements;
     }
   }
 
@@ -263,7 +337,7 @@ export function parseAllFiles(
 
   // ---- Step 3: Merge into unified Structure records ----
 
-  const structures: Structure[] = hullData.map((hull) => {
+  let structures: Structure[] = hullData.map((hull) => {
     const ind = individualsMap.get(hull.id);
     const pareto = paretoMap.get(hull.id);
     const ml = mlMap.get(hull.id);
@@ -303,7 +377,7 @@ export function parseAllFiles(
       if (hasIndCol('Thick') && !extraProps['Thick']) extraProps['Thick'] = ind.thickness;
       if (hasIndCol('Surf_area') && !extraProps['Surf_area']) extraProps['Surf_area'] = ind.surfArea;
       if (hasIndCol('Spec_surf_area')) extraProps['Spec_surf_area'] = ind.specSurfArea;
-      if (hasIndCol('Fitness')) extraProps['Fitness-Individuals'] = ind.indFitness;
+      if (hasIndCol('Fitness') || hasIndCol('e_above_hull')) extraProps['Fitness-Individuals'] = ind.indFitness;
       Object.assign(extraProps, ind.extras);
     }
 
@@ -326,7 +400,7 @@ export function parseAllFiles(
 
       // Origin
       origin: (orig?.origin ?? ind?.origin ?? 'Unknown') as OriginMethod,
-      parentIds: orig?.parentIds ?? [],
+      parentIds: orig?.parentIds ?? ind?.parentIds ?? [],
       parentEnthalpy: orig?.parentEnthalpy ?? 0,
 
       // Density
@@ -382,14 +456,7 @@ export function parseAllFiles(
       const enthalpyPerAtom = nAtoms > 0 ? ind.enthalpy / nAtoms : ind.enthalpy;
       const volumePerAtom = nAtoms > 0 ? ind.volume / nAtoms : ind.volume;
 
-      let hullX: number[];
-      if (systemType === 'binary' && ind.composition.length === 2) {
-        hullX = [ind.composition[1] / Math.max(1, nAtoms)];
-      } else if (systemType === 'ternary' && ind.composition.length >= 3) {
-        hullX = ind.composition.slice(1).map((c) => c / Math.max(1, nAtoms));
-      } else {
-        hullX = [0];
-      }
+      const hullX = inferHullCoordinates(ind.composition, systemType);
 
       const pareto = paretoMap.get(id);
       const ml = mlMap.get(id);
@@ -413,7 +480,7 @@ export function parseAllFiles(
         hullX,
         hullY: enthalpyPerAtom,
         origin: (orig?.origin ?? ind.origin ?? 'Unknown') as OriginMethod,
-        parentIds: orig?.parentIds ?? [],
+        parentIds: orig?.parentIds ?? ind.parentIds ?? [],
         parentEnthalpy: orig?.parentEnthalpy ?? 0,
         density: ind.density ?? pareto?.density ?? 0,
         paretoFront: pareto?.paretoFront ?? -1,
@@ -431,7 +498,7 @@ export function parseAllFiles(
           if (midCols.includes('Thick')) ep['Thick'] = ind.thickness;
           if (midCols.includes('Surf_area')) ep['Surf_area'] = ind.surfArea;
           if (midCols.includes('Spec_surf_area')) ep['Spec_surf_area'] = ind.specSurfArea;
-          if (midCols.includes('Fitness')) ep['Fitness-Individuals'] = ind.indFitness;
+          if (midCols.includes('Fitness') || midCols.includes('e_above_hull')) ep['Fitness-Individuals'] = ind.indFitness;
           Object.assign(ep, ind.extras);
           return Object.keys(ep).length > 0 ? ep : undefined;
         })(),
@@ -459,7 +526,7 @@ export function parseAllFiles(
   }
 
   // ---- Step 3c: Reconstruct convex hull (compute eForm / eHullRecons) ----
-  reconstructConvexHull(structures, systemType, compositionMode, elements);
+  structures = reconstructHullStructures(structures, systemType, compositionMode, elements);
 
   // ---- Step 4: Build system info ----
 
