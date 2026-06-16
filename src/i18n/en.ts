@@ -175,6 +175,9 @@ const en = {
   'col.eFormDesc': 'Reconstructed formation enthalpy, computed independently using auto-extracted elemental reference potentials',
   'col.eHullRecons': 'E_hull (Recons)',
   'col.eHullReconsDesc': 'Reconstructed hull distance, recomputed from E_form on USPEX hull geometry (fitness=0 structures)',
+  'table.generatedColumns': 'Program-generated columns',
+  'table.columnsGeneratedHint': 'Show or hide reconstructed data columns',
+  'table.columnsReset': 'Reset default',
 
   // ── Column data source descriptions ──
   'col.idDesc': 'Structure ID, common across all files',
@@ -406,6 +409,7 @@ const en = {
   'viewer.polyhedra': 'Polyhedra',
   'viewer.supercell': 'Supercell',
   'viewer.unitCell': 'Show unit cell',
+  'viewer.noPoscar': 'No POSCAR data is available for this structure, so the 3D viewer cannot be opened.',
 
   // ---- Add Structure ----
   'addStruct.title': 'Add Custom Structure',
@@ -600,6 +604,9 @@ const en = {
   'error': 'Error',
   'success': 'Success',
   'info': 'Info',
+
+  // ---- Plot interactions ----
+  'plot.clickToViewStructure': 'Click to view structure',
 
   // ---- Citation ----
   'cite.title': 'Cite USPEX',

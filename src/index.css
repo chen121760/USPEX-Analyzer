@@ -2,17 +2,25 @@
 
 /* ---- Custom CSS Variables ---- */
 :root {
+  color-scheme: light;
+
+  --font-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Code", "Consolas", "Liberation Mono", monospace;
+
   --color-primary: #2563eb;
   --color-primary-light: #dbeafe;
   --color-primary-dark: #1d4ed8;
+  --color-primary-contrast: #ffffff;
   --color-success: #16a34a;
   --color-warning: #f59e0b;
+  --color-warning-contrast: #ffffff;
   --color-danger: #dc2626;
 
   --color-bg: #ffffff;
   --color-bg-secondary: #f8fafc;
   --color-bg-tertiary: #f1f5f9;
   --color-surface: #ffffff;
+  --color-surface-hover: rgba(99, 102, 241, 0.06);
   --color-border: #e2e8f0;
   --color-border-less: #f1f5f9;
   --color-bg-hover: #f1f5f9;
@@ -21,6 +29,7 @@
   --color-text-primary: #0f172a;
   --color-text-secondary: #64748b;
   --color-text-muted: #94a3b8;
+  --color-shadow: rgba(15, 23, 42, 0.08);
 
   --sidebar-width: 220px;
   --sidebar-collapsed-width: 56px;
@@ -39,18 +48,42 @@
 }
 
 .dark {
-  --color-bg: #0f172a;
-  --color-bg-secondary: #1e293b;
-  --color-bg-tertiary: #334155;
-  --color-surface: #1e293b;
-  --color-border: #334155;
-  --color-border-less: #1e293b;
-  --color-bg-hover: #1e293b;
-  --color-accent: #818cf8;
-  --color-text: #f1f5f9;
-  --color-text-primary: #f1f5f9;
-  --color-text-secondary: #94a3b8;
-  --color-text-muted: #64748b;
+  color-scheme: dark;
+
+  /* Catppuccin Mocha */
+  --color-primary: #89b4fa;
+  --color-primary-light: rgba(137, 180, 250, 0.18);
+  --color-primary-dark: #b4befe;
+  --color-primary-contrast: #11111b;
+  --color-success: #a6e3a1;
+  --color-warning: #f9e2af;
+  --color-warning-contrast: #11111b;
+  --color-danger: #f38ba8;
+
+  --color-bg: #1e1e2e;
+  --color-bg-secondary: #181825;
+  --color-bg-tertiary: #313244;
+  --color-surface: #181825;
+  --color-surface-hover: #313244;
+  --color-border: #45475a;
+  --color-border-less: #313244;
+  --color-bg-hover: #313244;
+  --color-accent: #cba6f7;
+  --color-text: #cdd6f4;
+  --color-text-primary: #f5e0dc;
+  --color-text-secondary: #bac2de;
+  --color-text-muted: #a6adc8;
+  --color-shadow: rgba(17, 17, 27, 0.42);
+
+  --origin-seeds: #b4befe;
+  --origin-heredity: #f5c2e7;
+  --origin-latmutate: #fab387;
+  --origin-softmutate: #94e2d5;
+  --origin-permutate: #cba6f7;
+  --origin-random: #a6adc8;
+  --origin-transmutate: #89dceb;
+  --origin-useradded: #f9e2af;
+  --origin-unknown: #7f849c;
 }
 
 /* ---- Base ---- */
@@ -60,7 +93,7 @@
 
 body {
   margin: 0;
-  font-family: 'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-ui);
   background-color: var(--color-bg);
   color: var(--color-text);
   -webkit-font-smoothing: antialiased;
@@ -68,7 +101,7 @@ body {
 
 /** Monospace for code, numerical data, and tabular figures */
 code, pre, .tabular-nums {
-  font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -97,6 +130,8 @@ code, pre, .tabular-nums {
   display: flex;
   height: 100vh;
   overflow: hidden;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 .sidebar {
@@ -109,11 +144,40 @@ code, pre, .tabular-nums {
   transition: width 0.2s ease, min-width 0.2s ease;
   overflow: hidden;
   z-index: 20;
+  color: var(--color-text);
 }
 
 .sidebar.collapsed {
   width: var(--sidebar-collapsed-width);
   min-width: var(--sidebar-collapsed-width);
+}
+
+.sidebar-brand {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+}
+
+.sidebar-logo {
+  width: min(100%, 184px);
+  aspect-ratio: 1;
+  object-fit: contain;
+  border-radius: 1px;
+  display: block;
+  transition: width 0.2s ease;
+}
+
+.sidebar.collapsed .sidebar-brand {
+  padding: 10px 8px;
+}
+
+.sidebar.collapsed .sidebar-logo {
+  width: 36px;
+  min-width: 36px;
 }
 
 .main-area {
@@ -132,12 +196,20 @@ code, pre, .tabular-nums {
   align-items: center;
   padding: 0 16px;
   gap: 12px;
+  color: var(--color-text);
 }
 
 .content {
   flex: 1;
   overflow-y: auto;
   padding: 20px;
+}
+
+.dark .content {
+  background:
+    radial-gradient(circle at 16px 16px, color-mix(in srgb, var(--color-accent) 5%, transparent) 0 1px, transparent 1px 100%),
+    var(--color-bg);
+  background-size: 24px 24px, auto;
 }
 
 /* ---- Sidebar nav items ---- */
@@ -157,6 +229,10 @@ code, pre, .tabular-nums {
   overflow: hidden;
 }
 
+.nav-item svg {
+  flex-shrink: 0;
+}
+
 .nav-item:hover {
   background: var(--color-bg-tertiary);
   color: var(--color-text);
@@ -168,11 +244,18 @@ code, pre, .tabular-nums {
 }
 
 .dark .nav-item.active {
-  background: rgba(37, 99, 235, 0.15);
+  background: var(--color-primary-light);
+  color: var(--color-primary);
 }
 
 .sidebar.collapsed .nav-item span {
   display: none;
+}
+
+.sidebar.collapsed .nav-item {
+  justify-content: center;
+  gap: 0;
+  padding: 8px 0;
 }
 
 /* ---- Card ---- */
@@ -181,6 +264,10 @@ code, pre, .tabular-nums {
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 16px;
+}
+
+.dark .card {
+  box-shadow: 0 10px 28px var(--color-shadow);
 }
 
 /* ---- Stat card ---- */
@@ -192,6 +279,10 @@ code, pre, .tabular-nums {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.dark .stat-card {
+  box-shadow: 0 10px 28px var(--color-shadow);
 }
 
 .stat-card .stat-value {
@@ -259,16 +350,21 @@ code, pre, .tabular-nums {
 
 .btn-primary {
   background: var(--color-primary);
-  color: white;
+  color: var(--color-primary-contrast);
 }
 .btn-primary:hover {
   background: var(--color-primary-dark);
+  color: var(--color-primary-contrast);
 }
 
 .btn-outline {
   background: transparent;
   border-color: var(--color-border);
   color: var(--color-text);
+}
+
+.dark .btn-outline {
+  background: var(--color-surface);
 }
 .btn-outline:hover {
   background: var(--color-bg-tertiary);
@@ -330,13 +426,75 @@ code, pre, .tabular-nums {
 }
 
 .dark .data-table tr.selected td {
-  background: rgba(37, 99, 235, 0.1);
+  background: var(--color-primary-light);
+}
+
+input,
+select,
+textarea {
+  accent-color: var(--color-primary);
+}
+
+::selection {
+  color: var(--color-primary-contrast);
+  background: var(--color-primary);
 }
 
 /* ---- Plotly overrides ---- */
-.js-plotly-plot .plotly .modebar {
+.js-plotly-plot .modebar-container {
+  top: 6px !important;
   right: 8px !important;
-  top: 4px !important;
+  left: auto !important;
+  width: auto !important;
+}
+
+.js-plotly-plot .plotly .modebar {
+  position: static !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.js-plotly-plot .plotly .modebar-group {
+  display: inline-flex !important;
+  align-items: center;
+}
+
+.js-plotly-plot .plotly .modebar-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.plotly-interaction-boundary.plotly-structure-point-hover,
+.plotly-interaction-boundary.plotly-structure-point-hover .js-plotly-plot,
+.plotly-interaction-boundary.plotly-structure-point-hover .svg-container,
+.plotly-interaction-boundary.plotly-structure-point-hover .main-svg,
+.plotly-interaction-boundary.plotly-structure-point-hover .draglayer,
+.plotly-interaction-boundary.plotly-structure-point-hover .draglayer * {
+  cursor: pointer !important;
+}
+
+.plotly-structure-hover-hint {
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-border-less);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* Plotly's shared off-screen SVG text tester must stay out of hit-testing. */
+#js-plotly-tester {
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
+/* JSmol creates this global load monitor at z-index 99999; keep it from stealing Plotly pointer events. */
+#_Loader-status {
+  display: none !important;
+  pointer-events: none !important;
 }
 
 /* ---- Tooltip ---- */

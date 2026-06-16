@@ -16,15 +16,14 @@ import type { Structure, SystemInfo } from '@/types/structure';
 import { BinaryHullPlot } from '@/modules/ConvexHull/BinaryHullPlot';
 import { TernaryHullPlot } from '@/modules/ConvexHull/TernaryHullPlot';
 import { EnergyRankingChart } from '@/modules/ConvexHull/EnergyRankingChart';
-import { computeGeometricHull } from '@/lib/workshopHull';
-
-type Row = Record<string, string | number | null | undefined>;
+import { computeWorkshopGeometricHull } from '@/domain/hull/workshopHull';
+import { downloadWorkshopCsv, downloadWorkshopJson, workshopJsonToStructure } from '@/export/workshopExport';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
-import type { WorkshopGroup, WorkshopJsonExport, WorkshopJsonStructure } from './types';
+import type { WorkshopGroup, WorkshopJsonExport } from './types';
 import { GROUP_COLORS, defaultGroupName } from './types';
 import { buildFormula, totalAtoms } from '@/parsers/compositionUtils';
 import type { ManualStructureData } from './components/AddStructureModal';
-import { FlaskConical } from 'lucide-react';
+import { WorkshopContent } from './components/WorkshopContent';
 
 /* ------------------------------------------------------------------ */
 /*  Page component                                                     */
@@ -78,7 +77,7 @@ export function HullWorkshopPage() {
     let seq = 0;
     for (const g of visibleGroups) {
       for (const s of g.structures) {
-        result.push({ ...s as any, groupName: g.name, groupColor: g.color, _mergeSeq: seq++ });
+        result.push({ ...s, groupName: g.name, groupColor: g.color, _mergeSeq: seq++ });
       }
     }
     return result;
@@ -87,7 +86,7 @@ export function HullWorkshopPage() {
   /* ── Derived: geometric hull on merged structures ── */
   const hullResult = useMemo(() => {
     if (!mergedSystemInfo || mergedStructuresWithGroup.length === 0) return null;
-    return computeGeometricHull(mergedStructuresWithGroup, mergedSystemInfo);
+    return computeWorkshopGeometricHull(mergedStructuresWithGroup, mergedSystemInfo);
   }, [mergedStructuresWithGroup, mergedSystemInfo]);
 
   /* ── Action: import from current project ── */
@@ -158,121 +157,16 @@ export function HullWorkshopPage() {
   /* ── Action: export merged data as workshop CSV (with Group column + metadata) ── */
   const handleExport = useCallback(() => {
     if (!hullResult || !mergedSystemInfo) return;
-
-    const { elements, systemType, compositionMode } = mergedSystemInfo;
-    const structs = hullResult.structures as (Structure & { groupName?: string })[];
-
-    // Build metadata header comment lines
-    const metaHeaders = [
-      `# elements: ${elements.join(',')}`,
-      `# systemType: ${systemType}`,
-      `# compositionMode: ${compositionMode}`,
-    ];
-
-    // Build data headers and rows
-    let dataHeaders: string[];
-    let rows: Row[];
-
-    if (compositionMode === 'fixed') {
-      dataHeaders = ['Group', 'EA_ID', 'Formula', 'SpaceGroup', 'Generation', 'Origin', 'Enthalpy(eV/atom)', 'Fitness(eV/atom)'];
-      rows = structs.map((s) => ({
-        'Group': s.groupName ?? '',
-        'EA_ID': s.id,
-        'Formula': s.formula,
-        'SpaceGroup': s.spaceGroup,
-        'Generation': s.generation,
-        'Origin': s.origin,
-        'Enthalpy(eV/atom)': s.enthalpy,
-        'Fitness(eV/atom)': s.fitness ?? 0,
-      }));
-    } else if (systemType === 'binary') {
-      const elB = elements[1] || 'B';
-      dataHeaders = ['Group', 'EA_ID', 'Formula', `x(${elB})`, 'Formation_Energy(eV/atom)', 'Enthalpy(eV/atom)', 'Fitness(eV/atom)'];
-      rows = structs.map((s) => ({
-        'Group': s.groupName ?? '',
-        'EA_ID': s.id,
-        'Formula': s.formula,
-        [`x(${elB})`]: s.hullX?.[0] ?? 0,
-        'Formation_Energy(eV/atom)': s.hullY,
-        'Enthalpy(eV/atom)': s.enthalpy,
-        'Fitness(eV/atom)': s.fitness,
-      }));
-    } else {
-      // ternary
-      const [elA, elB, elC] = elements;
-      dataHeaders = ['Group', 'EA_ID', 'Formula', `x_${elA}`, `x_${elB}`, `x_${elC}`, 'Enthalpy(eV/atom)', 'Fitness(eV/atom)'];
-      rows = structs.map((s) => {
-        const total = s.composition.reduce((a: number, b: number) => a + b, 0) || 1;
-        return {
-          'Group': s.groupName ?? '',
-          'EA_ID': s.id,
-          'Formula': s.formula,
-          [`x_${elA}`]: (s.composition[0] / total).toFixed(6),
-          [`x_${elB}`]: (s.composition[1] / total).toFixed(6),
-          [`x_${elC}`]: (s.composition[2] / total).toFixed(6),
-          'Enthalpy(eV/atom)': s.enthalpy,
-          'Fitness(eV/atom)': s.fitness ?? 0,
-        };
-      });
-    }
-
-    // Build full CSV with metadata headers + BOM
-    function csvCell(v: unknown): string {
-      if (v === undefined || v === null) return '';
-      const s = String(v);
-      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-        return `"${s.replace(/"/g, '""')}"`;
-      }
-      return s;
-    }
-    const csvLine = (headers: string[], row: Row) =>
-      headers.map((h) => csvCell(row[h])).join(',');
-    const body = [dataHeaders.join(','), ...rows.map((r) => csvLine(dataHeaders, r))].join('\r\n');
-    const fullCsv = '\uFEFF' + [...metaHeaders, '', body].join('\r\n');
-
-    const blob = new Blob([fullCsv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${elements.join('-')}_workshop.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadWorkshopCsv(
+      mergedSystemInfo,
+      hullResult.structures as (Structure & { groupName?: string })[],
+    );
   }, [hullResult, mergedSystemInfo]);
 
   /* ── Action: export merged data as workshop JSON (full structure data) ── */
   const handleExportJson = useCallback(() => {
     if (!mergedSystemInfo) return;
-
-    const { elements, systemType, compositionMode, externalPressure } = mergedSystemInfo;
-
-    // Build structure JSON for each visible group
-    const jsonGroups = visibleGroups.map((g) => ({
-      name: g.name,
-      color: g.color,
-      structures: g.structures.map((s) => structureToJson(s)),
-    }));
-
-    const archive: WorkshopJsonExport = {
-      type: 'uspex-workshop',
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      systemInfo: {
-        elements,
-        systemType,
-        compositionMode,
-        externalPressure,
-      },
-      groups: jsonGroups,
-    };
-
-    const json = JSON.stringify(archive, null, 2);
-    const blob = new Blob(['\uFEFF' + json], { type: 'application/json;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${elements.join('-')}_workshop.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadWorkshopJson(mergedSystemInfo, visibleGroups);
   }, [mergedSystemInfo, visibleGroups]);
 
   /* ── Action: upload & parse JSON ── */
@@ -294,7 +188,7 @@ export function HullWorkshopPage() {
         const newGroups: WorkshopGroup[] = archive.groups.map((jg, gi) => ({
           id: crypto.randomUUID(),
           name: jg.name,
-          structures: jg.structures.map((js) => jsonToStructure(js)),
+          structures: jg.structures.map((js) => workshopJsonToStructure(js)),
           systemInfo: {
             elements: archive.systemInfo.elements,
             systemType: archive.systemInfo.systemType,
@@ -511,112 +405,15 @@ export function HullWorkshopPage() {
         onAddManual={handleAddManual}
       />
 
-      {/* Right content area */}
-      <div className="workshop-content fade-in">
-        {hasData ? (
-          <>
-            <h1 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>{pageTitle}</h1>
-            {renderChart()}
-          </>
-        ) : (
-          <div className="workshop-empty">
-            <FlaskConical size={48} style={{ color: 'var(--color-text-muted)', marginBottom: 16 }} />
-            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: 'var(--color-text-secondary)' }}>
-              {t('workshop.emptyTitle', 'Hull Workshop')}
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-              {t('workshop.emptyHint', 'Import data from the current project or load external data to get started.')}
-            </div>
-          </div>
-        )}
-      </div>
+      <WorkshopContent
+        hasData={hasData}
+        pageTitle={pageTitle}
+        emptyTitle={t('workshop.emptyTitle', 'Hull Workshop')}
+        emptyHint={t('workshop.emptyHint', 'Import data from the current project or load external data to get started.')}
+      >
+        {renderChart()}
+      </WorkshopContent>
 
     </div>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                            */
-/* ------------------------------------------------------------------ */
-
-/** Serialize a Structure to WorkshopJsonStructure for JSON export. */
-function structureToJson(s: Structure): WorkshopJsonStructure {
-  return {
-    id: s.id,
-    formula: s.formula,
-    composition: s.composition,
-    generation: s.generation,
-    origin: s.origin,
-    spaceGroup: s.spaceGroup,
-    enthalpy: s.enthalpy,
-    enthalpyTotal: s.enthalpyTotal,
-    volume: s.volume,
-    volumeTotal: s.volumeTotal,
-    fitness: s.fitness,
-    hullX: s.hullX,
-    hullY: s.hullY,
-    eForm: s.eForm,
-    density: s.density,
-    parentIds: s.parentIds ?? [],
-    parentEnthalpy: s.parentEnthalpy,
-    paretoFront: s.paretoFront,
-    bulkModulus: s.bulkModulus ?? 0,
-    shearModulus: s.shearModulus ?? 0,
-    youngModulus: s.youngModulus ?? 0,
-    poissonRatio: s.poissonRatio ?? 0,
-    pughRatio: s.pughRatio ?? 0,
-    vickersHardness: s.vickersHardness ?? 0,
-    fractureToughness: s.fractureToughness ?? 0,
-    qEntropy: s.qEntropy ?? 0,
-    aOrder: s.aOrder ?? 0,
-    sOrder: s.sOrder ?? 0,
-    kpoints: s.kpoints,
-    latticeParams: s.latticeParams,
-    poscarData: s.poscarData,
-    tags: s.tags ?? [],
-    notes: s.notes ?? '',
-  };
-}
-
-/** Reconstruct a Structure from WorkshopJsonStructure (JSON import). */
-function jsonToStructure(js: WorkshopJsonStructure): Structure {
-  return {
-    id: js.id,
-    formula: js.formula,
-    composition: js.composition,
-    generation: js.generation,
-    origin: js.origin,
-    spaceGroup: js.spaceGroup,
-    enthalpy: js.enthalpy,
-    enthalpyTotal: js.enthalpyTotal,
-    volume: js.volume,
-    volumeTotal: js.volumeTotal,
-    fitness: js.fitness,
-    hullX: js.hullX,
-    hullY: js.hullY,
-    eForm: js.eForm,
-    eHullRecons: 0,
-    density: js.density,
-    parentIds: js.parentIds,
-    parentEnthalpy: js.parentEnthalpy,
-    paretoFront: js.paretoFront,
-    bulkModulus: js.bulkModulus,
-    shearModulus: js.shearModulus,
-    youngModulus: js.youngModulus,
-    poissonRatio: js.poissonRatio,
-    pughRatio: js.pughRatio,
-    vickersHardness: js.vickersHardness,
-    fractureToughness: js.fractureToughness,
-    qEntropy: js.qEntropy,
-    aOrder: js.aOrder,
-    sOrder: js.sOrder,
-    kpoints: js.kpoints,
-    latticeParams: js.latticeParams,
-    poscarData: js.poscarData,
-    tags: js.tags,
-    notes: js.notes,
-    isUserAdded: false,
-    extraProperties: {},
-  } as Structure;
-}
-

@@ -1,8 +1,9 @@
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
-import { useUIStore } from '@/store/useUIStore';
-import logoImg from '@/assets/logo.jpg';
+import { useLayoutStore } from '@/store/useLayoutStore';
+import { UspexLogo } from '@/components/Logo/UspexLogo';
+import { downloadBlob } from '@/export/exportFileNames';
 import {
   LayoutDashboard,
   Table2,
@@ -40,8 +41,8 @@ function NavItem({ to, icon, label, hidden }: NavItemProps) {
 
 export function Sidebar() {
   const { t } = useTranslation();
-  const collapsed = useUIStore((s) => s.sidebarCollapsed);
-  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
+  const collapsed = useLayoutStore((s) => s.sidebarCollapsed);
+  const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
   const systemInfo = useProjectStore((s) => s.systemInfo);
 
   const isMulti = systemInfo?.optimizationType === 'multi';
@@ -52,12 +53,7 @@ export function Sidebar() {
     const blob = new Blob([JSON.stringify(projectFile, null, 2)], {
       type: 'application/json',
     });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `uspex-project-${systemInfo?.elements.join('-') ?? 'data'}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `uspex-project-${systemInfo?.elements.join('-') ?? 'data'}.json`);
   };
 
   const iconSize = 18;
@@ -65,21 +61,8 @@ export function Sidebar() {
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       {/* Logo / Brand */}
-      <div
-        style={{
-          padding: '12px 14px',
-          borderBottom: '1px solid var(--color-border)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          minHeight: 48,
-        }}
-      >
-        <img
-          src={logoImg}
-          alt="USPEX Analyzer"
-          style={{ width: '100%', aspectRatio: '1', objectFit: 'contain', borderRadius: 1, display: 'block' }}
-        />
+      <div className="sidebar-brand">
+        <UspexLogo className="sidebar-logo" />
 
       </div>
 

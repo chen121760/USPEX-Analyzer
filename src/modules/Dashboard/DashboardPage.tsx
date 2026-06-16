@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
-import { useUIStore } from '@/store/useUIStore';
-import Plot from 'react-plotly.js';
+import { useLayoutStore } from '@/store/useLayoutStore';
+import { useThemeStore } from '@/theme/themeStore';
 import { ChevronDown, ChevronUp, Check, X, AlertTriangle, Info } from 'lucide-react';
 import { formulaToHtml } from '@/parsers/compositionUtils';
-import { getPlotlyTheme } from '@/lib/constants';
+import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
+import { PlotFrame } from '@/charts/shared/PlotFrame';
+import { PLOTLY_FONT } from '@/lib/constants';
 
 /** Count occurrences of a field value */
 function countBy<T>(items: T[], accessor: (item: T) => string): Record<string, number> {
@@ -128,9 +130,9 @@ export function DashboardPage() {
   const systemInfo = useProjectStore((s) => s.systemInfo);
   const parsedFiles = useProjectStore((s) => s.parsedFiles);
   const parseWarnings = useProjectStore((s) => s.parseWarnings);
-  const collapsed = useUIStore((s) => s.dashboardCollapsed);
-  const toggleDashboard = useUIStore((s) => s.toggleDashboard);
-  const theme = useUIStore((s) => s.theme);
+  const collapsed = useLayoutStore((s) => s.dashboardCollapsed);
+  const toggleDashboard = useLayoutStore((s) => s.toggleDashboard);
+  const theme = useThemeStore((s) => s.theme);
   const plotTheme = getPlotlyTheme(theme);
 
   const stats = useMemo(() => {
@@ -275,7 +277,7 @@ export function DashboardPage() {
             <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--color-text-secondary)' }}>
               {t('dashboard.spaceGroupDistribution')}
             </h3>
-            <Plot
+            <PlotFrame
               data={[{
                 type: 'pie',
                 labels: stats.sgPieLabels,
@@ -292,15 +294,23 @@ export function DashboardPage() {
               }]}
               layout={{
                 showlegend: true,
-                legend: { bgcolor: 'rgba(255,255,255,0.4)', font: { size: 11, color: plotTheme.legendColor }, orientation: 'v', x: 1, y: 0.5 },
+                legend: {
+                  bgcolor: theme === 'dark' ? 'rgba(24, 24, 37, 0.86)' : 'rgba(255,255,255,0.4)',
+                  bordercolor: theme === 'dark' ? '#313244' : '#e2e8f0',
+                  font: { size: 11, color: plotTheme.legendColor },
+                  orientation: 'v',
+                  x: 1,
+                  y: 0.5,
+                },
                 margin: { t: 4, b: 4, l: 4, r: 80 },
                 paper_bgcolor: 'transparent',
                 plot_bgcolor: 'transparent',
-                font: { family: 'Times New Roman, serif', color: plotTheme.titleColor },
+                font: { ...PLOTLY_FONT, color: plotTheme.titleColor },
               }}
               useResizeHandler
               style={{ width: '100%', height: 260 }}
-              config={{ displayModeBar: false, responsive: true }}
+              boundaryStyle={{ width: '100%', height: 260 }}
+              config={{ displayModeBar: false }}
             />
           </div>
 

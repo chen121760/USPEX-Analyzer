@@ -3,14 +3,26 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { detectFileType } from '@/lib/fileDetection';
-import { UploadCloud, FileText, CheckCircle2, AlertCircle, Globe } from 'lucide-react';
+import {
+  UploadCloud,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  Globe,
+  Monitor,
+  Moon,
+  Sun,
+  Contact,
+} from 'lucide-react';
 import type { DetectedFile, USPEXFileType, ProjectFile } from '@/types/structure';
 import { useEffect } from 'react';
 import { loadRecentProjects, deleteProject, saveProject, type StoredProject } from '@/lib/projectStorage';
 import { Clock, Trash2 } from 'lucide-react';
-import logoImg from '@/assets/logo.jpg';
+import { UspexLogo } from '@/components/Logo/UspexLogo';
 import { QuickPackCommand } from '@/components/QuickPackCommand';
 import { extractArchive, entriesToFiles, isArchive } from '@/utils/extractArchive';
+import { CitePopover } from '@/components/CitePopover';
+import { useThemeStore } from '@/theme/themeStore';
 
 /**
  * Build auto project name.
@@ -38,12 +50,25 @@ function buildAutoName(
   return parts.join('-');
 }
 
+function hasUspex25Schema(fileContents: Map<USPEXFileType, string>): boolean {
+  const individuals = fileContents.get('individuals') ?? '';
+  const poscars = fileContents.get('gathered_poscars') ?? '';
+  const hull = fileContents.get('extended_convex_hull') ?? '';
+
+  return /^\s*generation\s+number\s+num_atoms_all\s+energy/m.test(individuals) ||
+    /^number=\d+\b/m.test(poscars) ||
+    /^\s*generation\s+number\s+num_atoms_all\s+energy.*\be_above_hull\b/m.test(hull);
+}
+
 export function UploadPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const processFiles = useProjectStore((s) => s.processFiles);
   const setProjectName = useProjectStore((s) => s.setProjectName);
   const loadProjectFile = useProjectStore((s) => s.loadProjectFile);
+  const theme = useThemeStore((s) => s.theme);
+  const themePreference = useThemeStore((s) => s.themePreference);
+  const cycleThemePreference = useThemeStore((s) => s.cycleThemePreference);
 
   const [detectedFiles, setDetectedFiles] = useState<DetectedFile[]>([]);
   const [fileContents, setFileContents] = useState<Map<USPEXFileType, string>>(new Map());
@@ -132,12 +157,15 @@ export function UploadPage() {
         // Replace if same type already exists
         const existingIdx = newDetected.findIndex((d) => d.type === detected.type);
         if (existingIdx >= 0) {
-          newDetected[existingIdx] = detected;
+          const existing = newDetected[existingIdx];
+          if (detected.confidence >= existing.confidence) {
+            newDetected[existingIdx] = detected;
+            newContents.set(detected.type, content);
+          }
         } else {
           newDetected.push(detected);
+          newContents.set(detected.type, content);
         }
-
-        newContents.set(detected.type, content);
       } catch (e) {
         newErrors.push(`Error reading ${file.name}: ${e}`);
       }
@@ -173,11 +201,22 @@ export function UploadPage() {
     if (e.target.files) handleFiles(e.target.files);
   };
 
-  const canStart =
+  const isUspex25Schema = hasUspex25Schema(fileContents);
+  const canStartLegacy =
     fileContents.has('individuals') &&
     fileContents.has('origin') &&
     fileContents.has('parameters') &&
     fileContents.has('gathered_poscars');
+  const canStartUspex25 =
+    isUspex25Schema &&
+    fileContents.has('individuals') &&
+    fileContents.has('gathered_poscars');
+  const canStart = canStartLegacy || canStartUspex25;
+  const requiredFilesHint = canStartUspex25 || isUspex25Schema
+    ? i18n.language === 'zh'
+      ? 'USPEX25 至少需要 Individuals 和 gatheredPOSCARS；extended_convex_hull 与 Parameters/parameter 文件可选。'
+      : 'USPEX25 needs at least Individuals and gatheredPOSCARS; extended_convex_hull and Parameters/parameter files are optional.'
+    : t('upload.requiredFilesHint');
 
   const startAnalysis = () => {
     processFiles(detectedFiles, fileContents);
@@ -230,23 +269,48 @@ export function UploadPage() {
         background: 'var(--color-bg)',
       }}
     >
-      {/* Language button top-right */}
-      <button
-        className="btn btn-ghost btn-sm"
-        onClick={toggleLang}
-        style={{ position: 'fixed', top: 12, right: 16 }}
+      {/* Utility actions top-right */}
+      <div
+        style={{
+          position: 'fixed',
+          top: 12,
+          right: 16,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          zIndex: 20,
+        }}
       >
-        <Globe size={16} />
-        <span>{i18n.language === 'zh' ? 'EN' : '中'}</span>
-      </button>
+        <button className="btn btn-ghost btn-sm" onClick={toggleLang} title="Switch language">
+          <Globe size={16} />
+          <span>{i18n.language === 'zh' ? 'EN' : '中'}</span>
+        </button>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={cycleThemePreference}
+          title={getThemeTitle(i18n.language, themePreference, theme)}
+        >
+          {themePreference === 'system'
+            ? <Monitor size={16} />
+            : theme === 'dark'
+              ? <Sun size={16} />
+              : <Moon size={16} />}
+        </button>
+        <CitePopover />
+        <a
+          className="btn btn-ghost btn-sm"
+          href="https://chen121760.github.io/"
+          target="_blank"
+          rel="noopener noreferrer"
+          title={i18n.language === 'zh' ? '联系作者' : 'Contact Author'}
+        >
+          <Contact size={16} />
+        </a>
+      </div>
 
       {/* Logo only */}
       <div style={{ textAlign: 'center', marginBottom: 4 }} className="fade-in">
-        <img
-          src={logoImg}
-          alt="USPEX Analyzer"
-          style={{ width: 250, height: 250, borderRadius: 6, margin: '0 auto' }}
-        />
+        <UspexLogo style={{ width: 250, height: 250, margin: '0 auto' }} />
       </div>
 
       {/* Sample data banner */}
@@ -405,7 +469,7 @@ export function UploadPage() {
             </button>
             {!canStart && (
               <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 8 }}>
-                {t('upload.requiredFilesHint')}
+                {requiredFilesHint}
               </p>
             )}
           </div>
@@ -472,4 +536,16 @@ export function UploadPage() {
       </div>
     </div>
   );
+}
+
+function getThemeTitle(language: string, preference: 'system' | 'light' | 'dark', theme: 'light' | 'dark') {
+  if (language === 'zh') {
+    return preference === 'system'
+      ? `跟随系统主题（当前${theme === 'dark' ? '深色' : '浅色'}）`
+      : `${preference === 'dark' ? '深色' : '浅色'}主题`;
+  }
+
+  return preference === 'system'
+    ? `Follow system theme (${theme})`
+    : `${preference} theme`;
 }

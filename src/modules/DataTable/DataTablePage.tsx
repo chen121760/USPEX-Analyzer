@@ -1,7 +1,8 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
+import { useCompareStore } from '@/store/useCompareStore';
+import { useTableStore } from '@/store/useTableStore';
 import { useUIStore } from '@/store/useUIStore';
 import {
   useReactTable,
@@ -11,13 +12,17 @@ import {
   flexRender,
   type ColumnDef,
   type SortingState,
+  type VisibilityState,
 } from '@tanstack/react-table';
 import {
-  ArrowUpDown, ArrowUp, ArrowDown, Search, Eye, GitBranch, ArrowLeftRight, Tag, MessageSquare, X,
+  Search, Eye, GitBranch, ArrowLeftRight, Columns3,
 } from 'lucide-react';
 import { LineagePanel } from './LineagePanel';
+import { NotesEditor, SortIcon, TagPicker } from './components/DataTableCellControls';
+import { DataTableFilterBuilder } from './components/DataTableFilterBuilder';
 import { FormulaDisplay } from '@/components/FormulaDisplay';
 import { ML_FIELD_KEYS, ML_FIELD_I18N } from '@/lib/constants';
+import { collectDynamicFieldKeys } from '@/domain/structure/dynamicFields';
 import type {
   Structure,
   NumericFilterColumn,
@@ -32,243 +37,12 @@ import type {
 // 本地别名，保持组件内部代码不变
 type FilterCondition = TableFilterCondition;
 
+const DEFAULT_COLUMN_VISIBILITY: VisibilityState = {
+  eForm: false,
+  eHullRecons: false,
+};
 
-function SortIcon({ sorted }: { sorted: false | 'asc' | 'desc' }) {
-  if (!sorted) return <ArrowUpDown size={12} style={{ opacity: 0.3 }} />;
-  if (sorted === 'asc') return <ArrowUp size={12} />;
-  return <ArrowDown size={12} />;
-}
-
-function TagPicker({
-  structureId,
-  currentTags,
-  allTags,
-  onToggle,
-}: {
-  structureId: number;
-  currentTags: string[];
-  allTags: { id: string; nameKey: string; color: string }[];
-  onToggle: (id: number, tags: string[]) => void;
-}) {
-  const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLDivElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  // pos 是下拉框的最终显示位置，初始值在 handleOpen 里计算，之后由视口矫正 useEffect 微调
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-
-  // 点击外部关闭：同时排除 triggerRef 和 dropdownRef 内部的点击
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      const target = e.target as Node;
-      const insideTrigger  = triggerRef.current?.contains(target);
-      const insideDropdown = dropdownRef.current?.contains(target);
-      if (!insideTrigger && !insideDropdown) setOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  // 视口边界矫正：下拉框渲染后，检查是否超出屏幕边缘，超出则调整位置
-  useEffect(() => {
-    if (!open || !dropdownRef.current) return;
-    const rect = dropdownRef.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    // 每次只做最小幅度的矫正，避免抖动
-    setPos((prev) => {
-      let { top, left } = prev;
-      // 右侧溢出：左移，让下拉框右边缘贴住视口右边缘（留 8px 间距）
-      if (rect.right > vw - 8) left = left - (rect.right - vw + 8);
-      // 底部溢出：向上弹出，让下拉框出现在触发按钮上方
-      if (rect.bottom > vh - 8 && triggerRef.current) {
-        const triggerRect = triggerRef.current.getBoundingClientRect();
-        top = triggerRect.top - rect.height - 4;
-      }
-      // 左侧溢出（矫正过头了）：贴住左边缘
-      if (left < 8) left = 8;
-      return { top, left };
-    });
-  }, [open]);
-
-  const toggle = (tagId: string) => {
-    const next = currentTags.includes(tagId)
-      ? currentTags.filter((t) => t !== tagId)
-      : [...currentTags, tagId];
-    onToggle(structureId, next);
-  };
-
-  const handleOpen = () => {
-    if (!open && triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      // 初始位置：触发按钮正下方，左对齐
-      setPos({ top: rect.bottom + 4, left: rect.left });
-    }
-    setOpen((v) => !v);
-  };
-
-  return (
-    <div ref={triggerRef}>
-      {/* 已选标签 + 点击区域 */}
-      <div
-        onClick={handleOpen}
-        style={{
-          display: 'flex', gap: 4, flexWrap: 'wrap', cursor: 'pointer',
-          minHeight: 24, alignItems: 'center', padding: '2px 4px',
-          borderRadius: 4, border: '1px solid transparent',
-        }}
-        title="点击编辑标签"
-      >
-        {currentTags.length === 0 && <Tag size={12} style={{ opacity: 0.3 }} />}
-        {currentTags.map((tagId) => {
-          const tag = allTags.find((t) => t.id === tagId);
-          if (!tag) return null;
-          return (
-            <span key={tagId} className="tag-badge"
-              style={{ background: `${tag.color}20`, color: tag.color, fontSize: 11 }}>
-              {t(tag.nameKey)}
-            </span>
-          );
-        })}
-      </div>
-
-      {/* 下拉框：portal 到 body，视口矫正后显示 */}
-      {open && createPortal(
-        <div ref={dropdownRef} style={{
-          position: 'fixed', top: pos.top, left: pos.left,
-          zIndex: 9999,
-          background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-          borderRadius: 8, padding: 6, minWidth: 160,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-        }}>
-          {allTags.map((tag) => {
-            const checked = currentTags.includes(tag.id);
-            return (
-              <label key={tag.id} style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '5px 8px', borderRadius: 4, cursor: 'pointer',
-                fontSize: 12, color: 'var(--color-text)',
-              }}>
-                <input type="checkbox" checked={checked}
-                  onChange={() => toggle(tag.id)} style={{ accentColor: tag.color }} />
-                <span style={{ width: 10, height: 10, borderRadius: '50%',
-                  background: tag.color, flexShrink: 0 }} />
-                {t(tag.nameKey)}
-              </label>
-            );
-          })}
-        </div>,
-        document.body
-      )}
-    </div>
-  );
-}
-
-/** 备注编辑弹出框 */
-function NotesEditor({
-  structureId,
-  currentNotes,
-  onSave,
-}: {
-  structureId: number;
-  currentNotes: string;
-  onSave: (id: number, notes: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [text, setText] = useState(currentNotes);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const popupRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ top: 0, right: 0 });
-
-  // 点击外部时保存并关闭
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      const target = e.target as Node;
-      const outsidePopup   = popupRef.current   && !popupRef.current.contains(target);
-      const outsideTrigger = triggerRef.current && !triggerRef.current.contains(target);
-      if (outsidePopup && outsideTrigger) {
-        onSave(structureId, text);
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open, text, structureId, onSave]);
-
-  // 视口边界矫正：弹框渲染后检查是否超出底部，超出则改为向上弹出
-  useEffect(() => {
-    if (!open || !popupRef.current || !triggerRef.current) return;
-    const popupRect   = popupRef.current.getBoundingClientRect();
-    const triggerRect = triggerRef.current.getBoundingClientRect();
-    const vh = window.innerHeight;
-    if (popupRect.bottom > vh - 8) {
-      // 底部溢出：改为在触发按钮上方弹出
-      setPos((prev) => ({
-        ...prev,
-        top: triggerRect.top - popupRect.height - 4,
-      }));
-    }
-  }, [open]);
-
-  const handleOpen = () => {
-    setText(currentNotes);
-    if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      // 初始位置：按钮正下方，右对齐到按钮右边缘
-      setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
-    }
-    setOpen(true);
-  };
-
-  return (
-    <>
-      <button
-        ref={triggerRef}
-        className="btn btn-ghost btn-sm"
-        onClick={handleOpen}
-        title={currentNotes || '添加备注'}
-        style={{ padding: '2px 6px', color: currentNotes ? 'var(--color-primary)' : undefined }}
-      >
-        <MessageSquare size={14} />
-      </button>
-
-      {open && createPortal(
-        <div ref={popupRef} style={{
-          position: 'fixed', top: pos.top, right: pos.right,
-          zIndex: 9999,
-          background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-          borderRadius: 8, padding: 10, width: 240,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 600 }}>EA{structureId} 备注</span>
-            <button className="btn btn-ghost btn-sm"
-              onClick={() => { onSave(structureId, text); setOpen(false); }}
-              style={{ padding: 2 }}>
-              <X size={14} />
-            </button>
-          </div>
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="写点备注..."
-            rows={3}
-            autoFocus
-            style={{
-              width: '100%', padding: 8, borderRadius: 6, fontSize: 12,
-              border: '1px solid var(--color-border)', resize: 'vertical',
-              background: 'var(--color-bg)', color: 'var(--color-text)',
-              boxSizing: 'border-box', outline: 'none',
-            }}
-          />
-        </div>,
-        document.body
-      )}
-    </>
-  );
-}
+const PROGRAM_GENERATED_COLUMN_IDS = ['eForm', 'eHullRecons'] as const;
 
 export function DataTablePage() {
   const { t } = useTranslation();
@@ -278,12 +52,12 @@ export function DataTablePage() {
   const updateStructureTags = useProjectStore((s) => s.updateStructureTags);
   const updateStructureNotes = useProjectStore((s) => s.updateStructureNotes);
   const openViewer = useUIStore((s) => s.openViewer);
-  const toggleCompare = useUIStore((s) => s.toggleCompare);
-  const compareIds = useUIStore((s) => s.compareIds);
+  const toggleCompare = useCompareStore((s) => s.toggleCompare);
+  const compareIds = useCompareStore((s) => s.compareIds);
 
-  // 排序状态从 UIStore 读取，切换页面后不会丢失
-  const sortingRaw    = useUIStore((s) => s.tableSorting) as SortingState;
-  const setSortingRaw = useUIStore((s) => s.setTableSorting);
+  // 排序状态从 TableStore 读取，切换页面后不会丢失
+  const sortingRaw    = useTableStore((s) => s.tableSorting) as SortingState;
+  const setSortingRaw = useTableStore((s) => s.setTableSorting);
   // react-table 的 onSortingChange 可能传入新值，也可能传入一个"更新函数"
   // 这个包装函数统一处理两种情况
   const sorting = sortingRaw;
@@ -294,8 +68,8 @@ export function DataTablePage() {
       setSortingRaw(updaterOrValue);
     }
   };
-  const globalFilterRaw = useUIStore((s) => s.tableGlobalFilter);
-  const setGlobalFilterRaw = useUIStore((s) => s.setTableGlobalFilter);
+  const globalFilterRaw = useTableStore((s) => s.tableGlobalFilter);
+  const setGlobalFilterRaw = useTableStore((s) => s.setTableGlobalFilter);
   const globalFilter = globalFilterRaw;
   const setGlobalFilter = (updaterOrValue: string | ((old: string) => string)) => {
     if (typeof updaterOrValue === 'function') {
@@ -305,16 +79,32 @@ export function DataTablePage() {
     }
   };
   const [lineageId, setLineageId] = useState<number | null>(null);
-  const selectedTag = useUIStore((s) => s.tableSelectedTag);
-  const setSelectedTag = useUIStore((s) => s.setTableSelectedTag);
+  const selectedTag = useTableStore((s) => s.tableSelectedTag);
+  const setSelectedTag = useTableStore((s) => s.setTableSelectedTag);
+  const columnVisibilityRaw = useTableStore((s) => s.tableColumnVisibility);
+  const setColumnVisibilityRaw = useTableStore((s) => s.setTableColumnVisibility);
+  const columnVisibility = useMemo<VisibilityState>(
+    () => ({ ...DEFAULT_COLUMN_VISIBILITY, ...columnVisibilityRaw }),
+    [columnVisibilityRaw],
+  );
+  const setColumnVisibility = (
+    updaterOrValue: VisibilityState | ((old: VisibilityState) => VisibilityState),
+  ) => {
+    if (typeof updaterOrValue === 'function') {
+      setColumnVisibilityRaw(updaterOrValue(columnVisibility));
+    } else {
+      setColumnVisibilityRaw(updaterOrValue);
+    }
+  };
 
-  // 筛选条件组接入 UIStore，切换页面后不丢失
-  const filterGroups    = useUIStore((s) => s.tableFilterGroups);
-  const setFilterGroups = useUIStore((s) => s.setTableFilterGroups);
+  // 筛选条件组接入 TableStore，切换页面后不丢失
+  const filterGroups    = useTableStore((s) => s.tableFilterGroups);
+  const setFilterGroups = useTableStore((s) => s.setTableFilterGroups);
   // 当前追加目标组（null = 新建组）
   const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
 
   const [pageIndex, setPageIndex] = useState(0);
+  const [isColumnPanelOpen, setIsColumnPanelOpen] = useState(false);
   const pageSize = 50;
 
   // 这三个变量要在 numericFilterColumns 之前定义，因为后者依赖它们
@@ -394,14 +184,7 @@ export function DataTablePage() {
     };
   }, [structures]);
 
-  // Collect all extraProps keys present in data
-  const extraPropKeys = useMemo(() => {
-    const keys = new Set<string>();
-    structures.forEach((s) => {
-      if (s.extraProps) Object.keys(s.extraProps).forEach((k) => keys.add(k));
-    });
-    return Array.from(keys).sort();
-  }, [structures]);
+  const extraPropKeys = useMemo(() => collectDynamicFieldKeys(structures), [structures]);
 
   const columns = useMemo<ColumnDef<Structure, unknown>[]>(() => {
     const cols: ColumnDef<Structure, unknown>[] = [      {
@@ -489,7 +272,7 @@ export function DataTablePage() {
         accessorKey: 'enthalpyTotal',
         header: t('col.enthalpyTotal'),
         size: 120,
-        cell: ({ row, getValue }) => {
+        cell: ({ getValue }) => {
           const v = getValue<number>();
           return v > 900 ? '—' : v.toFixed(2);
         },
@@ -768,9 +551,10 @@ export function DataTablePage() {
     data: tableData,
     columns,
     getRowId: (row) => String(row.id),
-    state: { sorting, globalFilter },
+    state: { sorting, globalFilter, columnVisibility },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
+    onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -789,6 +573,9 @@ export function DataTablePage() {
   const rowCount = table.getRowModel().rows.length;
   const totalPages = Math.max(1, Math.ceil(rowCount / pageSize));
   const currentPageIndex = Math.min(pageIndex, totalPages - 1);
+  const programGeneratedColumns = PROGRAM_GENERATED_COLUMN_IDS
+    .map((id) => table.getColumn(id))
+    .filter((column): column is NonNullable<typeof column> => column !== undefined);
 
   useEffect(() => {
     if (pageIndex !== currentPageIndex) {
@@ -821,7 +608,59 @@ export function DataTablePage() {
         <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
           {rowCount} / {tableData.length}
         </span>
+        {programGeneratedColumns.length > 0 && (
+          <button
+            className="btn btn-outline btn-sm"
+            type="button"
+            onClick={() => setIsColumnPanelOpen((open) => !open)}
+            title={t('table.columnsGeneratedHint')}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+          >
+            <Columns3 size={14} />
+            {t('btn.columns')}
+          </button>
+        )}
       </div>
+
+      {isColumnPanelOpen && programGeneratedColumns.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            flexWrap: 'wrap',
+            padding: '8px 10px',
+            border: '1px solid var(--color-border)',
+            borderRadius: 6,
+            background: 'var(--color-surface)',
+            fontSize: 12,
+          }}
+        >
+          <span style={{ color: 'var(--color-text-muted)' }}>{t('table.generatedColumns')}</span>
+          {programGeneratedColumns.map((column) => (
+            <label
+              key={column.id}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}
+              title={column.id === 'eForm' ? t('col.eFormDesc') : t('col.eHullReconsDesc')}
+            >
+              <input
+                type="checkbox"
+                checked={column.getIsVisible()}
+                onChange={column.getToggleVisibilityHandler()}
+              />
+              <span>{column.id === 'eForm' ? t('col.eForm') : t('col.eHullRecons')}</span>
+            </label>
+          ))}
+          <button
+            className="btn btn-ghost btn-sm"
+            type="button"
+            onClick={() => setColumnVisibilityRaw({})}
+            style={{ fontSize: 11, padding: '2px 8px' }}
+          >
+            {t('table.columnsReset')}
+          </button>
+        </div>
+      )}
 
       {/* 标签筛选行 */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -854,378 +693,42 @@ export function DataTablePage() {
         })}
       </div>
 
-      {/* 筛选条件构建行 */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{t('table.filterLabel')}</span>
-
-        {/* 切换筛选类型 */}
-        <select
-          value={colKind}
-          onChange={(e) => setColKind(e.target.value as typeof colKind)}
-          style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-        >
-          <option value="numeric">{t('table.filterNumeric')}</option>
-          <option value="text">{t('table.filterText')}</option>
-          <option value="nComponents">{t('table.filterNComponents')}</option>
-          <option value="elementFraction">{t('table.filterElemFraction')}</option>
-        </select>
-
-        {colKind === 'numeric' ? (
-          <>
-            {/* 数字列选择 */}
-            <select
-              value={filterNumCol}
-              onChange={(e) => setFilterNumCol(e.target.value as NumericFilterColumn)}
-              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-            >
-              {numericFilterColumns.map((c) => (
-                <option key={c.key} value={c.key}>{c.label}</option>
-              ))}
-            </select>
-            {/* 运算符 */}
-            <select
-              value={filterNumOp}
-              onChange={(e) => setFilterNumOp(e.target.value as NumericFilterCondition['operator'])}
-              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', width: 50 }}
-            >
-              <option value=">">&gt;</option>
-              <option value="<">&lt;</option>
-              <option value=">=">&ge;</option>
-              <option value="<=">&le;</option>
-              <option value="=">=</option>
-            </select>
-            {/* 数值输入 */}
-            <input
-              type="number"
-              value={filterNumVal}
-              onChange={(e) => setFilterNumVal(e.target.value)}
-              placeholder={t('table.filterPlaceholder')}
-              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', width: 80 }}
-            />
-            <button
-              className="btn btn-sm btn-primary"
-              style={{ fontSize: 11, padding: '3px 10px' }}
-              onClick={() => {
-                if (filterNumVal === '') return;
-                const col = numericFilterColumns.find((c) => c.key === filterNumCol);
-                addToGroup({
-                  kind: 'numeric',
-                  column: filterNumCol,
-                  label: col?.label || filterNumCol,
-                  operator: filterNumOp,
-                  value: Number(filterNumVal),
-                });
-                setFilterNumVal('');
-                setPageIndex(0);
-              }}
-            >
-              {t('btn.addFilter')}
-            </button>
-            {filterGroups.length > 0 && (
-              <button
-                className="btn btn-sm btn-outline"
-                style={{ fontSize: 11, padding: '3px 10px', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
-                onClick={() => {
-                  if (filterNumVal === '') return;
-                  const col = numericFilterColumns.find((c) => c.key === filterNumCol);
-                  addToGroup({
-                    kind: 'numeric',
-                    column: filterNumCol,
-                    label: col?.label || filterNumCol,
-                    operator: filterNumOp,
-                    value: Number(filterNumVal),
-                  }, true);
-                  setFilterNumVal('');
-                  setPageIndex(0);
-                }}
-              >
-                {t('btn.newOrGroup')}
-              </button>
-            )}
-          </>
-        ) : colKind === 'text' ? (
-          <>
-            {/* 文字列选择 */}
-            <select
-              value={filterTextCol}
-              onChange={(e) => setFilterTextCol(e.target.value as TextFilterColumn)}
-              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-            >
-              {textFilterColumns.map((c) => (
-                <option key={c.key} value={c.key}>{c.label}</option>
-              ))}
-            </select>
-            {/* 文字运算符 */}
-            <select
-              value={filterTextOp}
-              onChange={(e) => setFilterTextOp(e.target.value as TextFilterCondition['operator'])}
-              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-            >
-              <option value="contains">{t('table.filterContains')}</option>
-              <option value="notContains">{t('table.filterNotContains')}</option>
-              <option value="equals">{t('table.filterEquals')}</option>
-              <option value="notEquals">{t('table.filterNotEquals')}</option>
-            </select>
-            {/* 可选值下拉（多选） */}
-            <select
-              multiple
-              size={3}
-              value={filterTextInput.split(',').filter(Boolean)}
-              onChange={(e) => {
-                const selected = Array.from(e.target.selectedOptions).map((o) => o.value);
-                setFilterTextInput(selected.join(','));
-              }}
-              style={{
-                padding: '2px 4px', fontSize: 11, borderRadius: 4,
-                border: '1px solid var(--color-border)',
-                background: 'var(--color-bg)', color: 'var(--color-text)',
-                minWidth: 120, maxWidth: 200,
-              }}
-            >
-              {textColumnOptions[filterTextCol].map((v) => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
-            <button
-              className="btn btn-sm btn-primary"
-              style={{ fontSize: 11, padding: '3px 10px' }}
-              onClick={() => {
-                const values = filterTextInput.split(',').filter(Boolean);
-                if (values.length === 0) return;
-                const col = textFilterColumns.find((c) => c.key === filterTextCol);
-                addToGroup({
-                  kind: 'text',
-                  column: filterTextCol,
-                  label: col?.label || filterTextCol,
-                  operator: filterTextOp,
-                  values,
-                });
-                setFilterTextInput('');
-                setPageIndex(0);
-              }}
-            >
-              {t('btn.addFilter')}
-            </button>
-            {filterGroups.length > 0 && (
-              <button
-                className="btn btn-sm btn-outline"
-                style={{ fontSize: 11, padding: '3px 10px', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
-                onClick={() => {
-                  const values = filterTextInput.split(',').filter(Boolean);
-                  if (values.length === 0) return;
-                  const col = textFilterColumns.find((c) => c.key === filterTextCol);
-                  addToGroup({
-                    kind: 'text',
-                    column: filterTextCol,
-                    label: col?.label || filterTextCol,
-                    operator: filterTextOp,
-                    values,
-                  }, true);
-                  setFilterTextInput('');
-                  setPageIndex(0);
-                }}
-              >
-                {t('btn.newOrGroup')}
-              </button>
-            )}
-          </>
-        ) : colKind === 'nComponents' ? (
-          <>
-            {/* 体系类型选择 */}
-            <select
-              value={filterNComp}
-              onChange={(e) => setFilterNComp(Number(e.target.value) as 1 | 2 | 3)}
-              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-            >
-              <option value={1}>{t('table.filterUnary')}</option>
-              <option value={2}>{t('table.filterBinary')}</option>
-              <option value={3}>{t('table.filterTernary')}</option>
-            </select>
-            <button
-              className="btn btn-sm btn-primary"
-              style={{ fontSize: 11, padding: '3px 10px' }}
-              onClick={() => {
-                const labelMap: Record<number, string> = { 1: t('table.filterUnary'), 2: t('table.filterBinary'), 3: t('table.filterTernary') };
-                addToGroup({
-                  kind: 'nComponents',
-                  label: labelMap[filterNComp],
-                  value: filterNComp,
-                });
-                setPageIndex(0);
-              }}
-            >
-              {t('btn.addFilter')}
-            </button>
-            {filterGroups.length > 0 && (
-              <button
-                className="btn btn-sm btn-outline"
-                style={{ fontSize: 11, padding: '3px 10px', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
-                onClick={() => {
-                  const labelMap: Record<number, string> = { 1: t('table.filterUnary'), 2: t('table.filterBinary'), 3: t('table.filterTernary') };
-                  addToGroup({ kind: 'nComponents', label: labelMap[filterNComp], value: filterNComp }, true);
-                  setPageIndex(0);
-                }}
-              >
-                {t('btn.newOrGroup')}
-              </button>
-            )}
-          </>
-        ) : (
-          <>
-            {/* 元素选择 */}
-            <select
-              value={filterElemEl}
-              onChange={(e) => setFilterElemEl(e.target.value)}
-              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-            >
-              <option value="">{t('table.filterSelectElement')}</option>
-              {(systemInfo?.elements ?? []).map((el) => (
-                <option key={el} value={el}>{el}</option>
-              ))}
-            </select>
-            {/* 运算符 */}
-            <select
-              value={filterElemOp}
-              onChange={(e) => setFilterElemOp(e.target.value as ElementFractionFilterCondition['operator'])}
-              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', width: 50 }}
-            >
-              <option value=">">&gt;</option>
-              <option value="<">&lt;</option>
-              <option value=">=">&ge;</option>
-              <option value="<=">&le;</option>
-              <option value="=">=</option>
-            </select>
-            {/* 摩尔分数输入 0~1 */}
-            <input
-              type="number"
-              min={0} max={1} step={0.01}
-              value={filterElemVal}
-              onChange={(e) => setFilterElemVal(e.target.value)}
-              placeholder="0~1"
-              style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', width: 70 }}
-            />
-            <button
-              className="btn btn-sm btn-primary"
-              style={{ fontSize: 11, padding: '3px 10px' }}
-              onClick={() => {
-                if (!filterElemEl || filterElemVal === '') return;
-                addToGroup({
-                  kind: 'elementFraction',
-                  label: `x(${filterElemEl})`,
-                  element: filterElemEl,
-                  operator: filterElemOp,
-                  value: Number(filterElemVal),
-                });
-                setFilterElemVal('');
-                setPageIndex(0);
-              }}
-            >
-              {t('btn.addFilter')}
-            </button>
-            {filterGroups.length > 0 && (
-              <button
-                className="btn btn-sm btn-outline"
-                style={{ fontSize: 11, padding: '3px 10px', color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
-                onClick={() => {
-                  if (!filterElemEl || filterElemVal === '') return;
-                  addToGroup({
-                    kind: 'elementFraction',
-                    label: `x(${filterElemEl})`,
-                    element: filterElemEl,
-                    operator: filterElemOp,
-                    value: Number(filterElemVal),
-                  }, true);
-                  setFilterElemVal('');
-                  setPageIndex(0);
-                }}
-              >
-                {t('btn.newOrGroup')}
-              </button>
-            )}
-          </>
-        )}
-
-        {/* 重置按钮：有任何筛选条件时才显示 */}
-        {filterGroups.length > 0 && (
-          <button
-            className="btn btn-sm btn-outline"
-            style={{ fontSize: 11, padding: '3px 10px' }}
-            onClick={() => { setFilterGroups([]); setTargetGroupId(null); setSelectedTag(''); setGlobalFilter(''); setPageIndex(0); }}
-          >
-            {t('btn.resetFilter')}
-          </button>
-        )}
-      </div>
-
-      {/* 已激活的筛选条件组（组内 AND，组间 OR） */}
-      {filterGroups.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {filterGroups.map((group, gi) => (
-            <div key={group.id}>
-              {gi > 0 && (
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-primary)',
-                  letterSpacing: 2, margin: '1px 0', paddingLeft: 4 }}>
-                  OR
-                </div>
-              )}
-              <div style={{
-                display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center',
-                padding: '4px 6px', borderRadius: 6,
-                border: `1px solid ${targetGroupId === group.id ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                background: 'transparent',
-              }}>
-                {group.conditions.map((f, ci) => (
-                  <span key={ci} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    {ci > 0 && <span style={{ fontSize: 10, color: 'var(--color-text-muted)', margin: '0 2px' }}>AND</span>}
-                    <span style={{
-                      fontSize: 11, padding: '2px 7px', borderRadius: 10,
-                      background: 'var(--color-primary)', color: '#fff',
-                      display: 'flex', alignItems: 'center', gap: 3,
-                    }}>
-                      {f.kind === 'numeric'
-                        ? `${f.label} ${f.operator} ${f.value}`
-                        : f.kind === 'nComponents'
-                          ? f.label
-                          : f.kind === 'elementFraction'
-                            ? `x(${f.element}) ${f.operator} ${f.value}`
-                            : `${f.label} [${f.values.join(', ')}]`
-                      }
-                      <X size={11} style={{ cursor: 'pointer' }}
-                        onClick={() => {
-                          const newConds = group.conditions.filter((_, idx) => idx !== ci);
-                          if (newConds.length === 0) {
-                            setFilterGroups(filterGroups.filter((g) => g.id !== group.id));
-                            if (targetGroupId === group.id) setTargetGroupId(null);
-                          } else {
-                            setFilterGroups(filterGroups.map((g) => g.id === group.id ? { ...g, conditions: newConds } : g));
-                          }
-                          setPageIndex(0);
-                        }}
-                      />
-                    </span>
-                  </span>
-                ))}
-                <div style={{ marginLeft: 'auto', display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
-                  <button
-                    className={`btn btn-sm ${targetGroupId === group.id ? 'btn-primary' : 'btn-ghost'}`}
-                    style={{ fontSize: 10, padding: '1px 6px' }}
-                    onClick={() => setTargetGroupId(targetGroupId === group.id ? null : group.id)}
-                  >
-                    {targetGroupId === group.id ? t('btn.cancelAppend') : t('btn.appendToGroup')}
-                  </button>
-                  <X size={12} style={{ cursor: 'pointer', color: 'var(--color-text-muted)' }}
-                    onClick={() => {
-                      setFilterGroups(filterGroups.filter((g) => g.id !== group.id));
-                      if (targetGroupId === group.id) setTargetGroupId(null);
-                      setPageIndex(0);
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <DataTableFilterBuilder
+        t={t}
+        colKind={colKind}
+        setColKind={setColKind}
+        filterNumCol={filterNumCol}
+        setFilterNumCol={setFilterNumCol}
+        filterNumOp={filterNumOp}
+        setFilterNumOp={setFilterNumOp}
+        filterNumVal={filterNumVal}
+        setFilterNumVal={setFilterNumVal}
+        numericFilterColumns={numericFilterColumns}
+        filterTextCol={filterTextCol}
+        setFilterTextCol={setFilterTextCol}
+        filterTextOp={filterTextOp}
+        setFilterTextOp={setFilterTextOp}
+        filterTextInput={filterTextInput}
+        setFilterTextInput={setFilterTextInput}
+        textFilterColumns={textFilterColumns}
+        textColumnOptions={textColumnOptions}
+        filterNComp={filterNComp}
+        setFilterNComp={setFilterNComp}
+        filterElemEl={filterElemEl}
+        setFilterElemEl={setFilterElemEl}
+        filterElemOp={filterElemOp}
+        setFilterElemOp={setFilterElemOp}
+        filterElemVal={filterElemVal}
+        setFilterElemVal={setFilterElemVal}
+        elements={systemInfo?.elements ?? []}
+        filterGroups={filterGroups}
+        setFilterGroups={setFilterGroups}
+        targetGroupId={targetGroupId}
+        setTargetGroupId={setTargetGroupId}
+        addToGroup={addToGroup}
+        onResetFilters={() => { setFilterGroups([]); setTargetGroupId(null); setSelectedTag(''); setGlobalFilter(''); setPageIndex(0); }}
+        onFilterChanged={() => setPageIndex(0)}
+      />
     </div>
 
     {/* ===== 表格 ===== */}
@@ -1258,6 +761,9 @@ export function DataTablePage() {
                   : undefined;
                 // 列宽：同时设 width / minWidth / maxWidth，配合 tableLayout: fixed 才能精确控制
                 const colWidth = header.getSize();
+                const headerLabel = typeof header.column.columnDef.header === 'string'
+                  ? header.column.columnDef.header
+                  : undefined;
 
                 return (
                   <th
@@ -1274,10 +780,17 @@ export function DataTablePage() {
                       background: 'var(--color-surface)',
                       borderRight: colIndex === 3 ? '2px solid var(--color-border)' : undefined,
                     }}
+                    title={headerLabel}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                      {header.column.getCanSort() && <SortIcon sorted={header.column.getIsSorted()} />}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+                      <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                      </span>
+                      {header.column.getCanSort() && (
+                        <span style={{ flexShrink: 0, display: 'inline-flex' }}>
+                          <SortIcon sorted={header.column.getIsSorted()} />
+                        </span>
+                      )}
                     </div>
                   </th>
                 );

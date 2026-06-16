@@ -9,34 +9,25 @@ type PlotlyData = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyLayout = any;
 
-import { useMemo, useState, useRef } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import Plot, { type PlotMouseEvent } from 'react-plotly.js';
 import type { Structure, SystemInfo } from '@/types/structure';
 import { useUIStore } from '@/store/useUIStore';
+import { useThemeStore } from '@/theme/themeStore';
+import { useMarkStore } from '@/store/useMarkStore';
 import { useProjectStore } from '@/store/useProjectStore';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT, getPlotlyTheme } from '@/lib/constants';
+import { PLOTLY_FONT } from '@/lib/constants';
+import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
 import { ExportDataButton } from '@/components/ExportDataButton';
-
-
-/** Palette for auto-assigning colors to any origin method */
-const COLOR_PALETTE = [
-  '#6366f1', '#16a34a', '#f59e0b', '#ec4899', '#06b6d4',
-  '#8b5cf6', '#dc2626', '#0ea5e9', '#64748b', '#f97316',
-  '#14b8a6', '#a855f7', '#84cc16', '#e11d48', '#0284c7',
-];
-
-const originColorCache = new Map<string, string>();
-
-function getOriginColor(origin: string): string {
-  if (!originColorCache.has(origin)) {
-    originColorCache.set(origin, COLOR_PALETTE[originColorCache.size % COLOR_PALETTE.length]);
-  }
-  return originColorCache.get(origin)!;
-}
+import { PlotFrame } from '@/charts/shared/PlotFrame';
+import { usePlotViewport } from '@/charts/shared/plotRange';
+import { usePlotlyStructurePointClick } from '@/charts/shared/usePlotlyStructurePointClick';
+import { buildCsvText, type CsvRow } from '@/export/csvExport';
+import { downloadBlob } from '@/export/exportFileNames';
+import { CONVEX_HULL_PLOT_HEIGHT } from './plotSizing';
 
 interface Props {
   structures: Structure[];
@@ -54,10 +45,11 @@ interface Props {
 export function EnergyRankingChart({ structures, systemInfo, groupMap, showExport = true, showTags = true, onStructureClick }: Props) {
   const { t } = useTranslation();
   const openViewer      = useUIStore((s) => s.openViewer);
-  const markActiveTags  = useUIStore((s) => s.markActiveTags);
-  const markEaInput     = useUIStore((s) => s.markEaInput);
+  const markActiveTags  = useMarkStore((s) => s.markActiveTags);
+  const markEaInput     = useMarkStore((s) => s.markEaInput);
   const allTags         = useProjectStore((s) => s.tags);
-  const theme           = useUIStore((s) => s.theme);
+  const theme           = useThemeStore((s) => s.theme);
+  const plotTheme       = useMemo(() => getPlotlyTheme(theme), [theme]);
 
   const allSorted = useMemo(() =>
     structures
@@ -72,12 +64,22 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
 
   const [displayCount, setDisplayCount] = useState(() => Math.min(100, allSorted.length));
 
+  const originColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of structures) {
+      if (!map.has(s.origin)) {
+        map.set(s.origin, plotTheme.categoricalColors[map.size % plotTheme.categoricalColors.length]);
+      }
+    }
+    return map;
+  }, [structures, plotTheme]);
+
   const plotData = useMemo(() => {
     const top = allSorted.slice(0, displayCount);
     return {
       ranks: top.map((_, i) => i + 1),
       fitness: top.map((s) => s.fitness ?? 0),
-      colors: top.map((s) => getOriginColor(s.origin)),
+      colors: top.map((s) => originColorMap.get(s.origin) ?? plotTheme.defaultMarkerColor),
       hoverTexts: top.map((s) =>
         (s.groupName || groupMap ? `Group: ${s.groupName ?? groupMap?.get(s.id) ?? '—'}<br>` : '') +
         `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
@@ -89,7 +91,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
       ),
       ids: top.map((s: any) => s._mergeSeq ?? s.id),
     };
-  }, [allSorted, displayCount]);
+  }, [allSorted, displayCount, groupMap, originColorMap, plotTheme]);
 
 
   const trace: PlotlyData = {
@@ -101,7 +103,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
       color: plotData.colors,
       size: 8,
       opacity: 0.85,
-      line: { width: 0.5, color: '#ffffff' },
+      line: { width: 0.5, color: plotTheme.selectedMarkerFill },
     },
     text: plotData.hoverTexts,
     hoverinfo: 'text' as const,
@@ -133,10 +135,10 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
     type: 'scatter' as const,
     name: 'Manual',
     marker: {
-      color: '#ffffff',
+      color: plotTheme.selectedMarkerFill,
       size: 10,
       symbol: 'circle' as const,
-      line: { width: 1.5, color: '#1e293b' },
+      line: { width: 1.5, color: plotTheme.selectedMarkerLine },
     },
     text: userAdded.map((s) =>
       `[Manual]<br>` +
@@ -149,6 +151,15 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
     customdata: userAdded.map((s: any) => s._mergeSeq ?? s.id),
     showlegend: true,
   };
+
+  const getStructureHoverText = (s: Structure) =>
+    (s.groupName || groupMap ? `Group: ${s.groupName ?? groupMap?.get(s.id) ?? '—'}<br>` : '') +
+    `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
+    `ΔH: ${(s.fitness ?? 0).toFixed(4)} eV/atom<br>` +
+    `Enthalpy: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
+    `SG: ${s.spaceGroup}<br>` +
+    `Origin: ${s.origin}<br>` +
+    `Gen: ${s.generation}`;
 
   // --- Mark overlay traces: tag-based (controlled by showTags) ---
   const tagOverlayTraces = useMemo(() => {
@@ -166,13 +177,14 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
         mode: 'markers', type: 'scatter',
         name: `★ ${t(tagDef.nameKey)}`,
         marker: { symbol: 'star', size: 14, color: tagDef.color, line: { width: 1, color: 'white' } },
-        hoverinfo: 'skip',
+        text: tagged.map(getStructureHoverText),
+        hoverinfo: 'text',
         customdata: tagged.map((s) => s.id),
         showlegend: true,
       });
     }
     return result;
-  }, [allSorted, displayCount, rankMap, markActiveTags, allTags, t]);
+  }, [allSorted, displayCount, rankMap, markActiveTags, allTags, groupMap, t]);
 
   // --- Mark overlay traces: EA-ID search (always active) ---
   const eaOverlayTraces = useMemo(() => {
@@ -200,7 +212,8 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
             mode: 'markers', type: 'scatter',
             name,
             marker: { symbol: 'star', size: 14, color, line: { width: 1, color: 'white' } },
-            hoverinfo: 'skip',
+            text: structs.map(getStructureHoverText),
+            hoverinfo: 'text',
             customdata: structs.map((s) => s.id),
             showlegend: true,
           });
@@ -208,14 +221,12 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
       }
     }
     return result;
-  }, [allSorted, displayCount, rankMap, markEaInput, t]);
+  }, [allSorted, displayCount, rankMap, markEaInput, groupMap, t]);
 
 
-  const pt = getPlotlyTheme(theme);
+  const pt = plotTheme;
 
-  // Persist viewport across re-renders (zoom/pan)
-  const viewRef = useRef<Partial<PlotlyLayout>>({});
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { viewportLayout, handleRelayout } = usePlotViewport();
 
   const layout: PlotlyLayout = {
     font: PLOTLY_FONT,
@@ -237,11 +248,10 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
       automargin: true,
     },
     margin: { t: 50, r: 40, l: 80, b: 60 },
-    height: 500,
     plot_bgcolor: pt.plotBg,
     paper_bgcolor: pt.paperBg,
     showlegend: false,
-    ...viewRef.current,
+    ...viewportLayout,
   };
 
 
@@ -300,25 +310,27 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
       `# compositionMode: varcomp`,
     ];
 
-    function csvCell(v: unknown): string {
-      if (v === undefined || v === null) return '';
-      const s = String(v);
-      if (s.includes(',') || s.includes('"') || s.includes('\n')) return `"${s.replace(/"/g, '""')}"`;
-      return s;
-    }
-    const csvLine = (h: string[], r: Record<string, unknown>) =>
-      h.map((k) => csvCell(r[k])).join(',');
-    const body = [headers.join(','), ...rows.map((r) => csvLine(headers, r))].join('\r\n');
-
-    const fullCsv = '\uFEFF' + [...metaHeaders, '', body].join('\r\n');
+    const body = buildCsvText(headers, rows as CsvRow[]);
+    const fullCsv = `\uFEFF${[...metaHeaders, '', body].join('\r\n')}`;
     const blob = new Blob([fullCsv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${elements.join('-')}_energy_ranking_top${displayCount}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `${elements.join('-')}_energy_ranking_top${displayCount}.csv`);
   }
+
+  const chartTraces = [trace, userAddedTrace, ...(showTags ? tagOverlayTraces : []), ...eaOverlayTraces];
+  const handleStructurePointClick = (structureId: number) => {
+    if (onStructureClick) {
+      const structure = structures.find((s) => Number((s as Structure & { _mergeSeq?: number })._mergeSeq ?? s.id) === structureId);
+      if (structure) onStructureClick(structure);
+      return;
+    }
+
+    openViewer(structureId);
+  };
+
+  const structurePointClick = usePlotlyStructurePointClick({
+    traces: chartTraces,
+    onStructureClick: handleStructurePointClick,
+  });
 
   return (
     <>
@@ -346,41 +358,15 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
       </p>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <Plot
-          data={[trace, userAddedTrace, ...(showTags ? tagOverlayTraces : []), ...eaOverlayTraces]}
+        <PlotFrame
+          data={structurePointClick.plotTraces}
           layout={layout}
-          config={{ responsive: true, displayModeBar: true }}
-          style={{ width: '100%', height: layout.height }}
-          onClick={(event: PlotMouseEvent) => {
-            if (clickTimerRef.current) {
-              clearTimeout(clickTimerRef.current);
-              clickTimerRef.current = null;
-              return;
-            }
-            clickTimerRef.current = setTimeout(() => {
-              clickTimerRef.current = null;
-              const point = event.points?.[0];
-              if (point?.customdata !== undefined) {
-                if (onStructureClick) {
-                  const cdata = point.customdata;
-                  const structure = structures.find((s: any) => (s._mergeSeq ?? s.id) == cdata);
-                  if (structure) onStructureClick(structure);
-                } else {
-                  openViewer(Number(point.customdata));
-                }
-              }
-            }, 300);
-          }}
-          onRelayout={(e) => {
-            const v: Record<string, unknown> = {};
-            if (e['xaxis.range[0]'] !== undefined) {
-              v.xaxis = { range: [e['xaxis.range[0]'], e['xaxis.range[1]']] };
-            }
-            if (e['yaxis.range[0]'] !== undefined) {
-              v.yaxis = { range: [e['yaxis.range[0]'], e['yaxis.range[1]']] };
-            }
-            if (Object.keys(v).length > 0) viewRef.current = v;
-          }}
+          style={{ width: '100%', height: CONVEX_HULL_PLOT_HEIGHT }}
+          boundaryStyle={{ width: '100%', height: CONVEX_HULL_PLOT_HEIGHT }}
+          boundaryHandlers={structurePointClick.boundaryHandlers}
+          hoverTooltip={structurePointClick.hoverTooltip}
+          {...structurePointClick.plotHandlers}
+          onRelayout={handleRelayout}
         />
       </div>
 
@@ -393,7 +379,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
         </h3>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {Array.from(new Set(structures.map((s) => s.origin))).map((origin) => {
-            const color = getOriginColor(origin);
+            const color = originColorMap.get(origin) ?? plotTheme.defaultMarkerColor;
             const count = structures.filter((s) => s.origin === origin).length;
             return (
               <span key={origin} className="tag-badge" style={{ background: `${color}20`, color: color as string, fontSize: 12, padding: '3px 10px' }}>

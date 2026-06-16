@@ -19,7 +19,13 @@
  */
 
 import type { ParsedExtendedHull } from '@/types/structure';
-import { tokenizeHeader } from './headerUtils';
+import {
+  buildNormalizedColumnIndex,
+  getTokenByColumnAliases,
+  parseBracketedNumbers,
+  tokenizeDataRow,
+  tokenizeHeader,
+} from './headerUtils.ts';
 
 /**
  * Known column names that appear after "Compositions" in the hull header.
@@ -102,10 +108,132 @@ function collectHullExtras(
   return extras;
 }
 
+const USPEX25_HULL_CORE_COLUMNS = new Set([
+  'generation',
+  'number',
+  'num_atoms_all',
+  'energy',
+  'cell_volume',
+  'origin',
+  'parents',
+  'e_above_hull',
+  'space_group',
+  'formation_energy',
+]);
+
+function parseNumber(value: string | undefined): number {
+  if (value === undefined) return 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getUspex25Value(
+  rowTokens: string[],
+  columnMap: Map<string, number>,
+  aliases: string[],
+): string | undefined {
+  return getTokenByColumnAliases(rowTokens, columnMap, aliases);
+}
+
+function compositionToHullCoordinates(composition: number[]): number[] {
+  const nAtoms = composition.reduce((sum, count) => sum + count, 0);
+  if (nAtoms <= 0) return [0];
+  if (composition.length === 2) return [composition[1] / nAtoms];
+  if (composition.length >= 3) return composition.slice(1).map((count) => count / nAtoms);
+  return [0];
+}
+
+function collectUspex25HullExtras(
+  rowTokens: string[],
+  headerTokens: string[],
+): Record<string, number> {
+  const extras: Record<string, number> = {};
+
+  headerTokens.forEach((name, idx) => {
+    if (USPEX25_HULL_CORE_COLUMNS.has(name.toLowerCase())) return;
+
+    const raw = rowTokens[idx];
+    if (raw === undefined || raw.startsWith('[')) return;
+
+    const value = Number(raw);
+    if (Number.isFinite(value)) {
+      extras[name] = value;
+    }
+  });
+
+  return extras;
+}
+
+function parseUspex25ExtendedConvexHull(
+  lines: string[],
+  headerLine: string,
+): ParsedExtendedHull[] {
+  const headerTokens = tokenizeHeader(headerLine);
+  const columnMap = buildNormalizedColumnIndex(headerTokens);
+  const results: ParsedExtendedHull[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    if (trimmed === headerLine || trimmed.toLowerCase().startsWith('generation')) continue;
+
+    const rowTokens = tokenizeDataRow(trimmed);
+    const id = parseInt(
+      getUspex25Value(rowTokens, columnMap, ['number', 'ID']) ?? '',
+      10,
+    );
+    if (!Number.isFinite(id)) continue;
+
+    const composition = parseBracketedNumbers(
+      getUspex25Value(rowTokens, columnMap, ['num_atoms_all', 'Compositions']),
+    );
+    if (composition.length === 0) continue;
+
+    const nAtoms = composition.reduce((sum, count) => sum + count, 0);
+    const energy = parseNumber(getUspex25Value(rowTokens, columnMap, ['energy', 'Enthalpies']));
+    const cellVolume = parseNumber(getUspex25Value(rowTokens, columnMap, ['cell_volume', 'Volumes']));
+    const enthalpy = nAtoms > 0 ? energy / nAtoms : energy;
+    const volume = nAtoms > 0 ? cellVolume / nAtoms : cellVolume;
+    const fitness = parseNumber(getUspex25Value(rowTokens, columnMap, ['e_above_hull', 'Fitness']));
+    const symm = parseNumber(getUspex25Value(rowTokens, columnMap, ['space_group', 'SYMM']));
+    const y = parseNumber(getUspex25Value(rowTokens, columnMap, ['formation_energy', 'Y']));
+
+    results.push({
+      id,
+      composition,
+      enthalpy,
+      volume,
+      fitness,
+      symm,
+      x: compositionToHullCoordinates(composition),
+      y,
+      thickness: 0,
+      surfArea: 0,
+      extras: collectUspex25HullExtras(rowTokens, headerTokens),
+    });
+  }
+
+  return results;
+}
+
 // ── Main parser ──────────────────────────────────────────────
 
 export function parseExtendedConvexHull(content: string): ParsedExtendedHull[] {
   const lines = content.split('\n');
+
+  const uspex25Header = lines
+    .map((line) => line.trim())
+    .find((line) => {
+      const normalized = line.toLowerCase();
+      return normalized.startsWith('generation') &&
+        normalized.includes('number') &&
+        normalized.includes('num_atoms_all') &&
+        normalized.includes('e_above_hull');
+    });
+
+  if (uspex25Header) {
+    return parseUspex25ExtendedConvexHull(lines, uspex25Header);
+  }
 
   // ── Step 1: find header line & build mapping ──
   let mapping: HullMapping | null = null;

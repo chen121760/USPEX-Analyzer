@@ -1,17 +1,22 @@
 import { useTranslation } from 'react-i18next';
-import { useUIStore } from '@/store/useUIStore';
+import { useCompareStore } from '@/store/useCompareStore';
+import { useLayoutStore } from '@/store/useLayoutStore';
 import { useProjectStore } from '@/store/useProjectStore';
-import { Globe, UploadCloud, HelpCircle, Contact } from 'lucide-react';
+import { Globe, UploadCloud, HelpCircle, Contact, Monitor, Moon, Sun } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { CitePopover } from '@/components/CitePopover';
+import { useThemeStore } from '@/theme/themeStore';
 
 export function Header() {
   const { t, i18n } = useTranslation();
   const systemInfo = useProjectStore((s) => s.systemInfo);
   const projectName = useProjectStore((s) => s.projectName);
-  const compareIds = useUIStore((s) => s.compareIds);
-  const hintPanelOpen = useUIStore((s) => s.hintPanelOpen);
-  const toggleHintPanel = useUIStore((s) => s.toggleHintPanel);
+  const compareIds = useCompareStore((s) => s.compareIds);
+  const hintPanelOpen = useLayoutStore((s) => s.hintPanelOpen);
+  const toggleHintPanel = useLayoutStore((s) => s.toggleHintPanel);
+  const theme = useThemeStore((s) => s.theme);
+  const themePreference = useThemeStore((s) => s.themePreference);
+  const cycleThemePreference = useThemeStore((s) => s.cycleThemePreference);
   const navigate = useNavigate();
 
   const toggleLang = () => {
@@ -55,7 +60,7 @@ export function Header() {
           <span
             style={{
               background: 'var(--color-primary)',
-              color: 'white',
+              color: 'var(--color-primary-contrast)',
               borderRadius: 9999,
               padding: '0 6px',
               fontSize: 11,
@@ -77,6 +82,19 @@ export function Header() {
       <button className="btn btn-ghost btn-sm" onClick={toggleLang} title="Switch language">
         <Globe size={16} />
         <span style={{ fontSize: 12 }}>{i18n.language === 'zh' ? 'EN' : '中'}</span>
+      </button>
+
+      {/* Theme toggle */}
+      <button
+        className="btn btn-ghost btn-sm"
+        onClick={cycleThemePreference}
+        title={getThemeTitle(i18n.language, themePreference, theme)}
+      >
+        {themePreference === 'system'
+          ? <Monitor size={16} />
+          : theme === 'dark'
+            ? <Sun size={16} />
+            : <Moon size={16} />}
       </button>
 
       {/* Cite USPEX */}
@@ -108,4 +126,16 @@ export function Header() {
       </button>
     </header>
   );
+}
+
+function getThemeTitle(language: string, preference: 'system' | 'light' | 'dark', theme: 'light' | 'dark') {
+  if (language === 'zh') {
+    return preference === 'system'
+      ? `跟随系统主题（当前${theme === 'dark' ? '深色' : '浅色'}）`
+      : `${preference === 'dark' ? '深色' : '浅色'}主题`;
+  }
+
+  return preference === 'system'
+    ? `Follow system theme (${theme})`
+    : `${preference} theme`;
 }

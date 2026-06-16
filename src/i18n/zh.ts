@@ -175,6 +175,9 @@ const zh = {
   'col.eFormDesc': '重建的形成焓 — 使用自动提取的元素参考化学势独立计算，非 USPEX 原始输出',
   'col.eHullRecons': 'E_hull (Recons)',
   'col.eHullReconsDesc': '重建的凸包距离 — 基于 E_form 和 USPEX 凸包几何（fitness=0 结构）重算，非 USPEX 原始输出',
+  'table.generatedColumns': '程序重建列',
+  'table.columnsGeneratedHint': '显示或隐藏程序重建的数据列',
+  'table.columnsReset': '恢复默认',
 
   // ── 列数据来源描述 ──
   'col.idDesc': '结构编号，所有文件通用',
@@ -406,6 +409,7 @@ const zh = {
   'viewer.polyhedra': '配位多面体',
   'viewer.supercell': '超胞',
   'viewer.unitCell': '显示晶胞框',
+  'viewer.noPoscar': '该结构没有 POSCAR 数据，无法打开 3D 结构查看器。',
 
   // ---- Add Structure ----
   'addStruct.title': '添加自定义结构',
@@ -597,6 +601,9 @@ const zh = {
   'error': '错误',
   'success': '成功',
   'info': '提示',
+
+  // ---- Plot interactions ----
+  'plot.clickToViewStructure': '点击查看结构',
 
   // ---- Citation ----
   'cite.title': '引用 USPEX',

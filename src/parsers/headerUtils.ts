@@ -56,6 +56,59 @@ export function tokenizeHeader(headerLine: string): string[] {
 }
 
 /**
+ * Tokenize a data row while keeping bracketed list values as one field.
+ *
+ * USPEX25 tables contain columns such as:
+ *   num_atoms_all = [3, 0, 0]
+ *   parents       = [420, 451]
+ *
+ * A plain whitespace split would turn those into several tokens and shift all
+ * following columns. This tokenizer keeps the bracketed value intact.
+ */
+export function tokenizeDataRow(row: string): string[] {
+  return row.match(/\[[^\]]*\]|\S+/g) ?? [];
+}
+
+/** Normalize a column name for schema matching across USPEX versions. */
+export function normalizeColumnName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/** Build a normalized column-name → 0-based column index map. */
+export function buildNormalizedColumnIndex(tokens: string[]): Map<string, number> {
+  const map = new Map<string, number>();
+  tokens.forEach((token, index) => {
+    if (token !== '') map.set(normalizeColumnName(token), index);
+  });
+  return map;
+}
+
+/** Return the first row token matching any of the supplied column aliases. */
+export function getTokenByColumnAliases(
+  rowTokens: string[],
+  columnMap: Map<string, number>,
+  aliases: string[],
+): string | undefined {
+  for (const alias of aliases) {
+    const idx = columnMap.get(normalizeColumnName(alias));
+    if (idx !== undefined && idx < rowTokens.length) return rowTokens[idx];
+  }
+  return undefined;
+}
+
+/** Parse bracketed integer lists like "[3, 0, 0]" or "[420, 451]". */
+export function parseBracketedNumbers(value: string | undefined): number[] {
+  if (!value) return [];
+  const match = value.match(/\[([^\]]*)\]/);
+  if (!match) return [];
+  return match[1]
+    .split(/[,\s]+/)
+    .filter((token) => token.trim() !== '')
+    .map(Number)
+    .filter((n) => Number.isFinite(n));
+}
+
+/**
  * From a tokenized header, identify key columns for Individuals files.
  *
  * @param tokens Column names from header

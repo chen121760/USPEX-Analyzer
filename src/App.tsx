@@ -1,5 +1,6 @@
+import { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useUIStore } from '@/store/useUIStore';
+import { useThemeStore, watchSystemThemePreference } from '@/theme/themeStore';
 import { useAutoSave, useRestoreSession } from '@/hooks/usePersistence';
 import { AppShell } from '@/components/Layout/AppShell';
 import { UploadPage } from '@/modules/Upload/UploadPage';
@@ -12,11 +13,16 @@ import { ExplorerPage } from '@/modules/Explorer/ExplorerPage';
 import { BetaExplorerPage } from '@/modules/BetaExplorer/BetaExplorerPage';
 import { FilterPage } from '@/modules/Filter/FilterPage';
 import { ComparePage } from '@/modules/Compare/ComparePage';
-import { StructureViewerModal } from '@/components/StructureViewer/StructureViewerModal';
 
 function App() {
-  const theme = useUIStore((s) => s.theme);
+  const theme = useThemeStore((s) => s.theme);
   const { loading: restoringSession } = useRestoreSession();
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  }, [theme]);
+
+  useEffect(() => watchSystemThemePreference(), []);
 
   // Auto-save project to IndexedDB
   useAutoSave();
@@ -43,7 +49,6 @@ function App() {
   return (
     <div className={theme === 'dark' ? 'dark' : ''}>
       <HashRouter>
-        <StructureViewerModal />
         <Routes>
           {/* Upload page — standalone, no sidebar */}
           <Route path="/" element={<UploadPage />} />

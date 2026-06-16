@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Copy, Check } from 'lucide-react';
 
-const COMMAND = `missing=""; for f in Individuals origin Parameters.txt gatheredPOSCARS; do [ -f "$f" ] || missing="$missing $f"; done; if [ -n "$missing" ]; then echo "Missing:$missing"; else out="uspex_$(date +%Y%m%d_%H%M%S).tar.gz"; tar -czf "$out" Individuals origin Parameters.txt gatheredPOSCARS $(ls extended_convex_hull Pareto_ranking MLProperties 2>/dev/null) && echo "Done. Download $out to local and drag into the web page (no need to extract)."; fi`;
+const COMMAND = `missing=""; for f in Individuals gatheredPOSCARS; do [ -f "$f" ] || missing="$missing $f"; done; is25=0; [ -f Individuals ] && head -n 1 Individuals | grep -Eq '^[[:space:]]*generation[[:space:]]+number[[:space:]]+num_atoms_all' && is25=1; [ -f gatheredPOSCARS ] && grep -m1 -Eq '^number=[0-9]+' gatheredPOSCARS && is25=1; if [ "$is25" -eq 0 ]; then for f in origin Parameters.txt; do [ -f "$f" ] || missing="$missing $f"; done; fi; if [ -n "$missing" ]; then echo "Missing:$missing"; else out="uspex_$(date +%Y%m%d_%H%M%S).tar.gz"; tar -czf "$out" Individuals gatheredPOSCARS $(ls origin Parameters.txt parameters parameter extended_convex_hull convex_hull Pareto_ranking MLProperties gatheredPOSCARS_unrelaxed gatheredPOSCARS_unrelaxed_all BESTIndividuals BESTgatheredPOSCARS Individuals_all Individuals_extended generation_properties uspex.output 2>/dev/null) && echo "Done. Download $out to local and drag into the web page (no need to extract)."; fi`;
 
 export function QuickPackCommand() {
   const { t } = useTranslation();

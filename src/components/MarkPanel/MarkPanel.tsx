@@ -1,23 +1,23 @@
 import { useTranslation } from 'react-i18next';
-import { useUIStore } from '@/store/useUIStore';
+import { useMarkStore } from '@/store/useMarkStore';
 import { useProjectStore } from '@/store/useProjectStore';
 import { parseEaIds } from '@/lib/parseEaIds';
 
 /**
  * MarkPanel — shared overlay-mark control panel for all Plotly chart pages.
  *
- * Reads/writes mark state from UIStore directly (no props needed).
+ * Reads/writes mark state from MarkStore directly (no props needed).
  * Renders tag toggle buttons and an EA ID search input.
  * Active tags/IDs cause star markers to be overlaid on chart points.
  */
 export function MarkPanel({ showTags = true }: { showTags?: boolean }) {
   const { t } = useTranslation();
 
-  const markActiveTags  = useUIStore((s) => s.markActiveTags);
-  const markEaInput     = useUIStore((s) => s.markEaInput);
-  const setMarkActiveTags = useUIStore((s) => s.setMarkActiveTags);
-  const setMarkEaInput  = useUIStore((s) => s.setMarkEaInput);
-  const clearMarks      = useUIStore((s) => s.clearMarks);
+  const markActiveTags  = useMarkStore((s) => s.markActiveTags);
+  const markEaInput     = useMarkStore((s) => s.markEaInput);
+  const setMarkActiveTags = useMarkStore((s) => s.setMarkActiveTags);
+  const setMarkEaInput  = useMarkStore((s) => s.setMarkEaInput);
+  const clearMarks      = useMarkStore((s) => s.clearMarks);
 
   const allTags    = useProjectStore((s) => s.tags);
   const structures = useProjectStore((s) => s.structures);
