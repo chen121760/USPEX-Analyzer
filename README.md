@@ -1,6 +1,6 @@
-# USPEX Analyzer —— v1.3.5
+# USPEX Analyzer —— v1.4.1
 
-A browser-based analysis tool for USPEX crystal structure prediction outputs. Supports 3D bulk, 2D structure search, and variable/fixed-composition calculations. Upload your USPEX output files and interactively explore, visualize, filter, and export your results — all without installing anything.
+A browser-based analysis tool for USPEX crystal structure prediction outputs. Supports 3D bulk, 2D structure search, and variable/fixed-composition calculations. **Now compatible with both USPEX 10.5/10.6 and USPEX 25** — the tool auto-detects your data format and adapts file requirements accordingly. Upload your USPEX output files and interactively explore, visualize, filter, and export your results — all without installing anything.
 
 **Live Demo**: [https://chen121760.github.io/USPEX-Analyzer/](https://chen121760.github.io/USPEX-Analyzer/)
 
@@ -50,16 +50,25 @@ A browser-based analysis tool for USPEX crystal structure prediction outputs. Su
 
 ## Supported USPEX Files
 
-For best results, please upload the core USPEX output files for every calculation:
+The tool auto-detects whether your data comes from USPEX 10.5 (legacy format) or USPEX 25 and adapts file requirements accordingly.
 
-| File | Description | Requirement |
-|------|-------------|----------------|
-| `Individuals` | All predicted structures, including generation, composition, enthalpy/fitness, and fingerprint information | Required for all calculations |
-| `origin` | Parent-child genealogy and variation history of structures | Required for all calculations |
-| `Parameters.txt` | Element information and run metadata | Required for all calculations |
-| `gatheredPOSCARS` | Relaxed crystal structures in POSCAR format | Required for all calculations |
+### USPEX 10.5 — Core files (all 4 required)
 
-Additional files are useful for specific USPEX workflows:
+| File | Description |
+|------|-------------|
+| `Individuals` | All predicted structures, including generation, composition, enthalpy/fitness, and fingerprint information |
+| `origin` | Parent-child genealogy and variation history of structures |
+| `Parameters.txt` | Element information and run metadata |
+| `gatheredPOSCARS` | Relaxed crystal structures in POSCAR format |
+
+### USPEX 25 — Core files (minimum 2)
+
+| File | Description |
+|------|-------------|
+| `Individuals` | All predicted structures with USPEX25 column schema (`generation number num_atoms_all energy ...`) |
+| `gatheredPOSCARS` | Relaxed crystal structures in POSCAR format (`number=ID` markers) |
+
+### Optional files (workflow-specific, both versions)
 
 | File | Description | When to upload |
 |------|-------------|----------------|
