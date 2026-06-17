@@ -79,6 +79,8 @@ export function UploadPage() {
   const [loadingSample, setLoadingSample] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const canStartRef = useRef(false);
+  const startAnalysisRef = useRef<() => void>(() => {});
 
   // 存储历史项目列表
   const [recentProjects, setRecentProjects] = useState<StoredProject[]>([]);
@@ -87,6 +89,21 @@ export function UploadPage() {
   useEffect(() => {
     loadRecentProjects().then(setRecentProjects);
   }, []); // [] 表示只在组件第一次渲染时执行
+
+  // Enter 键快捷启动分析（ref 在每次渲染时更新，effect 只在挂载时注册一次）
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter') return;
+      // 不在输入框内响应 Enter
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (!canStartRef.current) return;
+      e.preventDefault();
+      startAnalysisRef.current();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // 点击历史项目 → 恢复数据 → 跳转到 Dashboard
   const handleRestoreProject = (stored: StoredProject) => {
@@ -212,11 +229,11 @@ export function UploadPage() {
     fileContents.has('individuals') &&
     fileContents.has('gathered_poscars');
   const canStart = canStartLegacy || canStartUspex25;
-  const requiredFilesHint = canStartUspex25 || isUspex25Schema
-    ? i18n.language === 'zh'
-      ? 'USPEX25 至少需要 Individuals 和 gatheredPOSCARS；extended_convex_hull 与 Parameters/parameter 文件可选。'
-      : 'USPEX25 needs at least Individuals and gatheredPOSCARS; extended_convex_hull and Parameters/parameter files are optional.'
-    : t('upload.requiredFilesHint');
+  const requiredFilesHint = isUspex25Schema
+    ? t('upload.requiredFilesHintUspex25')
+    : detectedFiles.length > 0
+      ? t('upload.requiredFilesHint')
+      : t('upload.requiredFilesFallback');
 
   const startAnalysis = () => {
     processFiles(detectedFiles, fileContents);
@@ -230,6 +247,10 @@ export function UploadPage() {
     setProjectName(autoName);
     navigate('/dashboard');
   };
+
+  // 每帧更新 ref，确保 Enter 键回调拿到最新值
+  canStartRef.current = canStart;
+  startAnalysisRef.current = startAnalysis;
 
   const handleLoadSample = async () => {
     setLoadingSample(true);
@@ -264,8 +285,7 @@ export function UploadPage() {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'flex-start',
-        paddingTop: 32,
-        padding: 24,
+        padding: '32px 24px 88px 24px',
         background: 'var(--color-bg)',
       }}
     >
@@ -393,21 +413,64 @@ export function UploadPage() {
 
             {/* File groups with live status */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5, width: '100%' }}>
+              {/* Core file groups */}
               {([
-                { labelKey: 'upload.groupCore', color: '#16a34a', bg: 'rgba(22,163,74,0.12)', files: [
-                  { name: 'Individuals', type: 'individuals' },
-                  { name: 'origin', type: 'origin' },
-                  { name: 'Parameters.txt', type: 'parameters' },
-                  { name: 'gatheredPOSCARS', type: 'gathered_poscars' },
+                { labelKey: 'upload.groupCore' as const, color: '#16a34a', bg: 'rgba(22,163,74,0.12)', files: [
+                  { name: 'Individuals', type: 'individuals' as const },
+                  { name: 'origin', type: 'origin' as const },
+                  { name: 'Parameters.txt', type: 'parameters' as const },
+                  { name: 'gatheredPOSCARS', type: 'gathered_poscars' as const },
                 ] },
-                { labelKey: 'upload.groupVarcomp', color: '#3b82f6', bg: 'rgba(59,130,246,0.12)', files: [
-                  { name: 'extended_convex_hull', type: 'extended_convex_hull' },
+                { labelKey: 'upload.groupCoreUspex25' as const, color: '#0d9488', bg: 'rgba(13,148,136,0.12)', files: [
+                  { name: 'Individuals', type: 'individuals' as const },
+                  { name: 'gatheredPOSCARS', type: 'gathered_poscars' as const },
                 ] },
-                { labelKey: 'upload.groupMulti', color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)', files: [
-                  { name: 'Pareto_ranking', type: 'pareto_ranking' },
+              ] as const).map((group) => (
+                <div key={group.labelKey}>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {t(group.labelKey)}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 6px' }}>
+                    {group.files.map(({ name, type }) => {
+                      const uploaded = detectedTypes.has(type as USPEXFileType);
+                      return (
+                        <span
+                          key={name}
+                          style={{
+                            fontSize: 11, padding: '2px 8px', borderRadius: 10,
+                            background: group.bg,
+                            color: group.color,
+                            opacity: uploaded ? 1 : 0.5,
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            transition: 'opacity 0.2s, box-shadow 0.2s',
+                            boxShadow: uploaded ? `0 0 0 1px ${group.color}60` : 'none',
+                          }}
+                        >
+                          {uploaded && <CheckCircle2 size={10} />}
+                          {name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              {/* Version split hint */}
+              <div style={{
+                fontSize: 10, fontWeight: 500, color: 'var(--color-text-muted)',
+                textAlign: 'center', padding: '2px 0', marginTop: -2,
+              }}>
+                {t('upload.versionSplit')}
+              </div>
+              {/* Optional file groups */}
+              {([
+                { labelKey: 'upload.groupVarcomp' as const, color: '#3b82f6', bg: 'rgba(59,130,246,0.12)', files: [
+                  { name: 'extended_convex_hull', type: 'extended_convex_hull' as const },
                 ] },
-                { labelKey: 'upload.groupML', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', files: [
-                  { name: 'MLProperties', type: 'ml_properties' },
+                { labelKey: 'upload.groupMulti' as const, color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)', files: [
+                  { name: 'Pareto_ranking', type: 'pareto_ranking' as const },
+                ] },
+                { labelKey: 'upload.groupML' as const, color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', files: [
+                  { name: 'MLProperties', type: 'ml_properties' as const },
                 ] },
               ] as const).map((group) => (
                 <div key={group.labelKey}>
@@ -453,8 +516,18 @@ export function UploadPage() {
             )}
           </div>
 
-          {/* Start button */}
-          <div style={{ textAlign: 'center' }}>
+          {/* Start button — fixed at bottom of viewport, full-width */}
+          <div style={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            textAlign: 'center',
+            padding: '12px 0',
+            background: 'var(--color-bg)',
+            borderTop: '1px solid var(--color-border)',
+            zIndex: 10,
+          }}>
             <button
               className="btn btn-primary"
               onClick={startAnalysis}
