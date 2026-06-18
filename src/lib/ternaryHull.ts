@@ -4,7 +4,7 @@
  * Ported from Plot_ternary_hull_corrected_2.py.
  *
  * Algorithm:
- * 1. Build 3D points: (cartX, cartY, enthalpy) for each stable point
+ * 1. Build 3D points: (cartX, cartY, eForm) for each stable point
  * 2. Compute 3D convex hull
  * 3. For each face, compute normal vector via cross product
  * 4. Faces with normal.z < 0 are on the lower hull (thermodynamic stability surface)
@@ -17,7 +17,7 @@ import convexHull from 'convex-hull';
 export interface TernaryHullInput {
   id: number;
   composition: number[];
-  enthalpy: number;
+  eForm: number;
   cartX: number;
   cartY: number;
   _mergeSeq?: number; // unique sequence number for workshop multi-group dedup
@@ -62,14 +62,14 @@ function faceNormal(
 
 /**
  * Deduplicate stable points: keep only one per unique composition
- * (the one with lowest enthalpy).
+ * (the one with lowest eForm).
  */
 export function uniqueHullPoints(points: TernaryHullInput[]): TernaryHullInput[] {
   const seen = new Map<string, TernaryHullInput>();
   for (const p of points) {
     const key = p.composition.join('-');
     const existing = seen.get(key);
-    if (!existing || p.enthalpy < existing.enthalpy) {
+    if (!existing || p.eForm < existing.eForm) {
       seen.set(key, p);
     }
   }
@@ -91,10 +91,10 @@ export function computeTernaryHullEdges(
   const unique = uniqueHullPoints(stablePoints);
   if (unique.length < 3) return [];
 
-  // Build 3D coordinates: (cartX, cartY, enthalpy)
-  let coords = unique.map((p) => [p.cartX, p.cartY, p.enthalpy]);
+  // Build 3D coordinates: (cartX, cartY, eForm)
+  let coords = unique.map((p) => [p.cartX, p.cartY, p.eForm]);
 
-  // Handle degenerate case: all enthalpies nearly identical
+  // Handle degenerate case: all eForm values nearly identical
   const zValues = coords.map((c) => c[2]);
   const zRange = Math.max(...zValues) - Math.min(...zValues);
   if (zRange < 1e-10) {

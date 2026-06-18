@@ -359,8 +359,30 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
           onChange={(e) => setFitnessMax(Number(e.target.value))}
           style={{ flex: 1, maxWidth: 300 }}
         />
-        <span style={{ fontSize: 13, fontWeight: 600, minWidth: 70 }}>
-          ≤ {fitnessMax.toFixed(3)} eV
+        <input
+          type="number"
+          min={0}
+          max={maxFitness}
+          step={0.001}
+          value={Math.round(fitnessMax * 1000) / 1000}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value);
+            if (!isNaN(v)) setFitnessMax(v);
+          }}
+          style={{
+            width: 72,
+            fontSize: 13,
+            fontWeight: 600,
+            textAlign: 'right',
+            padding: '2px 4px',
+            border: '1px solid var(--color-border)',
+            borderRadius: 4,
+            background: 'var(--color-surface)',
+            color: 'var(--color-text)',
+          }}
+        />
+        <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          eV
         </span>
         {showExport && <ExportDataButton onClick={handleExport} style={{ marginLeft: 'auto' }} />}
       </div>

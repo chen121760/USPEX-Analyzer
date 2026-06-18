@@ -16,11 +16,11 @@ interface PlotClickPoint {
   };
 }
 
-interface PlotClickEvent {
+export interface PlotClickEvent {
   points?: PlotClickPoint[];
 }
 
-interface PlotTraceLike {
+export interface PlotTraceLike {
   customdata?: unknown;
 }
 

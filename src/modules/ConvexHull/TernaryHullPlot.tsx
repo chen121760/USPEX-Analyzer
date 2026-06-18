@@ -1,7 +1,7 @@
 /**
  * Ternary phase diagram convex hull plot.
  *
- * Uses 3D convex hull (cartX, cartY, enthalpy) to compute lower-hull tie-lines,
+ * Uses 3D convex hull (cartX, cartY, formationEnergy) to compute lower-hull tie-lines,
  * then projects to a 2D equilateral triangle for display.
  *
  * Algorithm ported from Plot_ternary_hull_corrected_2.py.
@@ -98,7 +98,10 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
       .filter((s) => s.fitness === 0)
       .map((s) => {
         const [cx, cy] = ternaryToCartesian(s.composition);
-        return { id: s.id, composition: s.composition, enthalpy: s.enthalpy, cartX: cx, cartY: cy, _mergeSeq: (s as any)._mergeSeq };
+        // Use eForm (formation energy) for convex hull z-axis — raw enthalpy
+        // contains elemental reference energies that distort the energy landscape
+        const eForm = s.eForm !== undefined && s.eForm !== -1 ? s.eForm : s.enthalpy;
+        return { id: s.id, composition: s.composition, eForm, cartX: cx, cartY: cy, _mergeSeq: (s as any)._mergeSeq };
       });
 
     // Compute tie-lines from all on-hull structures
@@ -107,7 +110,8 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
     // Display-only stable points (non-user-added, for diamond markers)
     const stableInputs: TernaryHullInput[] = stable.map((s) => {
       const [cx, cy] = ternaryToCartesian(s.composition);
-      return { id: s.id, composition: s.composition, enthalpy: s.enthalpy, cartX: cx, cartY: cy, _mergeSeq: (s as any)._mergeSeq };
+      const eForm = s.eForm !== undefined && s.eForm !== -1 ? s.eForm : s.enthalpy;
+      return { id: s.id, composition: s.composition, eForm, cartX: cx, cartY: cy, _mergeSeq: (s as any)._mergeSeq };
     });
 
     // Unique stable points for display — join back to full Structure for hover info
@@ -248,7 +252,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
           [1, 'rgb(36,116,181)'],
         ],
         cmin: 0,
-        cmax: Math.max(maxFitness, 0.01),
+        cmax: Math.max(fitnessMax, 0.01),
         colorbar: {
           title: 'Fitness\n(eV/block)',
           thickness: 14,
@@ -320,7 +324,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
         return (
           (s?.groupName || groupMap ? `Group: ${s?.groupName ?? groupMap?.get(p.id) ?? '—'}<br>` : '') +
           `EA${p.id}: ${formulaToHtml(s?.formula ?? '')}<br>` +
-          `ΔH: ${p.enthalpy.toFixed(4)} eV/atom<br>` +
+          `E_form: ${p.eForm.toFixed(4)} eV/atom<br>` +
           `Fitness: 0.0000 eV/atom<br>` +
           `SG: ${s?.spaceGroup ?? '—'} | Gen: ${s?.generation ?? '—'}<br>` +
           `Origin: ${s?.origin ?? '—'}`
@@ -439,7 +443,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
         [`x_${elA}`]: (p.composition[0] / total).toFixed(6),
         [`x_${elB}`]: (p.composition[1] / total).toFixed(6),
         [`x_${elC}`]: (p.composition[2] / total).toFixed(6),
-        'Enthalpy(eV/atom)': p.enthalpy,
+        'E_form(eV/atom)': p.eForm,
         'Fitness(eV/atom)': 0,
         'SpaceGroup': s?.spaceGroup ?? '',
         'Generation': s?.generation ?? '',
@@ -484,8 +488,30 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
           onChange={(e) => handleFitnessChange(Number(e.target.value))}
           style={{ flex: 1, maxWidth: 300 }}
         />
-        <span style={{ fontSize: 13, fontWeight: 600, minWidth: 70 }}>
-          ≤ {fitnessMax.toFixed(3)} eV
+        <input
+          type="number"
+          min={0}
+          max={maxFitness}
+          step={0.001}
+          value={Math.round(fitnessMax * 1000) / 1000}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value);
+            if (!isNaN(v)) handleFitnessChange(v);
+          }}
+          style={{
+            width: 72,
+            fontSize: 13,
+            fontWeight: 600,
+            textAlign: 'right',
+            padding: '2px 4px',
+            border: '1px solid var(--color-border)',
+            borderRadius: 4,
+            background: 'var(--color-surface)',
+            color: 'var(--color-text)',
+          }}
+        />
+        <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+          eV
         </span>
         {showExport && <ExportDataButton onClick={handleExport} style={{ marginLeft: 'auto' }} />}
       </div>
@@ -521,7 +547,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
                 className="tag-badge"
                 style={{ background: '#dc262620', color: '#dc2626', fontSize: 12, padding: '3px 10px' }}
               >
-                EA{p.id} · {formula} · {p.enthalpy.toFixed(4)} eV/atom
+                EA{p.id} · {formula} · {p.eForm.toFixed(4)} eV/atom
               </span>
             );
           })}

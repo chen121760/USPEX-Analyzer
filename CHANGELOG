@@ -2,7 +2,18 @@
 
 ## 版本更新记录
 
-### V1.4.1
+### V1.4.2
+
+三元相图 3D 可视化 — 三维凸包交互
+
+- **3D 三元相图**：新增 `TernaryHullPlot3D` 组件，使用 Plotly `scatter3d` + `mesh3d` 渲染完整三维凸包面，支持旋转（`dragmode: turntable`）、缩放、平移
+- 凸包面灰色半透明渲染 + 平滑光照（ambient / diffuse / specular / fresnel）+ 黑色线框边，增强立体感与面片辨识度
+- **2D / 3D 视图切换**：ConvexHullPage 标题栏右上角新增 `2D Projection` / `3D View` 按钮，切换项目时自动重置为 2D
+
+Fitness 控制与色带优化
+
+- **数值输入框**：二元、二维三元、三维三元相图的 Fitness 控制栏均新增数值输入框，支持手动输入精确值（与滑块联动）
+- **动态色带范围**：色带 `cmax` 跟随当前 `fitnessMax` 滑块值动态缩放，过滤范围内颜色区分度更高
 
 上传页面 — USPEX 25 兼容与交互优化
 
