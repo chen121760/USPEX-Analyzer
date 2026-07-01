@@ -1,4 +1,4 @@
-# USPEX Analyzer —— v1.4.2
+# USPEX Analyzer —— v1.4.3
 
 A browser-based analysis tool for USPEX crystal structure prediction outputs. Supports 3D bulk, 2D structure search, and variable/fixed-composition calculations. **Now compatible with both USPEX 10.5/10.6 and USPEX 25** — the tool auto-detects your data format and adapts file requirements accordingly. Upload your USPEX output files and interactively explore, visualize, filter, and export your results — all without installing anything.
 
@@ -9,14 +9,14 @@ A browser-based analysis tool for USPEX crystal structure prediction outputs. Su
 ## Features
 
 - Data Table — Sortable, searchable table with all structure properties merged from multiple files
-- Convex Hull — Interactive 2D convex hull (tie-line projection) and **3D ternary phase diagram** (full convex hull with mesh3d surface, wireframe, and rotation), plus fitness slider with numerical input for precision filtering
+- Convex Hull — Interactive 2D convex hull (tie-line projection), **3D ternary phase diagram** (full convex hull with mesh3d surface, wireframe, and rotation), and **3D quaternary tetrahedron phase diagram** , plus fitness slider with numerical input for precision filtering
 - **Hull Workshop** — Merge multi-group data into a unified convex hull; add fixed-composition calculations to refine the hull or compute hull energies for all structures against a combined reference. Supports importing from current project, saved projects (multi-select), and JSON files. **Manually add a structure** (composition + enthalpy) to instantly test whether it expands (lowers) the convex hull — if it does, the chart shows the new hull as a solid line and the previous hull as a dashed line; all internal structures' fitness values are recalculated against the expanded hull. Ideal for exploring "what-if" candidate phases or incorporating known compounds from literature
 - Pareto Front — Multi-objective Pareto front visualization (auto-detected)
 - Explorer — Universal scatter plot with color mapping, dual-range slider filter, autoplay, and GIF export
 - HV Tracker — On-the-fly Pareto front computation on any two axes with hypervolume-vs-generation convergence tracking
 - Genealogy — View the parent and offspring relationships of any structure
 - Tags — Label structures as Candidate / To Verify / Excluded / custom tags
-- Filter & Export — Query builder with AND/OR conditions, export as .zip / seeds / .csv
+- Filter & Export — Query builder with AND/OR conditions, supports system type filtering (unary/binary/ternary/quaternary), element fraction filtering, export as .zip / seeds / .csv
 - **Export Data** — Every chart has a one-click Export Data button that downloads the currently visible data as an Origin-compatible CSV, respecting all active filters
 - Project Save/Load — Save all data + annotations as .json, reload anytime
 - Times New Roman typography for all Latin text and numbers across the UI and charts

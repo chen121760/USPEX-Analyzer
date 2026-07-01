@@ -68,6 +68,7 @@ const en = {
   "table.filterUnary": "Unary (1 element)",
   "table.filterBinary": "Binary (2 elements)",
   "table.filterTernary": "Ternary (3 elements)",
+  "table.filterQuaternary": "Quaternary (4 elements)",
   "table.filterSelectElement": "Select element",
 
 
@@ -131,6 +132,7 @@ const en = {
   'system.binary': 'Binary System',
   'system.ternary': 'Ternary System',
   'system.unary': 'Unary System',
+  'system.quaternary': 'Quaternary System',
   'system.single': 'Single-objective',
   'system.multi': 'Multi-objective',
   'system.varcomp': 'Variable Composition',
@@ -261,6 +263,7 @@ const en = {
   'hull.ternaryComingSoon': 'Ternary phase diagram — 3D Convex Hull visualization coming soon',
   'hull.3dComingSoon': '3D Convex Hull view coming soon',
   'hull.ternaryTitle': 'Ternary Phase Diagram',
+  'hull.quaternaryTitle': 'Quaternary Phase Diagram',
   'hull.tieLines': 'Tie Lines',
   'hull.energyRanking': 'Energy Ranking',
   'hull.energyRankingDesc': 'Fixed composition — showing enthalpy ranking of all structures',
@@ -277,6 +280,7 @@ const en = {
   'workshop.currentDataset': 'Current Dataset',
   'workshop.emptyTitle': 'Hull Workshop',
   'workshop.emptyHint': 'Import data from the current project or load external data to get started.',
+  'workshop.quaternaryNote': 'Hull reconstruction is not supported for quaternary systems in the Workshop. Use the Convex Hull page for tetrahedron visualization.',
   'workshop.groups': 'Groups',
   'workshop.removeGroup': 'Remove Group',
   'workshop.renameGroup': 'Rename Group',

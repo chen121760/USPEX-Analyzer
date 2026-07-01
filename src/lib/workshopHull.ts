@@ -158,6 +158,14 @@ export function computeGeometricHull(
     return { structures: oldResult.structures, hullEdges: oldResult.hullEdges };
   }
 
+  // Quaternary: hull reconstruction is not available (4D problem).
+  // Keep USPEX-provided fitness values as-is; user-added structures get 0.
+  if (systemType === 'quaternary') {
+    const ua = structures.filter((s) => s.isUserAdded && s.enthalpyTotal <= 900);
+    for (const s of ua) s.fitness = 0;
+    return { structures };
+  }
+
   // Unary
   const uv = structures.filter((s) => !s.isUserAdded && s.enthalpyTotal <= 900);
   for (const s of uv) s.fitness = 0;
@@ -274,6 +282,8 @@ function ensureHullX(structures: Structure[], elements: string[]): void {
       s.hullX = [s.composition[1] / total];
     } else if (elements.length === 3) {
       s.hullX = [s.composition[0] / total, s.composition[1] / total];
+    } else if (elements.length >= 4) {
+      s.hullX = [s.composition[0] / total, s.composition[1] / total, s.composition[2] / total];
     }
   }
 }

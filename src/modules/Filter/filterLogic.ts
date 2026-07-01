@@ -56,7 +56,7 @@ export function conditionLabel(cond: UnifiedCondition, t: (k: string) => string)
     return `${t(`col.${cond.field}`) || cond.field} ${opLabel[cond.operator]} ${cond.value}`;
   }
   if (cond.kind === 'nComponents') {
-    return ({ 1: t('table.filterUnary'), 2: t('table.filterBinary'), 3: t('table.filterTernary') })[cond.value];
+    return ({ 1: t('table.filterUnary'), 2: t('table.filterBinary'), 3: t('table.filterTernary'), 4: t('table.filterQuaternary') })[cond.value];
   }
   return `x(${cond.element}) ${cond.operator} ${cond.value}`;
 }

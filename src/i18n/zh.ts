@@ -68,6 +68,7 @@ const zh = {
   "table.filterUnary": "一元（1种元素）",
   "table.filterBinary": "二元（2种元素）",
   "table.filterTernary": "三元（3种元素）",
+  "table.filterQuaternary": "四元（4种元素）",
   "table.filterSelectElement": "选择元素",
 
 
@@ -131,6 +132,7 @@ const zh = {
   'system.binary': '二元体系',
   'system.ternary': '三元体系',
   'system.unary': '一元体系',
+  'system.quaternary': '四元体系',
   'system.single': '单目标优化',
   'system.multi': '多目标优化',
   'system.varcomp': '变组分',
@@ -261,6 +263,7 @@ const zh = {
   'hull.ternaryComingSoon': '三元相图 — 3D 凸包可视化即将推出',
   'hull.3dComingSoon': '3D 凸包视图即将推出',
   'hull.ternaryTitle': '三元相图',
+  'hull.quaternaryTitle': '四元相图',
   'hull.tieLines': '相平衡连线',
   'hull.energyRanking': '能量排序',
   'hull.energyRankingDesc': '定组分计算 — 按焓值排序展示所有结构',
@@ -277,6 +280,7 @@ const zh = {
   'workshop.currentDataset': '当前数据集',
   'workshop.emptyTitle': '凸包工作台',
   'workshop.emptyHint': '从当前项目导入数据，或加载外部数据以开始分析。',
+  'workshop.quaternaryNote': 'Hull Workshop 不支持四元体系的凸包重建，请使用 Convex Hull 页面查看四面体可视化。',
   'workshop.groups': '数据组',
   'workshop.removeGroup': '删除组',
   'workshop.renameGroup': '重命名组',

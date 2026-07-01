@@ -65,8 +65,8 @@ export function DataTableFilterBuilder({
   setFilterTextInput: (value: string) => void;
   textFilterColumns: { key: TextFilterColumn; label: string }[];
   textColumnOptions: Record<TextFilterColumn, string[]>;
-  filterNComp: 1 | 2 | 3;
-  setFilterNComp: (value: 1 | 2 | 3) => void;
+  filterNComp: 1 | 2 | 3 | 4;
+  setFilterNComp: (value: 1 | 2 | 3 | 4) => void;
   filterElemEl: string;
   setFilterElemEl: (value: string) => void;
   filterElemOp: ElementFractionFilterCondition['operator'];
@@ -116,6 +116,7 @@ export function DataTableFilterBuilder({
       1: t('table.filterUnary'),
       2: t('table.filterBinary'),
       3: t('table.filterTernary'),
+      4: t('table.filterQuaternary'),
     };
     addToGroup({
       kind: 'nComponents',
@@ -261,12 +262,13 @@ export function DataTableFilterBuilder({
           <>
             <select
               value={filterNComp}
-              onChange={(e) => setFilterNComp(Number(e.target.value) as 1 | 2 | 3)}
+              onChange={(e) => setFilterNComp(Number(e.target.value) as 1 | 2 | 3 | 4)}
               style={{ padding: '3px 6px', fontSize: 12, borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
             >
               <option value={1}>{t('table.filterUnary')}</option>
               <option value={2}>{t('table.filterBinary')}</option>
               <option value={3}>{t('table.filterTernary')}</option>
+              <option value={4}>{t('table.filterQuaternary')}</option>
             </select>
             <button
               className="btn btn-sm btn-primary"

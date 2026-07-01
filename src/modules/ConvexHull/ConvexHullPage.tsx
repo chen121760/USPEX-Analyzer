@@ -4,6 +4,7 @@ import { useProjectStore } from '@/store/useProjectStore';
 import { BinaryHullPlot } from './BinaryHullPlot';
 import { TernaryHullPlot } from './TernaryHullPlot';
 import { TernaryHullPlot3D } from './TernaryHullPlot3D';
+import { QuaternaryHullPlot3D } from './QuaternaryHullPlot3D';
 import { EnergyRankingChart } from './EnergyRankingChart';
 
 export function ConvexHullPage() {
@@ -45,7 +46,9 @@ export function ConvexHullPage() {
       ? t('hull.energyRanking', 'Energy Ranking')
       : systemType === 'ternary'
         ? t('hull.ternaryTitle', 'Ternary Phase Diagram')
-        : t('hull.title', 'Convex Hull');
+        : systemType === 'quaternary'
+          ? t('hull.quaternaryTitle', 'Quaternary Phase Diagram')
+          : t('hull.title', 'Convex Hull');
 
   return (
     <div className="fade-in">
@@ -121,6 +124,8 @@ export function ConvexHullPage() {
         ) : (
           <TernaryHullPlot3D structures={structures} systemInfo={systemInfo} />
         )
+      ) : systemType === 'quaternary' ? (
+        <QuaternaryHullPlot3D structures={structures} systemInfo={systemInfo} />
       ) : (
         <BinaryHullPlot structures={structures} systemInfo={systemInfo} />
       )}

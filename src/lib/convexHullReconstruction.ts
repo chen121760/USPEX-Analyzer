@@ -455,6 +455,12 @@ export function reconstructConvexHull(
           ? Math.max(0, s.eForm - Math.min(...hullPoints3D.map(p => p.z)))
           : 0;
     }
+  } else if (systemType === 'quaternary') {
+    // Quaternary: USPEX already provides hull distance via fitness / e_above_hull.
+    // We compute eForm here but skip 4D hull reconstruction.
+    for (const s of converged) {
+      s.eHullRecons = s.fitness >= 0 ? s.fitness : 0;
+    }
   } else {
     // Unary: no hull needed
     for (const s of converged) {

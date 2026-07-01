@@ -10,7 +10,8 @@
       "Bash(npx eslint *)",
       "Bash(python3:*)",
       "Bash(ls:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "WebFetch(domain:api.materialsproject.org)"
     ]
   }
 }
