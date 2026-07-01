@@ -86,6 +86,39 @@ export function ternaryToCartesian(composition: number[]): [number, number] {
   return [x, y];
 }
 
+/** Centroid of the regular tetrahedron.  Values are relative to the unshifted embedding. */
+export const TETRA_CENTROID: [number, number, number] = [0.5, Math.sqrt(3) / 6, Math.sqrt(6) / 12];
+
+/**
+ * Convert quaternary composition to Cartesian coordinates for a 3D tetrahedron plot.
+ *
+ * The tetrahedron is centered at origin so that turntable rotation orbits its centroid.
+ *
+ * Regular tetrahedron vertices (centered):
+ *   A (element 0) → (-0.5,         -√3/6,   -√6/12)
+ *   B (element 1) → ( 0.5,         -√3/6,   -√6/12)
+ *   C (element 2) → ( 0,            √3/3,   -√6/12)
+ *   D (element 3) → ( 0,            0,       √6/4 )
+ *
+ * Position = weighted sum of vertices by molar fraction, minus centroid.
+ */
+export function quaternaryToCartesian(composition: number[]): [number, number, number] {
+  const total = totalAtoms(composition);
+  if (total === 0) return [0, 0, 0];
+
+  const f0 = composition[0] / total;
+  const f1 = composition[1] / total;
+  const f2 = composition[2] / total;
+  const f3 = composition[3] / total;
+
+  // compute in original space then shift to centroid-origin
+  const x = f1 * 1 + f2 * 0.5 + f3 * 0.5 - TETRA_CENTROID[0];
+  const y = f2 * (Math.sqrt(3) / 2) + f3 * (Math.sqrt(3) / 6) - TETRA_CENTROID[1];
+  const z = f3 * (Math.sqrt(6) / 3) - TETRA_CENTROID[2];
+
+  return [x, y, z];
+}
+
 /**
  * Get composition key string for deduplication.
  * e.g., [3, 8] → "3-8"
@@ -94,11 +127,52 @@ export function compositionKey(composition: number[]): string {
   return composition.join('-');
 }
 
+const COMPOSITION_TOL = 1e-10;
+
+function gcdInt(a: number, b: number): number {
+  a = Math.abs(Math.trunc(a));
+  b = Math.abs(Math.trunc(b));
+  while (b !== 0) [a, b] = [b, a % b];
+  return a;
+}
+
 /**
- * Get reduced composition key.
+ * Get a stable deduplication key for a composition.
+ *
+ * For integer (or integer-tolerance) atom counts the key is the
+ * colon-separated reduced formula, e.g. [2,10,0,0] → "1:5:0:0".
+ * Non-integer compositions fall back to a high-precision normalised
+ * string key.  Returns null for obviously invalid inputs.
+ *
+ * This matches pymatgen's convention of grouping entries by reduced
+ * composition so that, e.g., Ti₂O₄ and TiO₂ share the same key.
  */
-export function reducedCompositionKey(composition: number[]): string {
-  return reducedComposition(composition).join('-');
+export function reducedCompositionKey(composition: number[]): string | null {
+  if (
+    composition.length < 2 ||
+    composition.some((v) => !Number.isFinite(v) || v < 0)
+  ) {
+    return null;
+  }
+
+  const total = composition.reduce((sum, v) => sum + v, 0);
+  if (!(total > 0)) return null;
+
+  const rounded = composition.map((v) => Math.round(v));
+  const integerLike = composition.every(
+    (v, idx) => Math.abs(v - rounded[idx]) <= COMPOSITION_TOL,
+  );
+
+  if (integerLike) {
+    const nonZero = rounded.filter((v) => v !== 0);
+    const divisor = nonZero.reduce((g, v) => gcdInt(g, v), 0) || 1;
+    return rounded.map((v) => v / divisor).join(':');
+  }
+
+  return composition
+    .map((v) => v / total)
+    .map((v) => v.toPrecision(15))
+    .join(':');
 }
 
 /**

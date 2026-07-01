@@ -6,7 +6,7 @@
 export type OriginMethod = string;
 
 /** System dimensionality */
-export type SystemType = 'unary' | 'binary' | 'ternary';
+export type SystemType = 'unary' | 'binary' | 'ternary' | 'quaternary';
 
 /** Optimization type */
 export type OptimizationType = 'single' | 'multi';
@@ -174,7 +174,7 @@ export interface TextFilterCondition {
 export interface NComponentsFilterCondition {
   kind: 'nComponents';
   label: string;
-  value: 1 | 2 | 3;
+  value: 1 | 2 | 3 | 4;
 }
 
 export interface ElementFractionFilterCondition {
@@ -197,7 +197,7 @@ export type CompOperator = '>' | '<' | '>=' | '<=' | '=';
 
 export type UnifiedCondition =
   | { kind: 'numeric'; field: string; operator: NumericOperator; value: number }
-  | { kind: 'nComponents'; value: 1 | 2 | 3 }
+  | { kind: 'nComponents'; value: 1 | 2 | 3 | 4 }
   | { kind: 'elementFraction'; element: string; operator: CompOperator; value: number };
 
 /** A group of UnifiedConditions joined by AND; groups are joined by OR */

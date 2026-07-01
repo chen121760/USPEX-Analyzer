@@ -85,7 +85,8 @@ function inferElementsFromPoscars(poscarMap: Map<number, ParsedPoscar>): string[
 function inferSystemTypeFromCompositionLength(compositionLength: number): SystemType {
   if (compositionLength <= 1) return 'unary';
   if (compositionLength === 2) return 'binary';
-  return 'ternary';
+  if (compositionLength === 3) return 'ternary';
+  return 'quaternary';
 }
 
 function inferHullCoordinates(composition: number[], systemType: SystemType): number[] {
@@ -95,6 +96,9 @@ function inferHullCoordinates(composition: number[], systemType: SystemType): nu
     return [composition[1] / nAtoms];
   }
   if (systemType === 'ternary' && composition.length >= 3) {
+    return composition.slice(1).map((count) => count / nAtoms);
+  }
+  if (systemType === 'quaternary' && composition.length >= 4) {
     return composition.slice(1).map((count) => count / nAtoms);
   }
   return [0];
@@ -198,7 +202,8 @@ export function parseAllFiles(
   if (paramsResult) {
     // From Parameters.txt
     const numComp = paramsResult.numComponents;
-    if (numComp >= 3) systemType = 'ternary';
+    if (numComp >= 4) systemType = 'quaternary';
+    else if (numComp === 3) systemType = 'ternary';
     else if (numComp === 2) systemType = 'binary';
     else if (numComp === 1) systemType = 'unary';
 

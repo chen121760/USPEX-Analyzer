@@ -130,8 +130,8 @@ export function DataTablePage() {
   const [filterTextCol, setFilterTextCol] = useState<TextFilterColumn>('formula');
   const [filterTextOp, setFilterTextOp] = useState<TextFilterCondition['operator']>('contains');
   const [filterTextInput, setFilterTextInput] = useState('');
-  // 体系类型筛选：1=一元, 2=二元, 3=三元
-  const [filterNComp, setFilterNComp] = useState<1 | 2 | 3>(2);
+  // 体系类型筛选：1=一元, 2=二元, 3=三元, 4=四元
+  const [filterNComp, setFilterNComp] = useState<1 | 2 | 3 | 4>(2);
   // 元素摩尔分数筛选
   const [filterElemEl, setFilterElemEl] = useState('');
   const [filterElemOp, setFilterElemOp] = useState<ElementFractionFilterCondition['operator']>('>');

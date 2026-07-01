@@ -60,7 +60,7 @@ export function HullWorkshopPage() {
       hasVarcomp ? 'varcomp' : 'fixed';
 
     // System type: highest dimension (ternary > binary > unary)
-    const typeRank = { unary: 0, binary: 1, ternary: 2 } as const;
+    const typeRank = { unary: 0, binary: 1, ternary: 2, quaternary: 3 } as const;
     let best = visibleGroups[0].systemInfo;
     for (const g of visibleGroups) {
       if (typeRank[g.systemInfo.systemType] > typeRank[best.systemType]) {
@@ -243,7 +243,9 @@ export function HullWorkshopPage() {
           ? [data.composition[1] / total]
           : wsElements.length === 3
             ? [data.composition[0] / total, data.composition[1] / total]
-            : [0],
+            : wsElements.length >= 4
+              ? [data.composition[0] / total, data.composition[1] / total, data.composition[2] / total]
+              : [0],
         hullY: 0,
         eForm: 0,
         eHullRecons: 0,
@@ -354,6 +356,13 @@ export function HullWorkshopPage() {
           oldHullEdges={hullResult.oldHullEdges}
           onStructureClick={handleStructureClick}
         />
+      );
+    }
+    if (systemType === 'quaternary') {
+      return (
+        <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-muted)' }}>
+          {t('hull.quaternaryTitle', 'Quaternary Phase Diagram')} — {t('workshop.quaternaryNote', 'Tetrahedron visualization is available on the Convex Hull page. Hull reconstruction is not supported for quaternary systems in the Workshop.')}
+        </div>
       );
     }
     return (

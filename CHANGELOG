@@ -2,6 +2,21 @@
 
 ## 版本更新记录
 
+### V1.4.3
+
+四元体系全面支持 — 四面体相图与全链路适配
+
+- **3D 四元四面体相图**：新增 `QuaternaryHullPlot3D` 组件，基于4D热力学下凸包（composition + energy 空间）计算真实四元相图的3D投影面
+  - 凸包面分为外部包络面（蓝灰色，hull boundary）和内部分界面（橙红色，相邻四面体胞间共享面），直观展示相区边界
+  - 四面体线框（灰色虚线） + 4个顶点元素标签 + 凸包边线框
+  - 稳定相红色菱形标记，非稳相 Viridis 色带着色（按 fitness）
+  - 支持 Camera 位置记忆（切换数据后重置）
+  - `quaternaryToCartesian` 函数将四元素组分映射到正四面体3D坐标
+- **类型系统扩展**：`SystemType` 新增 `'quaternary'`，`NComponentsFilterCondition.value` / `UnifiedCondition.value` 均适配 `1 | 2 | 3 | 4`
+- **筛选功能**：DataTable 内联筛选与 FilterPage 独立筛选均增加"四元（4种元素）"选项，前端逻辑 `s.composition.filter(c>0).length === f.value` 天然支持1-4
+- **i18n**：中英文翻译全覆盖 `table.filterQuaternary`、`system.quaternary`、`hull.quaternaryTitle`
+- **Hull Workshop 提示**：四元体系不适用于 Hull Workshop 的凸包重建，显示兜底提示文案引导用户到 Convex Hull 页面查看四面体可视化
+
 ### V1.4.2
 
 三元相图 3D 可视化 — 三维凸包交互

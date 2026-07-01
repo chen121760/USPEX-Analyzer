@@ -17,7 +17,7 @@ export interface WorkshopGroup {
 /** Metadata parsed from a workshop-exported CSV header comments */
 export interface WorkshopCsvMeta {
   elements: string[];
-  systemType: 'unary' | 'binary' | 'ternary';
+  systemType: 'unary' | 'binary' | 'ternary' | 'quaternary';
   compositionMode: 'varcomp' | 'fixed';
 }
 
@@ -46,7 +46,7 @@ export interface WorkshopJsonExport {
   exportedAt: string; // ISO 8601
   systemInfo: {
     elements: string[];
-    systemType: 'unary' | 'binary' | 'ternary';
+    systemType: 'unary' | 'binary' | 'ternary' | 'quaternary';
     compositionMode: 'varcomp' | 'fixed';
     externalPressure: number | null;
   };

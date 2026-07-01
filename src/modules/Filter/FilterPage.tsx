@@ -67,7 +67,7 @@ export function FilterPage() {
   const [numField, setNumField] = useState(() => numericFields[0]);
   const [numOp, setNumOp] = useState<NumericOperator>('lte');
   const [numVal, setNumVal] = useState('');
-  const [nComp, setNComp] = useState<1 | 2 | 3>(2);
+  const [nComp, setNComp] = useState<1 | 2 | 3 | 4>(2);
   const [elemEl, setElemEl] = useState('');
   const [elemOp, setElemOp] = useState<CompOperator>('>');
   const [elemVal, setElemVal] = useState('');
@@ -259,10 +259,11 @@ export function FilterPage() {
               </>}
 
               {condKind === 'nComponents' && (
-                <select value={nComp} onChange={(e) => setNComp(Number(e.target.value) as 1 | 2 | 3)} style={selectStyle}>
+                <select value={nComp} onChange={(e) => setNComp(Number(e.target.value) as 1 | 2 | 3 | 4)} style={selectStyle}>
                   <option value={1}>{t('table.filterUnary')}</option>
                   <option value={2}>{t('table.filterBinary')}</option>
                   <option value={3}>{t('table.filterTernary')}</option>
+                  <option value={4}>{t('table.filterQuaternary')}</option>
                 </select>
               )}
 
