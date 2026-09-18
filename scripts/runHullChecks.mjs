@@ -1,9 +1,12 @@
 /**
- * Runner for the hull/reference invariant checks.
+ * Runner for the standalone node checks.
  *
- * Bundles scripts/hullReferenceChecks.ts with rolldown (so the checks import the
- * real sources through the '@' alias) and executes the result.  rolldown ships
+ * Bundles each `scripts/*Checks.ts` file with rolldown (so the checks import the
+ * real sources through the '@' alias) and executes the results.  rolldown ships
  * with vite, so this adds no dependency.
+ *
+ * `@spglib/moyo-wasm` stays external: its wasm-bindgen glue resolves the
+ * `.wasm` binary relative to its own location, so bundling it would break.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,16 +14,30 @@ import { pathToFileURL } from 'node:url';
 import { build } from 'rolldown';
 
 const root = path.resolve(import.meta.dirname, '..');
-const outDir = path.join(root, 'node_modules', '.cache', 'hull-reference-checks');
-const outFile = path.join(outDir, 'hullReferenceChecks.mjs');
+const outDir = path.join(root, 'node_modules', '.cache', 'node-checks');
+const checkFiles = ['hullReferenceChecks.ts', 'symmetryChecks.ts'];
 
 fs.mkdirSync(outDir, { recursive: true });
 
-await build({
-  input: path.join(root, 'scripts', 'hullReferenceChecks.ts'),
-  platform: 'node',
-  resolve: { alias: { '@': path.join(root, 'src') } },
-  output: { file: outFile, format: 'esm' },
-});
+let failed = false;
 
-await import(pathToFileURL(outFile).href);
+for (const checkFile of checkFiles) {
+  const outFile = path.join(outDir, checkFile.replace(/\.ts$/, '.mjs'));
+
+  await build({
+    input: path.join(root, 'scripts', checkFile),
+    platform: 'node',
+    external: ['@spglib/moyo-wasm'],
+    resolve: { alias: { '@': path.join(root, 'src') } },
+    output: { file: outFile, format: 'esm' },
+  });
+
+  try {
+    await import(pathToFileURL(outFile).href);
+  } catch (error) {
+    failed = true;
+    console.error(`\n${checkFile} threw:`, error);
+  }
+}
+
+if (failed) process.exitCode = 1;

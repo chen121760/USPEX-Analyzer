@@ -28,6 +28,49 @@ export interface DynamicFieldMetadata {
   category: 'secondObjective' | '2d' | 'parserExtra' | 'ml' | 'core';
 }
 
+// ── Symmetry (moyo / spglib) ──────────────────────────────────
+
+/**
+ * One space-group determination produced by `@spglib/moyo-wasm` at a single
+ * distance tolerance.
+ *
+ * The USPEX-native value is deliberately *not* duplicated here: it lives on
+ * `Structure.spaceGroup` and is presented in the UI as `symm-USPEX`.
+ */
+export interface SymmetryPoint {
+  /** Distance tolerance used for this determination, in Å. */
+  symprec: number;
+  /** ITA space-group number, 1–230. `0` when the analysis failed. */
+  number: number;
+  /** Hermann–Mauguin short symbol, e.g. `"I4/mmm"`. */
+  symbol: string;
+  /** Pearson symbol of the standardized cell, e.g. `"tI10"`. */
+  pearson: string;
+  /** Number of symmetry operations found in the input cell. */
+  operations: number;
+  /** Hall number (1–530) of the reported setting. */
+  hallNumber: number;
+}
+
+/** Cached moyo symmetry analysis for a single structure. */
+export interface SymmetryAnalysis {
+  /** Schema + tolerance-set version; a mismatch triggers recomputation. */
+  version: number;
+  /** Tolerances actually used, ascending (Å). */
+  symprecs: number[];
+  /** One entry per tolerance, in the same order as `symprecs`. */
+  points: SymmetryPoint[];
+  /** Set when the POSCAR could not be converted or analysed. */
+  error?: string;
+}
+
+/** Progress of the background full-project symmetry analysis. */
+export interface SymmetryStatus {
+  running: boolean;
+  done: number;
+  total: number;
+}
+
 /** Complete structure record — merges all file sources */
 export interface Structure {
   // --- Identity ---
@@ -81,6 +124,11 @@ export interface Structure {
   // --- POSCAR data ---
   poscarData?: string;
   latticeParams?: LatticeParams;
+
+  // --- Symmetry (moyo / spglib precomputation) ---
+  // `spaceGroup` above stays the USPEX-native Sym.group value; this holds the
+  // multi-tolerance moyo determinations shown in the structure detail view.
+  symmetry?: SymmetryAnalysis;
 
   // --- User annotations ---
   tags: string[];

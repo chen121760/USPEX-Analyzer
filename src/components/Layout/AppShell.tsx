@@ -3,6 +3,7 @@ import { Outlet, Navigate } from 'react-router-dom';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useLayoutStore } from '@/store/useLayoutStore';
 import { useUIStore } from '@/store/useUIStore';
+import { useSymmetryAutoAnalysis } from '@/hooks/useSymmetryAnalysis';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { HintDrawer } from '@/components/HintCard/HintDrawer';
@@ -19,6 +20,9 @@ export function AppShell() {
   const hintPanelOpen = useLayoutStore((s) => s.hintPanelOpen);
   const viewerStructureId = useUIStore((s) => s.viewerStructureId);
   const closeViewer = useUIStore((s) => s.closeViewer);
+
+  // Keep the moyo (spglib) symmetry analysis in sync with the loaded data.
+  useSymmetryAutoAnalysis();
 
   useEffect(() => {
     let cancelled = false;

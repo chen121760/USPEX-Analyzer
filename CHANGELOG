@@ -2,6 +2,18 @@
 
 ## 版本更新记录
 
+### V1.4.6
+
+接入 moyo (spglib) 多容忍度空间群判定 — 结构详情页给出与 symm-USPEX 的对照
+
+- **新增依赖 `@spglib/moyo-wasm`**：WASM 版晶体对称性分析库，运行在 Web Worker 中、不阻塞 UI；`.wasm` 由 vite 作为独立资源打包（735 kB，gzip 273 kB）。全量预计算与单结构即时查询各用一个 worker，长任务不会卡住交互查询
+- **多容忍度空间群**：每个结构用 5 档 symprec（`1e-5 / 1e-4 / 1e-3 / 1e-2 / 0.1 Å`）各判定一次空间群；USPEX 自带的 `Sym.group` 原样保留并标注为 `symm-USPEX`（其容忍度由 USPEX 的 `symmPrecision` 决定，通常最接近 0.1 Å 那一档）。样本数据（MgO–HfO2，4150 个结构）实测单结构 5 档约 1.3 ms、全量约 4.9 s
+- **导入后自动全量预计算**：项目加载、会话恢复或新增结构后自动在后台补齐结果，Header 显示 `moyo 对称性 done/total` 进度胶囊；结果按 64 个一批写回 store 并随项目 JSON 一起保存，重新载入无需重算。容忍度集合或结果结构变更时按版本号（`SYMMETRY_ANALYSIS_VERSION`）自动失效重算；跨项目的过期任务按 `projectId` 校验后丢弃，不会把旧结果写进新项目
+- **结构详情页对照表**：3D 查看器右侧新增「对称性 Symmetry」面板，逐行列出 `symm-USPEX` 与各档 moyo 结果（空间群号 + H-M 符号）；点击任意行显示晶系、Pearson 符号、对称操作数、Hall 编号，并提供自定义 symprec 即时试算。信息栏同时给出 `moyo: 1 → 1 → 1 → 1 → 191` 的容忍度演化摘要。工作台（Hull Workshop）等未预计算的结构在打开详情时即时补算
+- **POSCAR 解析覆盖常见变体**：Direct / Cartesian、Selective dynamics、逐轴 scale、负 scale（目标体积）、VASP 4 无元素行（从注释行取元素）；无法解析的结构记为空结果并在面板显示原因，不会反复重试
+- **二维计算提示**：2D（表面）计算中板层按含真空层的三维晶胞处理，面板会明确标注返回的是三维空间群
+- 新增 `scripts/symmetryChecks.ts` 并并入 `npm test`：51 条断言覆盖 POSCAR 各变体与非法输入拒绝、真实 USPEX 样本的容忍度单调性与全量可解析性、UI 辅助函数与缓存版本判定
+
 ### V1.4.5
 
 参考化学势改为「精确端元 only」— 修复 E_form 依赖文件行序的问题

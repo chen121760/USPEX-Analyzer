@@ -1,4 +1,4 @@
-import type { LatticeParams, Structure } from '@/types/structure';
+import type { LatticeParams, Structure, SymmetryAnalysis } from '@/types/structure';
 
 export type StructureLike = Partial<Structure> & { id: number };
 
@@ -18,6 +18,16 @@ function normalizeExtraProps(value: Structure['extraProps']): Structure['extraPr
 
 function cloneLatticeParams(value: LatticeParams | undefined): LatticeParams | undefined {
   return value ? { ...value } : undefined;
+}
+
+function cloneSymmetry(value: SymmetryAnalysis | undefined): SymmetryAnalysis | undefined {
+  if (!value || !Array.isArray(value.points)) return undefined;
+  return {
+    version: value.version,
+    symprecs: Array.isArray(value.symprecs) ? [...value.symprecs] : [],
+    points: value.points.map((point) => ({ ...point })),
+    error: value.error,
+  };
 }
 
 /**
@@ -66,6 +76,7 @@ export function normalizeStructure(structure: StructureLike): Structure {
 
     poscarData: structure.poscarData,
     latticeParams: cloneLatticeParams(structure.latticeParams),
+    symmetry: cloneSymmetry(structure.symmetry),
 
     tags: structure.tags ? [...structure.tags] : [],
     isUserAdded: structure.isUserAdded ?? false,

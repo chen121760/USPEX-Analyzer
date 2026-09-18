@@ -12,9 +12,11 @@ import { useProjectStore } from '@/store/useProjectStore';
 import { useThemeStore } from '@/theme/themeStore';
 import { JSmolViewer } from './JSmolViewer';
 import type { JSmolViewerHandle } from './JSmolViewer';
+import { SymmetryPanel } from './SymmetryPanel';
 import { X } from 'lucide-react';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { downloadStructurePoscar } from '@/export/poscarExport';
+import { summariseSymmetryNumbers, MOYO_SYMMETRY_LABEL, USPEX_SYMMETRY_LABEL } from '@/domain/symmetry/symmetryConstants';
 
 /** Jmol script snippets for toolbar buttons */
 const SCRIPTS = {
@@ -53,9 +55,13 @@ export function StructureViewerModal() {
   const closeViewer = useUIStore((s) => s.closeViewer);
   const viewerWorkshopStructure = useUIStore((s) => s.viewerWorkshopStructure);
   const structures = useProjectStore((s) => s.structures);
+  const systemInfo = useProjectStore((s) => s.systemInfo);
   const tags = useProjectStore((s) => s.tags);
   const updateStructureTags = useProjectStore((s) => s.updateStructureTags);
   const themeBgColor = theme === 'dark' ? 'black' : 'white';
+
+  // USPEX encodes the system dimension in the hundreds digit of calculationType.
+  const is2DRun = systemInfo !== null && Math.floor(systemInfo.calculationType / 100) === 2;
 
   // Toolbar state
   const [showUnitCell, setShowUnitCell] = useState(true);
@@ -133,8 +139,10 @@ export function StructureViewerModal() {
   };
 
   // Info line — formula 单独渲染以支持下标，其余部分拼成字符串
+  const moyoSymbols = summariseSymmetryNumbers(structure.symmetry?.points);
   const infoSuffix = [
-    `SG: ${structure.spaceGroup}`,
+    `SG: ${structure.spaceGroup} (${USPEX_SYMMETRY_LABEL})`,
+    moyoSymbols ? `${MOYO_SYMMETRY_LABEL}: ${moyoSymbols}` : '',
     structure.latticeParams
       ? `a=${structure.latticeParams.a.toFixed(2)} b=${structure.latticeParams.b.toFixed(2)} c=${structure.latticeParams.c.toFixed(2)}`
       : '',
@@ -174,7 +182,7 @@ export function StructureViewerModal() {
 
         {/* Toolbar sidebar */}
         <div style={{
-          width: 200,
+          width: 280,
           borderLeft: '1px solid var(--color-border, #e5e7eb)',
           padding: 12,
           fontSize: 13,
@@ -187,6 +195,11 @@ export function StructureViewerModal() {
           zIndex: 2,
           flexShrink: 0,
         }}>
+          {/* Symmetry reference — USPEX vs moyo at several tolerances */}
+          <div style={{ paddingBottom: 10, borderBottom: '1px solid var(--color-border, #e5e7eb)' }}>
+            <SymmetryPanel structure={structure} isSlab={is2DRun} />
+          </div>
+
           {/* Display mode */}
           <Section title="显示模式 Display">
             {(['ballAndStick', 'spacefill', 'wireframe', 'sticks'] as const).map((mode) => (

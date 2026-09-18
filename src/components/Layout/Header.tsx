@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useCompareStore } from '@/store/useCompareStore';
 import { useLayoutStore } from '@/store/useLayoutStore';
 import { useProjectStore } from '@/store/useProjectStore';
-import { Globe, UploadCloud, HelpCircle, Contact, Monitor, Moon, Sun } from 'lucide-react';
+import { Globe, UploadCloud, HelpCircle, Contact, Monitor, Moon, Sun, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { CitePopover } from '@/components/CitePopover';
 import { useThemeStore } from '@/theme/themeStore';
@@ -11,6 +11,7 @@ export function Header() {
   const { t, i18n } = useTranslation();
   const systemInfo = useProjectStore((s) => s.systemInfo);
   const projectName = useProjectStore((s) => s.projectName);
+  const symmetryStatus = useProjectStore((s) => s.symmetryStatus);
   const compareIds = useCompareStore((s) => s.compareIds);
   const hintPanelOpen = useLayoutStore((s) => s.hintPanelOpen);
   const toggleHintPanel = useLayoutStore((s) => s.toggleHintPanel);
@@ -48,6 +49,31 @@ export function Header() {
       )}
 
       <div style={{ flex: 1 }} />
+
+      {/* Background moyo symmetry analysis progress */}
+      {symmetryStatus.running && (
+        <span
+          title={t('symmetry.progressTitle')}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: 12,
+            color: 'var(--color-text-secondary)',
+            padding: '2px 8px',
+            borderRadius: 9999,
+            border: '1px solid var(--color-border)',
+            background: 'var(--color-bg-secondary)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <Loader2 size={13} className="animate-spin" />
+          {t('symmetry.progress', {
+            done: symmetryStatus.done,
+            total: symmetryStatus.total,
+          })}
+        </span>
+      )}
 
       {/* Compare badge */}
       {compareIds.length > 0 && (

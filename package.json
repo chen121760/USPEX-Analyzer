@@ -1,7 +1,7 @@
 {
   "name": "uspex-analyzer",
   "private": true,
-  "version": "1.4.5",
+  "version": "1.4.6",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,6 +11,7 @@
     "test": "node scripts/runHullChecks.mjs"
   },
   "dependencies": {
+    "@spglib/moyo-wasm": "^0.18.0",
     "@tanstack/react-table": "^8.20.0",
     "@tanstack/react-virtual": "^3.11.0",
     "clsx": "^2.1.1",

@@ -7,6 +7,8 @@
 import { create } from 'zustand';
 import type {
   Structure,
+  SymmetryAnalysis,
+  SymmetryStatus,
   SystemInfo,
   DetectedFile,
   USPEXFileType,
@@ -59,6 +61,13 @@ interface ProjectState {
   isLoading: boolean;
   isDataLoaded: boolean;
   projectId: string;   // stable unique ID, never changes after creation
+
+  // ---- Background symmetry (moyo) analysis ----
+  symmetryStatus: SymmetryStatus;
+  setSymmetryStatus: (patch: Partial<SymmetryStatus>) => void;
+  /** Merge streamed moyo results into the structure lists (one write per chunk). */
+  applySymmetryResults: (results: { id: number; analysis: SymmetryAnalysis }[]) => void;
+
  // ---- Actions ----
   setDetectedFiles: (files: DetectedFile[]) => void;
   processFiles: (detectedFiles: DetectedFile[], fileContents: Map<USPEXFileType, string>) => void;
@@ -108,11 +117,29 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   parseWarnings: [],
   isLoading: false,
   isDataLoaded: false,
+  symmetryStatus: { running: false, done: 0, total: 0 },
 
   setDetectedFiles: (files) => set({ detectedFiles: files }),
   setProjectName: (name) => {
     set({ projectName: name });
     autoSave(get);
+  },
+
+  setSymmetryStatus: (patch) =>
+    set((state) => ({ symmetryStatus: { ...state.symmetryStatus, ...patch } })),
+
+  applySymmetryResults: (results) => {
+    if (results.length === 0) return;
+    const byId = new Map(results.map((entry) => [entry.id, entry.analysis]));
+    const merge = (list: Structure[]): Structure[] =>
+      list.map((structure) => {
+        const analysis = byId.get(structure.id);
+        return analysis ? { ...structure, symmetry: analysis } : structure;
+      });
+    set((state) => ({
+      structures: merge(state.structures),
+      userStructures: merge(state.userStructures),
+    }));
   },
 
   processFiles: (detectedFiles, fileContents) => {
@@ -298,5 +325,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       parseWarnings: [],
       isLoading: false,
       isDataLoaded: false,
+      symmetryStatus: { running: false, done: 0, total: 0 },
     }),
 }));
