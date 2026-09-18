@@ -92,11 +92,17 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
 
   const { stable, unstable, userAdded, hullLine } = plotData;
   const elements = systemInfo.elements;
+  const components = systemInfo.componentLabels?.length === 2
+    ? systemInfo.componentLabels
+    : elements.slice(0, 2);
+  const componentA = components[0] || 'A';
+  const componentB = components[1] || 'B';
+  const formationUnit = systemInfo.compositionBasis?.length ? 'eV/block' : 'eV/atom';
   const getStructureHoverText = (s: Structure) =>
     (s.groupName || groupMap ? `Group: ${s.groupName ?? groupMap?.get(s.id) ?? '—'}<br>` : '') +
     `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
     `ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
-    `Fitness: ${s.fitness.toFixed(4)} eV/atom<br>` +
+    `Fitness: ${s.fitness.toFixed(4)} eV/block<br>` +
     `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>` +
     `Origin: ${s.origin}`;
 
@@ -159,16 +165,16 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
   function handleExport() {
     const hasGroup = groupMap != null || structures.some((s) => s.groupName != null);
     const groupCol = hasGroup ? ['Group'] : [];
-    const pointHeaders = [...groupCol, 'EA_ID', 'Formula', `x(${elements[1] || 'B'})`, 'Formation_Energy(eV/atom)', 'Enthalpy(eV/atom)', 'Fitness(eV/atom)', 'SpaceGroup', 'Generation', 'Origin', 'Type'];
+    const pointHeaders = [...groupCol, 'EA_ID', 'Formula', `x(${componentB})`, `Formation_Energy(${formationUnit})`, 'Enthalpy(eV/atom)', 'Fitness(eV/block)', 'SpaceGroup', 'Generation', 'Origin', 'Type'];
     const groupField = (s: Structure) => hasGroup ? { 'Group': s.groupName ?? '' } : {};
     const stableRows = stable.map((s) => ({
       ...groupField(s),
       'EA_ID': s.id,
       'Formula': s.formula,
-      [`x(${elements[1] || 'B'})`]: s.hullX[0] ?? 0,
-      'Formation_Energy(eV/atom)': s.hullY,
+      [`x(${componentB})`]: s.hullX[0] ?? 0,
+      [`Formation_Energy(${formationUnit})`]: s.hullY,
       'Enthalpy(eV/atom)': s.enthalpy,
-      'Fitness(eV/atom)': 0,
+      'Fitness(eV/block)': 0,
       'SpaceGroup': s.spaceGroup,
       'Generation': s.generation,
       'Origin': s.origin,
@@ -178,22 +184,22 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
       ...groupField(s),
       'EA_ID': s.id,
       'Formula': s.formula,
-      [`x(${elements[1] || 'B'})`]: s.hullX[0] ?? 0,
-      'Formation_Energy(eV/atom)': s.hullY,
+      [`x(${componentB})`]: s.hullX[0] ?? 0,
+      [`Formation_Energy(${formationUnit})`]: s.hullY,
       'Enthalpy(eV/atom)': s.enthalpy,
-      'Fitness(eV/atom)': s.fitness,
+      'Fitness(eV/block)': s.fitness,
       'SpaceGroup': s.spaceGroup,
       'Generation': s.generation,
       'Origin': s.origin,
       'Type': 'Unstable',
     }));
-    const hullHeaders = [`x(${elements[1] || 'B'})`, 'Formation_Energy(eV/atom)'];
+    const hullHeaders = [`x(${componentB})`, `Formation_Energy(${formationUnit})`];
     const hullRows = hullLine.map((p) => ({
-      [`x(${elements[1] || 'B'})`]: p.x,
-      'Formation_Energy(eV/atom)': p.y,
+      [`x(${componentB})`]: p.x,
+      [`Formation_Energy(${formationUnit})`]: p.y,
     }));
     const tag = fitnessMax.toFixed(3).replace('.', 'p');
-    downloadMultiSectionCsv(`${elements.join('-')}_binary_hull_fitness${tag}`, [
+    downloadMultiSectionCsv(`${components.join('-')}_binary_hull_fitness${tag}`, [
       { title: 'All Points (Stable + Unstable)', headers: pointHeaders, rows: [...stableRows, ...unstableRows] },
       { title: 'Convex Hull Line', headers: hullHeaders, rows: hullRows },
     ]);
@@ -218,7 +224,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
           (s.groupName || groupMap ? `Group: ${s.groupName ?? groupMap?.get(s.id) ?? '—'}<br>` : '') +
           `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
           `ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
-          `Fitness: ${s.fitness.toFixed(4)} eV/atom<br>` +
+          `Fitness: ${s.fitness.toFixed(4)} eV/block<br>` +
           `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>` +
           `Origin: ${s.origin}`,
       ),
@@ -259,7 +265,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
           (s.groupName || groupMap ? `Group: ${s.groupName ?? groupMap?.get(s.id) ?? '—'}<br>` : '') +
           `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
           `ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
-          `Fitness: ${s.fitness.toFixed(4)} eV/atom<br>` +
+          `Fitness: ${s.fitness.toFixed(4)} eV/block<br>` +
           `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>` +
           `Origin: ${s.origin}`,
       ),
@@ -285,7 +291,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
           (s.groupName ? `Group: ${s.groupName}<br>` : '') +
           `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
           `ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
-          `Fitness: ${s.fitness.toFixed(4)} eV/atom`,
+          `Fitness: ${s.fitness.toFixed(4)} eV/block`,
       ),
       hoverinfo: 'text' as const,
       customdata: userAdded.map((s: any) => s._mergeSeq ?? s.id),
@@ -308,8 +314,8 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
 
   const layout: PlotlyLayout = {
     font: PLOTLY_FONT,
-    title: { text: `${elements.join('-')} ${t('hull.title')}`, font: { size: 15, color: pt.titleColor } },
-    xaxis: { title: { text: `x(${elements[1] || 'B'}) = ${elements[1] || 'B'}/(${elements[0] || 'A'}+${elements[1] || 'B'})`, font: titleFont }, ...axisStyle },
+    title: { text: `${components.map(formulaToHtml).join('-')} ${t('hull.title')}`, font: { size: 15, color: pt.titleColor } },
+    xaxis: { title: { text: `x(${formulaToHtml(componentB)}) = ${formulaToHtml(componentB)}/(${formulaToHtml(componentA)}+${formulaToHtml(componentB)})`, font: titleFont }, ...axisStyle },
     yaxis: { title: { text: t('hull.formationEnergy'), font: titleFont }, range: [-0.001, undefined], ...axisStyle },
     hovermode: 'closest' as const,
     showlegend: true,

@@ -8,6 +8,30 @@
  */
 
 import type { ParsedParameters } from '@/types/structure';
+import { buildFormula } from './compositionUtils';
+
+/** Parse the numSpecies matrix (one independent composition block per row). */
+function parseNumSpecies(
+  content: string,
+  elementCount: number,
+): { rows: number[][]; valid: boolean } {
+  const match = content.match(
+    /%\s*numSpecies\s*\n([\s\S]*?)\n\s*%\s*EndNumSpecies/i
+  );
+  if (!match || elementCount === 0) return { rows: [], valid: !match };
+
+  const rows = match[1]
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.split(/\s+/).map(Number));
+  const valid = rows.length > 0 && rows.every((row) =>
+      row.length === elementCount &&
+      row.every((value) => Number.isInteger(value) && value >= 0) &&
+      row.some((value) => value > 0)
+    );
+  return { rows: valid ? rows : [], valid };
+}
 
 /**
  * Parse the % optType ... % EndOptType block.
@@ -69,12 +93,23 @@ export function parseParameters(content: string): ParsedParameters {
   const isVarcomp = calculationType > 0
     ? (calculationType % 10) === 1
     : false;
-  const numComponents = elements.length;
+  const parsedNumSpecies = parseNumSpecies(content, elements.length);
+  const componentCompositions = parsedNumSpecies.rows;
+  const usesCompositionBasis = isVarcomp && parsedNumSpecies.valid && componentCompositions.length >= 2;
+  const componentLabels = usesCompositionBasis
+    ? componentCompositions.map((composition) => buildFormula(composition, elements))
+    : [...elements];
+  const numComponents = usesCompositionBasis
+    ? componentCompositions.length
+    : elements.length;
   const externalPressure = parseExternalPressure(content);
   const { isPickup, pickUpGen, pickUpFolder } = parsePickup(content);
 
   return {
     elements,
+    componentCompositions: usesCompositionBasis ? componentCompositions : [],
+    componentLabels,
+    numSpeciesValid: parsedNumSpecies.valid,
     calculationType,
     optType,
     isVarcomp,

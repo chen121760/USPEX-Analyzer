@@ -11,3 +11,4 @@ desktop/resources/
 desktop/neutralinojs.log
 tsconfig.tsbuildinfo
 *.tsbuildinfo
+test/

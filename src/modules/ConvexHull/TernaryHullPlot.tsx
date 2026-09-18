@@ -14,7 +14,11 @@ type PlotlyLayout = any;
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Structure, SystemInfo } from '@/types/structure';
-import { ternaryToCartesian, formulaToHtml } from '@/parsers/compositionUtils';
+import {
+  componentAmountsFromComposition,
+  ternaryToCartesian,
+  formulaToHtml,
+} from '@/parsers/compositionUtils';
 import { useUIStore } from '@/store/useUIStore';
 import { useThemeStore } from '@/theme/themeStore';
 import { useMarkStore } from '@/store/useMarkStore';
@@ -79,7 +83,19 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
 
   const plotData = useMemo(() => {
     const elements = systemInfo.elements;
-    const validStructures = structures.filter((s) => s.enthalpyTotal <= 900 && !isNaN(s.enthalpy));
+    const components = systemInfo.componentLabels?.length === 3
+      ? systemInfo.componentLabels
+      : elements.slice(0, 3);
+    const compositionBasis = systemInfo.compositionBasis ?? [];
+    const toPlotComposition = (composition: number[]) =>
+      compositionBasis.length > 0
+        ? componentAmountsFromComposition(composition, compositionBasis) ?? []
+        : composition;
+    const validStructures = structures.filter((s) =>
+      s.enthalpyTotal <= 900 &&
+      !isNaN(s.enthalpy) &&
+      (compositionBasis.length === 0 || toPlotComposition(s.composition).length === 3)
+    );
     const userAdded = validStructures.filter((s) => s.isUserAdded);
     const nonUser = validStructures.filter((s) => !s.isUserAdded);
     const stable = nonUser.filter((s) => s.fitness === 0);
@@ -87,7 +103,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
 
     // Compute cartesian coords for unstable structures
     const unstableWithCoords: StructureWithCoords[] = unstable.map((s) => {
-      const [cx, cy] = ternaryToCartesian(s.composition);
+      const [cx, cy] = ternaryToCartesian(toPlotComposition(s.composition));
       return { ...s, cartX: cx, cartY: cy };
     });
 
@@ -97,11 +113,12 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
     const hullInputs: TernaryHullInput[] = validStructures
       .filter((s) => s.fitness === 0)
       .map((s) => {
-        const [cx, cy] = ternaryToCartesian(s.composition);
+        const plotComposition = toPlotComposition(s.composition);
+        const [cx, cy] = ternaryToCartesian(plotComposition);
         // Use eForm (formation energy) for convex hull z-axis — raw enthalpy
         // contains elemental reference energies that distort the energy landscape
         const eForm = s.eForm !== undefined && s.eForm !== -1 ? s.eForm : s.enthalpy;
-        return { id: s.id, composition: s.composition, eForm, cartX: cx, cartY: cy, _mergeSeq: (s as any)._mergeSeq };
+        return { id: s.id, composition: plotComposition, eForm, cartX: cx, cartY: cy, _mergeSeq: (s as any)._mergeSeq };
       });
 
     // Compute tie-lines from all on-hull structures
@@ -109,9 +126,10 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
 
     // Display-only stable points (non-user-added, for diamond markers)
     const stableInputs: TernaryHullInput[] = stable.map((s) => {
-      const [cx, cy] = ternaryToCartesian(s.composition);
+      const plotComposition = toPlotComposition(s.composition);
+      const [cx, cy] = ternaryToCartesian(plotComposition);
       const eForm = s.eForm !== undefined && s.eForm !== -1 ? s.eForm : s.enthalpy;
-      return { id: s.id, composition: s.composition, eForm, cartX: cx, cartY: cy, _mergeSeq: (s as any)._mergeSeq };
+      return { id: s.id, composition: plotComposition, eForm, cartX: cx, cartY: cy, _mergeSeq: (s as any)._mergeSeq };
     });
 
     // Unique stable points for display — join back to full Structure for hover info
@@ -128,14 +146,14 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
 
     // User-added in cartesian
     const userAddedWithCoords: { id: number; cartX: number; cartY: number; s: Structure }[] = userAdded.map((s) => {
-      const [cx, cy] = ternaryToCartesian(s.composition);
+      const [cx, cy] = ternaryToCartesian(toPlotComposition(s.composition));
       return { id: s.id, cartX: cx, cartY: cy, s };
     });
 
-    return { unstableWithCoords, stableInputs, uniqueStableFull, edges, elements, userAddedWithCoords };
+    return { unstableWithCoords, stableInputs, uniqueStableFull, edges, components, userAddedWithCoords };
   }, [structures, systemInfo, fitnessMax]);
 
-  const { unstableWithCoords, uniqueStableFull, edges, elements, userAddedWithCoords } = plotData;
+  const { unstableWithCoords, uniqueStableFull, edges, components, userAddedWithCoords } = plotData;
   const structureById = useMemo(() => new Map(structures.map((s) => [s.id, s])), [structures]);
   const getStructureHoverText = (id: number, fallbackFormula = '') => {
     const s = structureById.get(id);
@@ -144,7 +162,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
       (s?.groupName || groupMap ? `Group: ${s?.groupName ?? groupMap?.get(id) ?? '—'}<br>` : '') +
       `EA${id}: ${formulaToHtml(s?.formula ?? fallbackFormula)}<br>` +
       `ΔH: ${s?.enthalpy.toFixed(4) ?? '—'} eV/atom<br>` +
-      `Fitness: ${s?.fitness.toFixed(4) ?? '—'} eV/atom<br>` +
+      `Fitness: ${s?.fitness.toFixed(4) ?? '—'} eV/block<br>` +
       `SG: ${s?.spaceGroup ?? '—'} | Gen: ${s?.generation ?? '—'}<br>` +
       `Origin: ${s?.origin ?? '—'}`
     );
@@ -270,7 +288,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
           (s.groupName || groupMap ? `Group: ${s.groupName ?? groupMap?.get(s.id) ?? '—'}<br>` : '') +
           `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
           `ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
-          `Fitness: ${s.fitness.toFixed(4)} eV/atom<br>` +
+          `Fitness: ${s.fitness.toFixed(4)} eV/block<br>` +
           `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>` +
           `Origin: ${s.origin}`,
       ),
@@ -308,14 +326,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
       name: 'Stable',
       marker: { color: getPlotlyTheme(theme).frontColors[0], size: 10, symbol: 'diamond' },
       text: uniqueStableFull.map((p) => {
-        if (elements.length >= 3) {
-          const plain = elements.map((el, i) => {
-            const count = p.composition[i];
-            return count === 0 ? '' : count === 1 ? el : `${el}${count}`;
-          }).filter(Boolean).join('');
-          return formulaToHtml(plain);
-        }
-        return `EA${p.id}`;
+        return formulaToHtml(p.full?.formula ?? `EA${p.id}`);
       }),
       textposition: 'top center' as const,
       textfont: { size: 8 },
@@ -325,7 +336,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
           (s?.groupName || groupMap ? `Group: ${s?.groupName ?? groupMap?.get(p.id) ?? '—'}<br>` : '') +
           `EA${p.id}: ${formulaToHtml(s?.formula ?? '')}<br>` +
           `E_form: ${p.eForm.toFixed(4)} eV/atom<br>` +
-          `Fitness: 0.0000 eV/atom<br>` +
+          `Fitness: 0.0000 eV/block<br>` +
           `SG: ${s?.spaceGroup ?? '—'} | Gen: ${s?.generation ?? '—'}<br>` +
           `Origin: ${s?.origin ?? '—'}`
         );
@@ -353,7 +364,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
           (s.groupName ? `Group: ${s.groupName}<br>` : '') +
           `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
           `ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
-          `Fitness: ${s.fitness.toFixed(4)} eV/atom`
+          `Fitness: ${s.fitness.toFixed(4)} eV/block`
         );
       }),
       hoverinfo: 'text' as const,
@@ -364,19 +375,19 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
   ];
 
   // Element labels at triangle corners
-  const labels = elements.length >= 3 ? elements : ['A', 'B', 'C'];
+  const labels = components.length >= 3 ? components : ['A', 'B', 'C'];
   const pt = getPlotlyTheme(theme);
   const labelAnnotations = [
-    { x: -0.05, y: -0.05, text: labels[0], showarrow: false, font: { size: 13, color: pt.annotationColor, weight: 'bold' as const } },
-    { x: 0.5, y: Math.sqrt(3) / 2 + 0.06, text: labels[1], showarrow: false, font: { size: 13, color: pt.annotationColor, weight: 'bold' as const } },
-    { x: 1.05, y: -0.05, text: labels[2], showarrow: false, font: { size: 13, color: pt.annotationColor, weight: 'bold' as const } },
+    { x: -0.05, y: -0.05, text: formulaToHtml(labels[0]), showarrow: false, font: { size: 13, color: pt.annotationColor, weight: 'bold' as const } },
+    { x: 0.5, y: Math.sqrt(3) / 2 + 0.06, text: formulaToHtml(labels[1]), showarrow: false, font: { size: 13, color: pt.annotationColor, weight: 'bold' as const } },
+    { x: 1.05, y: -0.05, text: formulaToHtml(labels[2]), showarrow: false, font: { size: 13, color: pt.annotationColor, weight: 'bold' as const } },
   ];
   const { viewportLayout, handleRelayout } = usePlotViewport();
 
   const layout: PlotlyLayout = {
     autosize: true,
     font: PLOTLY_FONT,
-    title: { text: `${elements.join('-')} ${t('hull.ternaryTitle', 'Ternary Phase Diagram')}`, font: { size: 15, color: pt.titleColor } },
+    title: { text: `${components.map(formulaToHtml).join('-')} ${t('hull.ternaryTitle', 'Ternary Phase Diagram')}`, font: { size: 15, color: pt.titleColor } },
     xaxis: {
       range: [-0.12, 1.12],
       showgrid: false,
@@ -427,12 +438,13 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
   });
 
   function handleExport() {
-    const elA = elements[0] || 'A';
-    const elB = elements[1] || 'B';
-    const elC = elements[2] || 'C';
+    const elA = components[0] || 'A';
+    const elB = components[1] || 'B';
+    const elC = components[2] || 'C';
     const hasGroup = groupMap != null || structures.some((s) => s.groupName != null);
     const groupCol = hasGroup ? ['Group'] : [];
-    const headers = [...groupCol, 'EA_ID', 'Formula', `x_${elA}`, `x_${elB}`, `x_${elC}`, 'Enthalpy(eV/atom)', 'Fitness(eV/atom)', 'SpaceGroup', 'Generation', 'Origin', 'Type'];
+    const energyUnit = systemInfo.compositionBasis?.length ? 'eV/block' : 'eV/atom';
+    const headers = [...groupCol, 'EA_ID', 'Formula', `x_${elA}`, `x_${elB}`, `x_${elC}`, `E_form(${energyUnit})`, 'Fitness(eV/block)', 'SpaceGroup', 'Generation', 'Origin', 'Type'];
     const stableRows = uniqueStableFull.map((p) => {
       const total = p.composition.reduce((a: number, b: number) => a + b, 0) || 1;
       const s = p.full;
@@ -443,8 +455,8 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
         [`x_${elA}`]: (p.composition[0] / total).toFixed(6),
         [`x_${elB}`]: (p.composition[1] / total).toFixed(6),
         [`x_${elC}`]: (p.composition[2] / total).toFixed(6),
-        'E_form(eV/atom)': p.eForm,
-        'Fitness(eV/atom)': 0,
+        [`E_form(${energyUnit})`]: p.eForm,
+        'Fitness(eV/block)': 0,
         'SpaceGroup': s?.spaceGroup ?? '',
         'Generation': s?.generation ?? '',
         'Origin': s?.origin ?? '',
@@ -452,16 +464,19 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
       };
     });
     const unstableRows = unstableWithCoords.map((s) => {
-      const total = s.composition.reduce((a: number, b: number) => a + b, 0) || 1;
+      const exportComposition = systemInfo.compositionBasis?.length
+        ? componentAmountsFromComposition(s.composition, systemInfo.compositionBasis) ?? []
+        : s.composition;
+      const total = exportComposition.reduce((a: number, b: number) => a + b, 0) || 1;
       return {
         ...(hasGroup ? { 'Group': s.groupName ?? '' } : {}),
         'EA_ID': s.id,
         'Formula': s.formula,
-        [`x_${elA}`]: (s.composition[0] / total).toFixed(6),
-        [`x_${elB}`]: (s.composition[1] / total).toFixed(6),
-        [`x_${elC}`]: (s.composition[2] / total).toFixed(6),
-        'Enthalpy(eV/atom)': s.enthalpy,
-        'Fitness(eV/atom)': s.fitness,
+        [`x_${elA}`]: (exportComposition[0] / total).toFixed(6),
+        [`x_${elB}`]: (exportComposition[1] / total).toFixed(6),
+        [`x_${elC}`]: (exportComposition[2] / total).toFixed(6),
+        [`E_form(${energyUnit})`]: s.eForm,
+        'Fitness(eV/block)': s.fitness,
         'SpaceGroup': s.spaceGroup,
         'Generation': s.generation,
         'Origin': s.origin,
@@ -469,7 +484,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
       };
     });
     const tag = fitnessMax.toFixed(3).replace('.', 'p');
-    downloadCsv(`${elements.join('-')}_ternary_hull_fitness${tag}`, headers, [...stableRows, ...unstableRows]);
+    downloadCsv(`${components.join('-')}_ternary_hull_fitness${tag}`, headers, [...stableRows, ...unstableRows]);
   }
 
   return (
@@ -538,9 +553,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
         </h3>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {uniqueStableFull.map((p) => {
-            const formula = elements.length >= 3
-              ? elements.map((el, i) => p.composition[i] === 0 ? '' : p.composition[i] === 1 ? el : `${el}${p.composition[i]}`).filter(Boolean).join('')
-              : `EA${p.id}`;
+            const formula = p.full?.formula ?? `EA${p.id}`;
             return (
               <span
                 key={p.id}

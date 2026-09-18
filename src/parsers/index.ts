@@ -32,7 +32,12 @@ import { parseMLProperties } from './mlPropertiesParser';
 import { parseOrigin } from './originParser';
 import { parseGatheredPoscars } from './poscarParser';
 import { parseConvexHullGenerations } from './convexHullParser';
-import { buildFormula, totalAtoms } from './compositionUtils';
+import {
+  buildFormula,
+  componentFractionsFromComposition,
+  compositionBasisRank,
+  totalAtoms,
+} from './compositionUtils';
 import { reconstructHullStructures } from '@/domain/hull/reconstructHull';
 
 // Re-export individual parsers for direct use
@@ -89,7 +94,18 @@ function inferSystemTypeFromCompositionLength(compositionLength: number): System
   return 'quaternary';
 }
 
-function inferHullCoordinates(composition: number[], systemType: SystemType): number[] {
+function inferHullCoordinates(
+  composition: number[],
+  systemType: SystemType,
+  compositionBasis: number[][] = [],
+): number[] {
+  if (compositionBasis.length > 0) {
+    const componentFractions = componentFractionsFromComposition(composition, compositionBasis);
+    return componentFractions && componentFractions.length >= 2
+      ? componentFractions.slice(1)
+      : [Number.NaN];
+  }
+
   const nAtoms = totalAtoms(composition);
   if (nAtoms <= 0) return [0];
   if (systemType === 'binary' && composition.length === 2) {
@@ -130,10 +146,28 @@ export function parseAllFiles(
   const paramContent = fileContents.get('parameters');
   if (paramContent) {
     paramsResult = parseParameters(paramContent);
+    if (!paramsResult.numSpeciesValid) {
+      warnings.push(
+        'Invalid numSpecies block: every row must contain one non-negative integer count per atomType entry',
+      );
+    }
   }
 
   // Elements: primary from Parameters.txt, with POSCAR fallback below.
   let elements = paramsResult?.elements ?? [];
+  const compositionBasis = paramsResult?.componentCompositions ?? [];
+  const componentLabels = paramsResult?.componentLabels ?? [];
+  const basisRank = compositionBasisRank(compositionBasis);
+  if (compositionBasis.length > 0 && basisRank < compositionBasis.length) {
+    warnings.push(
+      `numSpecies composition blocks are linearly dependent (rank ${basisRank} of ${compositionBasis.length}); block coordinates and reconstructed hull energies are not uniquely recoverable`,
+    );
+  }
+  if (compositionBasis.length > 4) {
+    warnings.push(
+      `USPEX Analyzer supports visualization up to four composition blocks; found ${compositionBasis.length}`,
+    );
+  }
 
   // Extended convex hull (primary data source for varcomp)
   let hullData: ParsedExtendedHull[] = [];
@@ -277,7 +311,7 @@ export function parseAllFiles(
         ? ind.indFitness
         : ind.enthalpy / Math.max(1, totalAtoms(ind.composition)) - minEnthalpy,
       symm: ind.symm,
-      x: inferHullCoordinates(ind.composition, systemType),
+      x: inferHullCoordinates(ind.composition, systemType, compositionBasis),
       y: 0,
       thickness: ind.thickness / Math.max(1, totalAtoms(ind.composition)),
       surfArea: ind.surfArea / Math.max(1, totalAtoms(ind.composition)),
@@ -287,17 +321,27 @@ export function parseAllFiles(
     warnings.push('No extended_convex_hull or Individuals file found — very limited functionality');
   }
 
-  // Override systemType from actual composition data if Parameters.txt was wrong/missing
+  // Override systemType from actual composition data if Parameters.txt was wrong/missing.
+  // A numSpecies basis intentionally decouples the number of independent
+  // components from the number of atomic elements (e.g. MgO-HfO2 is a
+  // pseudo-binary system represented by three atomic composition columns).
   if (hullData.length > 0) {
     const actualCompLen = hullData[0].composition.length;
     const inferred = inferSystemTypeFromCompositionLength(actualCompLen);
-    if (!paramsResult || paramsResult.numComponents === 0 || paramsResult.numComponents !== actualCompLen) {
+    const hasCompositionBasis = compositionBasis.length >= 2;
+    if (!hasCompositionBasis && (!paramsResult || paramsResult.numComponents === 0 || paramsResult.numComponents !== actualCompLen)) {
       if (paramsResult && paramsResult.numComponents !== 0 && paramsResult.numComponents !== actualCompLen) {
         warnings.push(
           `Parameters element count (${paramsResult.numComponents}) does not match parsed composition length (${actualCompLen}); using parsed structure data`,
         );
       }
       systemType = inferred;
+    }
+
+    if (hasCompositionBasis && compositionBasis.length !== actualCompLen) {
+      warnings.push(
+        `Detected ${compositionBasis.length}-component composition basis (${componentLabels.join(', ')}) over ${actualCompLen} atomic elements`,
+      );
     }
 
     if (elements.length !== actualCompLen && poscarElements.length === actualCompLen) {
@@ -461,7 +505,7 @@ export function parseAllFiles(
       const enthalpyPerAtom = nAtoms > 0 ? ind.enthalpy / nAtoms : ind.enthalpy;
       const volumePerAtom = nAtoms > 0 ? ind.volume / nAtoms : ind.volume;
 
-      const hullX = inferHullCoordinates(ind.composition, systemType);
+      const hullX = inferHullCoordinates(ind.composition, systemType, compositionBasis);
 
       const pareto = paretoMap.get(id);
       const ml = mlMap.get(id);
@@ -531,7 +575,13 @@ export function parseAllFiles(
   }
 
   // ---- Step 3c: Reconstruct convex hull (compute eForm / eHullRecons) ----
-  structures = reconstructHullStructures(structures, systemType, compositionMode, elements);
+  structures = reconstructHullStructures(
+    structures,
+    systemType,
+    compositionMode,
+    elements,
+    compositionBasis,
+  );
 
   // ---- Step 4: Build system info ----
 
@@ -549,6 +599,8 @@ export function parseAllFiles(
 
   const systemInfo: SystemInfo = {
     elements,
+    componentLabels: componentLabels.length > 0 ? componentLabels : undefined,
+    compositionBasis: compositionBasis.length > 0 ? compositionBasis : undefined,
     systemType,
     optimizationType,
     compositionMode,

@@ -20,7 +20,13 @@ import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import convexHull from 'convex-hull';
 import type { Structure, SystemInfo } from '@/types/structure';
-import { quaternaryToCartesian, formulaToHtml, TETRA_CENTROID, reducedCompositionKey } from '@/parsers/compositionUtils';
+import {
+  componentAmountsFromComposition,
+  quaternaryToCartesian,
+  formulaToHtml,
+  TETRA_CENTROID,
+  reducedCompositionKey,
+} from '@/parsers/compositionUtils';
 import { useUIStore } from '@/store/useUIStore';
 import { useThemeStore } from '@/theme/themeStore';
 import { useMarkStore } from '@/store/useMarkStore';
@@ -498,14 +504,23 @@ export function QuaternaryHullPlot3D({
 
   // ── Hull surface (independent of fitness slider) ──
   const hullSurface = useMemo(() => {
+    const compositionBasis = systemInfo.compositionBasis ?? [];
+    const toPlotComposition = (composition: number[]) =>
+      compositionBasis.length > 0
+        ? componentAmountsFromComposition(composition, compositionBasis) ?? []
+        : composition;
     const nonUser = structures.filter(
-      (s) => !s.isUserAdded && s.enthalpyTotal <= 900 && !isNaN(s.enthalpy),
+      (s) =>
+        !s.isUserAdded &&
+        s.enthalpyTotal <= 900 &&
+        !isNaN(s.enthalpy) &&
+        toPlotComposition(s.composition).length === 4,
     );
     const hullInput: ThermoHullInput[] = nonUser
       .filter((s) => s.fitness === 0)
       .map((s) => ({
         id: s.id,
-        composition: s.composition,
+        composition: toPlotComposition(s.composition),
         enthalpy:
           s.eForm !== undefined && s.eForm !== -1 ? s.eForm : s.enthalpy,
         formula: s.formula,
@@ -530,13 +545,24 @@ export function QuaternaryHullPlot3D({
       edgeY: fallback.edgeY,
       edgeZ: fallback.edgeZ,
     };
-  }, [structures]);
+  }, [structures, systemInfo]);
 
   // ── Plot points (reacts to fitness slider) ──
   const plotData = useMemo(() => {
     const elements = systemInfo.elements;
+    const components = systemInfo.componentLabels?.length === 4
+      ? systemInfo.componentLabels
+      : elements.slice(0, 4);
+    const compositionBasis = systemInfo.compositionBasis ?? [];
+    const toPlotComposition = (composition: number[]) =>
+      compositionBasis.length > 0
+        ? componentAmountsFromComposition(composition, compositionBasis) ?? []
+        : composition;
     const validStructures = structures.filter(
-      (s) => s.enthalpyTotal <= 900 && !isNaN(s.enthalpy),
+      (s) =>
+        s.enthalpyTotal <= 900 &&
+        !isNaN(s.enthalpy) &&
+        toPlotComposition(s.composition).length === 4,
     );
     const nonUser = validStructures.filter((s) => !s.isUserAdded);
 
@@ -557,7 +583,7 @@ export function QuaternaryHullPlot3D({
     const userAdded = validStructures.filter((s) => s.isUserAdded);
 
     const stablePts: PointInTetra[] = stable.map((s) => {
-      const [cx, cy, cz] = quaternaryToCartesian(s.composition);
+      const [cx, cy, cz] = quaternaryToCartesian(toPlotComposition(s.composition));
       return {
         id: s.id, x: cx, y: cy, z: cz,
         fitness: s.fitness, enthalpy: hullEnthalpy(s),
@@ -567,7 +593,7 @@ export function QuaternaryHullPlot3D({
     });
 
     const unstablePts: PointInTetra[] = unstable.map((s) => {
-      const [cx, cy, cz] = quaternaryToCartesian(s.composition);
+      const [cx, cy, cz] = quaternaryToCartesian(toPlotComposition(s.composition));
       return {
         id: s.id, x: cx, y: cy, z: cz,
         fitness: s.fitness, enthalpy: hullEnthalpy(s),
@@ -577,7 +603,7 @@ export function QuaternaryHullPlot3D({
     });
 
     const userAddedPts: PointInTetra[] = userAdded.map((s) => {
-      const [cx, cy, cz] = quaternaryToCartesian(s.composition);
+      const [cx, cy, cz] = quaternaryToCartesian(toPlotComposition(s.composition));
       return {
         id: s.id, x: cx, y: cy, z: cz,
         fitness: s.fitness, enthalpy: hullEnthalpy(s),
@@ -600,7 +626,7 @@ export function QuaternaryHullPlot3D({
         x: v[0] + (dx / len) * labelShift,
         y: v[1] + (dy / len) * labelShift,
         z: v[2] + (dz / len) * labelShift,
-        label: elements[i] ?? `El${i}`,
+        label: components[i] ?? `Component${i + 1}`,
       };
     });
 
@@ -610,7 +636,7 @@ export function QuaternaryHullPlot3D({
       userAddedPts,
       wireframe,
       vertexLabels,
-      elements,
+      components,
     };
   }, [structures, systemInfo, fitnessMax]);
 
@@ -936,21 +962,24 @@ export function QuaternaryHullPlot3D({
   // ── CSV export (current visible data) ──
   const handleExport = useCallback(() => {
     const allPts = [...stablePts, ...unstablePts, ...userAddedPts];
-    const elements = systemInfo.elements;
+    const components = systemInfo.componentLabels?.length === 4
+      ? systemInfo.componentLabels
+      : systemInfo.elements.slice(0, 4);
+    const energyUnit = systemInfo.compositionBasis?.length ? 'eV/block' : 'eV/atom';
     const tag = fitnessMax.toFixed(3).replace('.', 'p');
-    const headers = ['EA', 'Formula', 'Composition', 'Enthalpy(eV/atom)', 'Fitness(eV/block)', 'SpaceGroup', 'Generation', 'Origin'];
+    const headers = ['EA', 'Formula', 'Composition', `E_form(${energyUnit})`, 'Fitness(eV/block)', 'SpaceGroup', 'Generation', 'Origin'];
     const rows = allPts.map((p) => ({
       EA: String(p.id),
       Formula: p.formula,
       Composition: `[${p.s.composition.join(', ')}]`,
-      'Enthalpy(eV/atom)': p.enthalpy.toFixed(6),
+      [`E_form(${energyUnit})`]: p.enthalpy.toFixed(6),
       'Fitness(eV/block)': p.fitness.toFixed(6),
       SpaceGroup: String(p.spaceGroup),
       Generation: String(p.generation),
       Origin: p.origin,
     }));
     downloadCsv(
-      `${elements.join('-')}_quaternary_hull_fitness${tag}`,
+      `${components.join('-')}_quaternary_hull_fitness${tag}`,
       headers,
       rows,
     );

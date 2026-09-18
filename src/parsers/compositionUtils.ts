@@ -65,6 +65,127 @@ export function molarFractions(composition: number[]): number[] {
 }
 
 /**
+ * Resolve an atomic composition into amounts of independent USPEX
+ * composition blocks from the Parameters.txt numSpecies matrix.
+ *
+ * For example, [4, 1, 6] in the basis MgO=[1,0,1], HfO2=[0,1,2]
+ * resolves to [4, 1].  The least-squares normal equations are exact for
+ * valid USPEX compositions; the reconstruction check rejects unrelated or
+ * rank-deficient inputs instead of returning misleading coordinates.
+ */
+export function componentAmountsFromComposition(
+  composition: number[],
+  basis: number[][],
+): number[] | null {
+  const componentCount = basis.length;
+  const elementCount = composition.length;
+  if (
+    componentCount === 0 ||
+    elementCount === 0 ||
+    basis.some((row) => row.length !== elementCount)
+  ) {
+    return null;
+  }
+
+  const matrix = basis.map((rowI) => [
+    ...basis.map((rowJ) => rowI.reduce(
+      (sum, value, elementIndex) => sum + value * rowJ[elementIndex],
+      0,
+    )),
+    rowI.reduce(
+      (sum, value, elementIndex) => sum + value * composition[elementIndex],
+      0,
+    ),
+  ]);
+
+  // Gauss-Jordan elimination with partial pivoting.
+  for (let col = 0; col < componentCount; col++) {
+    let pivot = col;
+    for (let row = col + 1; row < componentCount; row++) {
+      if (Math.abs(matrix[row][col]) > Math.abs(matrix[pivot][col])) pivot = row;
+    }
+    if (Math.abs(matrix[pivot][col]) < 1e-12) return null;
+    [matrix[col], matrix[pivot]] = [matrix[pivot], matrix[col]];
+
+    const divisor = matrix[col][col];
+    for (let j = col; j <= componentCount; j++) matrix[col][j] /= divisor;
+
+    for (let row = 0; row < componentCount; row++) {
+      if (row === col) continue;
+      const factor = matrix[row][col];
+      for (let j = col; j <= componentCount; j++) {
+        matrix[row][j] -= factor * matrix[col][j];
+      }
+    }
+  }
+
+  const amounts = matrix.map((row) => row[componentCount]);
+  const scale = Math.max(1, ...composition.map(Math.abs));
+  const amountTolerance = 1e-8;
+  const reconstructionTolerance = 1e-8 * scale;
+  if (amounts.some((value) => !Number.isFinite(value) || value < -amountTolerance)) return null;
+
+  const cleaned = amounts.map((value) => Math.abs(value) <= amountTolerance ? 0 : value);
+  // USPEX defines structures as non-negative integer combinations of the
+  // numSpecies building blocks.  A merely real-valued solution (for example
+  // 0.5 AC + 0.5 AB + 0.5 BC for atomic composition ABC) is not a valid block
+  // decomposition and must not be used as a hull coordinate.
+  if (cleaned.some((value) => Math.abs(value - Math.round(value)) > amountTolerance)) {
+    return null;
+  }
+  const integerAmounts = cleaned.map((value) => Math.round(value));
+  for (let elementIndex = 0; elementIndex < elementCount; elementIndex++) {
+    const reconstructed = integerAmounts.reduce(
+      (sum, amount, componentIndex) => sum + amount * basis[componentIndex][elementIndex],
+      0,
+    );
+    if (Math.abs(reconstructed - composition[elementIndex]) > reconstructionTolerance) return null;
+  }
+
+  return integerAmounts;
+}
+
+/** Return normalized component fractions for a numSpecies composition basis. */
+export function componentFractionsFromComposition(
+  composition: number[],
+  basis: number[][],
+): number[] | null {
+  const amounts = componentAmountsFromComposition(composition, basis);
+  if (!amounts) return null;
+  const total = amounts.reduce((sum, value) => sum + value, 0);
+  return total > 0 ? amounts.map((value) => value / total) : null;
+}
+
+/** Numerical row rank of a numSpecies composition-block matrix. */
+export function compositionBasisRank(basis: number[][]): number {
+  if (basis.length === 0) return 0;
+  const columnCount = Math.max(...basis.map((row) => row.length));
+  if (columnCount === 0 || basis.some((row) => row.length !== columnCount)) return 0;
+
+  const matrix = basis.map((row) => [...row]);
+  let rank = 0;
+  for (let col = 0; col < columnCount && rank < matrix.length; col++) {
+    let pivot = rank;
+    for (let row = rank + 1; row < matrix.length; row++) {
+      if (Math.abs(matrix[row][col]) > Math.abs(matrix[pivot][col])) pivot = row;
+    }
+    if (Math.abs(matrix[pivot][col]) < 1e-12) continue;
+    [matrix[rank], matrix[pivot]] = [matrix[pivot], matrix[rank]];
+    const divisor = matrix[rank][col];
+    for (let j = col; j < columnCount; j++) matrix[rank][j] /= divisor;
+    for (let row = 0; row < matrix.length; row++) {
+      if (row === rank) continue;
+      const factor = matrix[row][col];
+      for (let j = col; j < columnCount; j++) {
+        matrix[row][j] -= factor * matrix[rank][j];
+      }
+    }
+    rank++;
+  }
+  return rank;
+}
+
+/**
  * Convert ternary composition to Cartesian coordinates for triangle plot.
  *
  * Triangle vertices:

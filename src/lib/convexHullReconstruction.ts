@@ -2,8 +2,8 @@
  * Convex hull reconstruction for USPEX Analyzer.
  *
  * Computes independently:
- *   - eForm: formation enthalpy per atom (eV/atom)
- *   - eHullRecons: distance above the reconstructed convex hull (eV/atom)
+ *   - eForm: formation enthalpy per atom, or per numSpecies block
+ *   - eHullRecons: distance above the reconstructed convex hull in the same unit
  *
  * The hull geometry is defined by fitness === 0 structures (from USPEX's own hull).
  * We recalculate E_form with our own reference potentials and compute the
@@ -11,7 +11,12 @@
  */
 
 import convexHull from 'convex-hull';
-import { ternaryToCartesian, totalAtoms } from '@/parsers/compositionUtils';
+import {
+  componentAmountsFromComposition,
+  compositionBasisRank,
+  ternaryToCartesian,
+  totalAtoms,
+} from '@/parsers/compositionUtils';
 import type { Structure, SystemType, CompositionMode } from '@/types/structure';
 
 // ── 3D geometry helpers (replicated from ternaryHull.ts) ──
@@ -104,6 +109,78 @@ export function computeFormationEnthalpy(
     eForm -= (s.composition[i] / total) * refPots[i];
   }
   return eForm;
+}
+
+/**
+ * Extract reference enthalpies for independent numSpecies composition blocks.
+ * Energies are normalized by the total number of blocks, not by atom count.
+ */
+export function extractComponentReferencePotentials(
+  structures: Structure[],
+  compositionBasis: number[][],
+): number[] {
+  const componentCount = compositionBasis.length;
+  const bestEnthalpy = new Array(componentCount).fill(Infinity);
+  const maxFraction = new Array(componentCount).fill(-1);
+  const candidates: { fractions: number[]; enthalpyPerBlock: number }[] = [];
+
+  for (const s of structures) {
+    if (s.isUserAdded || s.enthalpyTotal > 900) continue;
+    const amounts = componentAmountsFromComposition(s.composition, compositionBasis);
+    if (!amounts) continue;
+    const totalBlocks = amounts.reduce((sum, value) => sum + value, 0);
+    if (!(totalBlocks > 0)) continue;
+
+    const fractions = amounts.map((value) => value / totalBlocks);
+    const totalEnergy = Number.isFinite(s.enthalpyTotal)
+      ? s.enthalpyTotal
+      : s.enthalpy * totalAtoms(s.composition);
+    const enthalpyPerBlock = totalEnergy / totalBlocks;
+    candidates.push({ fractions, enthalpyPerBlock });
+
+    for (let i = 0; i < componentCount; i++) {
+      if (fractions[i] > maxFraction[i]) maxFraction[i] = fractions[i];
+      if (fractions[i] >= PURITY_THRESHOLD && enthalpyPerBlock < bestEnthalpy[i]) {
+        bestEnthalpy[i] = enthalpyPerBlock;
+      }
+    }
+  }
+
+  for (let i = 0; i < componentCount; i++) {
+    if (bestEnthalpy[i] !== Infinity) continue;
+    for (const candidate of candidates) {
+      if (
+        candidate.fractions[i] >= maxFraction[i] * 0.99 &&
+        candidate.enthalpyPerBlock < bestEnthalpy[i]
+      ) {
+        bestEnthalpy[i] = candidate.enthalpyPerBlock;
+      }
+    }
+    if (bestEnthalpy[i] === Infinity) bestEnthalpy[i] = 0;
+  }
+
+  return bestEnthalpy;
+}
+
+/** Formation enthalpy normalized per numSpecies composition block. */
+export function computeComponentFormationEnthalpy(
+  s: Structure,
+  referencePotentials: number[],
+  compositionBasis: number[][],
+): number | null {
+  const amounts = componentAmountsFromComposition(s.composition, compositionBasis);
+  if (!amounts) return null;
+  const totalBlocks = amounts.reduce((sum, value) => sum + value, 0);
+  if (!(totalBlocks > 0)) return null;
+
+  const totalEnergy = Number.isFinite(s.enthalpyTotal)
+    ? s.enthalpyTotal
+    : s.enthalpy * totalAtoms(s.composition);
+  let formationEnthalpy = totalEnergy / totalBlocks;
+  for (let i = 0; i < amounts.length; i++) {
+    formationEnthalpy -= (amounts[i] / totalBlocks) * (referencePotentials[i] ?? 0);
+  }
+  return formationEnthalpy;
 }
 
 // ── 2D point-in-segment helpers ──
@@ -394,13 +471,24 @@ export function reconstructConvexHull(
   systemType: SystemType,
   compositionMode: CompositionMode,
   elements: string[],
+  compositionBasis: number[][] = [],
 ): void {
-  // Extract reference potentials from converged USPEX structures
-  const refPots = extractReferencePotentials(structures, elements);
-
-  const converged = structures.filter(
-    (s) => !s.isUserAdded && s.enthalpyTotal <= 900,
-  );
+  const hasCompositionBasis = compositionMode === 'varcomp' && compositionBasis.length >= 2;
+  const useCompositionBasis = hasCompositionBasis &&
+    compositionBasisRank(compositionBasis) === compositionBasis.length;
+  if (hasCompositionBasis && !useCompositionBasis) {
+    for (const s of structures) {
+      s.eForm = -1;
+      s.eHullRecons = -1;
+    }
+    return;
+  }
+  // A composition-block hull is normalized per block.  The identity basis
+  // naturally reduces to the ordinary elemental eV/atom formulation.
+  const componentRefPots = useCompositionBasis
+    ? extractComponentReferencePotentials(structures, compositionBasis)
+    : [];
+  const elementalRefPots = extractReferencePotentials(structures, elements);
 
   // Step 1: Compute E_form for all structures
   for (const s of structures) {
@@ -408,9 +496,27 @@ export function reconstructConvexHull(
       s.eForm = -1;
       s.eHullRecons = -1;
     } else {
-      s.eForm = computeFormationEnthalpy(s, refPots, elements);
+      if (useCompositionBasis) {
+        const componentFormation = computeComponentFormationEnthalpy(
+          s,
+          componentRefPots,
+          compositionBasis,
+        );
+        if (componentFormation === null) {
+          s.eForm = -1;
+          s.eHullRecons = -1;
+        } else {
+          s.eForm = componentFormation;
+        }
+      } else {
+        s.eForm = computeFormationEnthalpy(s, elementalRefPots, elements);
+      }
     }
   }
+
+  const converged = structures.filter(
+    (s) => !s.isUserAdded && s.enthalpyTotal <= 900 && s.eForm !== -1,
+  );
 
   // Step 2: Compute E_HullReconstructed based on composition mode
   if (compositionMode === 'fixed') {
@@ -427,10 +533,11 @@ export function reconstructConvexHull(
   // Variable composition
   if (systemType === 'binary') {
     // Binary: hull from fitness=0 structures
-    const hullStructures = converged.filter((s) => s.fitness === 0);
-    const hullPoints: Point2D[] = hullStructures
+    const hullStructures = converged.filter((s) => s.fitness <= 0);
+    const hullCandidates: Point2D[] = hullStructures
       .map((s) => ({ x: s.hullX[0] ?? 0, y: s.eForm }))
       .sort((a, b) => a.x - b.x);
+    const hullPoints = computeLowerHull2D(hullCandidates);
 
     for (const s of converged) {
       const x = s.hullX[0] ?? 0;
@@ -438,9 +545,12 @@ export function reconstructConvexHull(
     }
   } else if (systemType === 'ternary') {
     // Ternary: hull from fitness=0 structures in 3D
-    const hullStructures = converged.filter((s) => s.fitness === 0);
+    const hullStructures = converged.filter((s) => s.fitness <= 0);
     const hullPoints3D: Point3D[] = hullStructures.map((s) => {
-      const [cx, cy] = ternaryToCartesian(s.composition);
+      const plotComposition = useCompositionBasis
+        ? componentAmountsFromComposition(s.composition, compositionBasis) ?? s.composition
+        : s.composition;
+      const [cx, cy] = ternaryToCartesian(plotComposition);
       return { x: cx, y: cy, z: s.eForm };
     });
 
@@ -448,7 +558,10 @@ export function reconstructConvexHull(
     const lowerFaces = computeTernaryLowerFaces(hullPoints3D);
 
     for (const s of converged) {
-      const [cx, cy] = ternaryToCartesian(s.composition);
+      const plotComposition = useCompositionBasis
+        ? componentAmountsFromComposition(s.composition, compositionBasis) ?? s.composition
+        : s.composition;
+      const [cx, cy] = ternaryToCartesian(plotComposition);
       s.eHullRecons = lowerFaces.length > 0
         ? ternaryHullDistanceFromFaces(cx, cy, s.eForm, lowerFaces)
         : hullPoints3D.length > 0

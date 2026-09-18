@@ -191,6 +191,8 @@ export function HullWorkshopPage() {
           structures: jg.structures.map((js) => workshopJsonToStructure(js)),
           systemInfo: {
             elements: archive.systemInfo.elements,
+            componentLabels: archive.systemInfo.componentLabels,
+            compositionBasis: archive.systemInfo.compositionBasis,
             systemType: archive.systemInfo.systemType,
             compositionMode: archive.systemInfo.compositionMode,
             externalPressure: archive.systemInfo.externalPressure,
@@ -290,6 +292,8 @@ export function HullWorkshopPage() {
           structures: [structure],
           systemInfo: {
             elements: wsElements,
+            componentLabels: sysInfo?.componentLabels,
+            compositionBasis: sysInfo?.compositionBasis,
             systemType: sysInfo?.systemType ?? 'binary',
             compositionMode: sysInfo?.compositionMode ?? 'varcomp',
             optimizationType: 'single',

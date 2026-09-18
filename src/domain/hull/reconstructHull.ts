@@ -14,8 +14,15 @@ export function reconstructHullStructures(
   systemType: SystemType,
   compositionMode: CompositionMode,
   elements: string[],
+  compositionBasis: number[][] = [],
 ): Structure[] {
   const normalized = normalizeStructures(structures);
-  reconstructConvexHull(normalized, systemType, compositionMode, elements);
+  reconstructConvexHull(
+    normalized,
+    systemType,
+    compositionMode,
+    elements,
+    compositionBasis,
+  );
   return normalizeStructures(normalized);
 }

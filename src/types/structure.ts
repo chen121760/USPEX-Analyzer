@@ -121,6 +121,10 @@ export interface ParsedFileStatus {
 /** Global system information derived from parsed files */
 export interface SystemInfo {
   elements: string[];
+  /** Independent USPEX composition-block labels (e.g. ["MgO", "HfO2"]). */
+  componentLabels?: string[];
+  /** numSpecies rows expressed in the atomic element order. */
+  compositionBasis?: number[][];
   systemType: SystemType;
   optimizationType: OptimizationType;
   compositionMode: CompositionMode;
@@ -243,10 +247,16 @@ export interface HullGenerationEntry {
 
 export interface ParsedParameters {
   elements: string[];
+  /** Independent numSpecies rows expressed in the atomic element order. */
+  componentCompositions: number[][];
+  /** Formula labels derived from componentCompositions. */
+  componentLabels: string[];
+  /** Whether every declared numSpecies row is a valid non-negative integer block. */
+  numSpeciesValid: boolean;
   calculationType: number;       // 3-digit: hundreds=dimension, tens=molecule, ones=varcomp
   optType: number[];             // [1]=single-obj enthalpy, [1,1201]=multi-obj
   isVarcomp: boolean;            // derived: calculationType % 10 === 1
-  numComponents: number;         // from atomType count: 2=binary, 3=ternary
+  numComponents: number;         // independent composition components (numSpecies rows for varcomp, otherwise atomType count)
   externalPressure: number | null; // GPa, from "100 : ExternalPressure"
   isPickup: boolean;               // true if pickUpGen or pickUpFolder is non-zero
   pickUpGen: number;               // value of pickUpGen (0 = not a restart)

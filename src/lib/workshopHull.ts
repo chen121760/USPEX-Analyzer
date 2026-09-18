@@ -21,7 +21,9 @@
 import convexHull from 'convex-hull';
 import {
   extractReferencePotentials,
+  extractComponentReferencePotentials,
   computeFormationEnthalpy,
+  computeComponentFormationEnthalpy,
   computeLowerHull2D,
   binaryHullDistance,
   computeTernaryLowerFaces,
@@ -30,7 +32,12 @@ import {
   type Point3D,
   type TernaryLowerFace,
 } from './convexHullReconstruction';
-import { ternaryToCartesian, totalAtoms } from '@/parsers/compositionUtils';
+import {
+  componentAmountsFromComposition,
+  compositionBasisRank,
+  ternaryToCartesian,
+  totalAtoms,
+} from '@/parsers/compositionUtils';
 import type { Structure, SystemInfo } from '@/types/structure';
 
 /* ------------------------------------------------------------------ */
@@ -66,24 +73,47 @@ export function computeGeometricHull(
   systemInfo: SystemInfo,
 ): WorkshopHullResult {
   const { elements, systemType, compositionMode } = systemInfo;
+  const compositionBasis = systemInfo.compositionBasis ?? [];
+  const hasCompositionBasis = compositionMode === 'varcomp' && compositionBasis.length >= 2;
+  const useCompositionBasis = hasCompositionBasis &&
+    compositionBasisRank(compositionBasis) === compositionBasis.length;
 
   if (structures.length === 0) {
     return { structures, hullLine: [], hullEdges: [] };
   }
 
+  if (hasCompositionBasis && !useCompositionBasis) {
+    for (const s of structures) {
+      s.eForm = -1;
+      s.fitness = -1;
+    }
+    return { structures, hullLine: [], hullEdges: [] };
+  }
+
   const refPots = extractReferencePotentials(structures, elements);
+  const componentRefPots = useCompositionBasis
+    ? extractComponentReferencePotentials(structures, compositionBasis)
+    : [];
 
   for (const s of structures) {
     if (s.enthalpyTotal > 900) {
       s.eForm = -1;
       s.fitness = -1;
     } else {
-      s.eForm = computeFormationEnthalpy(s, refPots, elements);
-      s.hullY = s.eForm;
+      const formation = useCompositionBasis
+        ? computeComponentFormationEnthalpy(s, componentRefPots, compositionBasis)
+        : computeFormationEnthalpy(s, refPots, elements);
+      if (formation === null) {
+        s.eForm = -1;
+        s.fitness = -1;
+      } else {
+        s.eForm = formation;
+        s.hullY = formation;
+      }
     }
   }
 
-  ensureHullX(structures, elements);
+  ensureHullX(structures, elements, compositionBasis);
 
   if (compositionMode === 'fixed') {
     const valid = structures.filter((s) => !s.isUserAdded && s.enthalpyTotal <= 900);
@@ -107,8 +137,8 @@ export function computeGeometricHull(
   }
 
   if (systemType === 'binary') {
-    const valid = structures.filter((s) => !s.isUserAdded && s.enthalpyTotal <= 900);
-    const userAdded = structures.filter((s) => s.isUserAdded && s.enthalpyTotal <= 900);
+    const valid = structures.filter((s) => !s.isUserAdded && s.enthalpyTotal <= 900 && s.eForm !== -1);
+    const userAdded = structures.filter((s) => s.isUserAdded && s.enthalpyTotal <= 900 && s.eForm !== -1);
     const oldResult = computeBinaryHull(structures, valid);
     // Compute fitness for user-added against old hull
     computeFitnessForUserAdded(userAdded, oldResult.hullLine, systemType);
@@ -129,25 +159,28 @@ export function computeGeometricHull(
   }
 
   if (systemType === 'ternary') {
-    const valid = structures.filter((s) => !s.isUserAdded && s.enthalpyTotal <= 900);
-    const userAdded = structures.filter((s) => s.isUserAdded && s.enthalpyTotal <= 900);
-    const oldResult = computeTernaryHull(structures, valid);
+    const valid = structures.filter((s) => !s.isUserAdded && s.enthalpyTotal <= 900 && s.eForm !== -1);
+    const userAdded = structures.filter((s) => s.isUserAdded && s.enthalpyTotal <= 900 && s.eForm !== -1);
+    const oldResult = computeTernaryHull(structures, valid, compositionBasis);
     // Pre-compute lower faces from non-user-added hull so we can accurately
     // measure each user-added structure's vertical distance to the old hull
     // WITHOUT re-running convexHull() for every structure.
     const oldHullPoints3D: Point3D[] = valid.map((s) => {
-      const [cx, cy] = ternaryToCartesian(s.composition);
+      const plotComposition = compositionBasis.length > 0
+        ? componentAmountsFromComposition(s.composition, compositionBasis) ?? []
+        : s.composition;
+      const [cx, cy] = ternaryToCartesian(plotComposition);
       return { x: cx, y: cy, z: s.eForm };
     });
     const oldLowerFaces = oldHullPoints3D.length >= 4
       ? computeTernaryLowerFaces(oldHullPoints3D)
       : [];
-    computeFitnessForUserAdded(userAdded, undefined, systemType, oldLowerFaces);
+    computeFitnessForUserAdded(userAdded, undefined, systemType, oldLowerFaces, compositionBasis);
 
     const expanded = userAdded.some((s) => s.fitness <= 0);
     if (expanded && userAdded.length > 0) {
       const allValid = [...valid, ...userAdded];
-      const newResult = computeTernaryHull(structures, allValid);
+      const newResult = computeTernaryHull(structures, allValid, compositionBasis);
       return {
         structures: newResult.structures,
         hullEdges: newResult.hullEdges,
@@ -178,13 +211,17 @@ function computeFitnessForUserAdded(
   hullLine?: Point2D[],
   systemType?: string,
   lowerFaces?: TernaryLowerFace[],
+  compositionBasis: number[][] = [],
 ): void {
   for (const s of userAdded) {
     if (systemType === 'binary' && hullLine) {
       const x = s.hullX[0] ?? 0;
       s.fitness = binaryHullDistance(x, s.eForm, hullLine);
     } else if (systemType === 'ternary' && lowerFaces) {
-      const [cx, cy] = ternaryToCartesian(s.composition);
+      const plotComposition = compositionBasis.length > 0
+        ? componentAmountsFromComposition(s.composition, compositionBasis) ?? []
+        : s.composition;
+      const [cx, cy] = ternaryToCartesian(plotComposition);
       s.fitness = lowerFaces.length > 0
         ? ternaryHullDistanceFromFaces(cx, cy, s.eForm, lowerFaces)
         : 0;
@@ -231,10 +268,14 @@ function computeBinaryHull(
 function computeTernaryHull(
   structures: Structure[],
   valid: Structure[],
+  compositionBasis: number[][] = [],
 ): WorkshopHullResult {
   // Build 3D hull-defining points from all valid structures
   const hullPoints3D: Point3D[] = valid.map((s) => {
-    const [cx, cy] = ternaryToCartesian(s.composition);
+    const plotComposition = compositionBasis.length > 0
+      ? componentAmountsFromComposition(s.composition, compositionBasis) ?? []
+      : s.composition;
+    const [cx, cy] = ternaryToCartesian(plotComposition);
     return { x: cx, y: cy, z: s.eForm };
   });
 
@@ -245,7 +286,10 @@ function computeTernaryHull(
 
   // Compute fitness for each structure using the pre-computed faces
   for (const s of valid) {
-    const [cx, cy] = ternaryToCartesian(s.composition);
+    const plotComposition = compositionBasis.length > 0
+      ? componentAmountsFromComposition(s.composition, compositionBasis) ?? []
+      : s.composition;
+    const [cx, cy] = ternaryToCartesian(plotComposition);
     s.fitness = lowerFaces.length > 0
       ? ternaryHullDistanceFromFaces(cx, cy, s.eForm, lowerFaces)
       : hullPoints3D.length > 0
@@ -271,8 +315,24 @@ function computeTernaryHull(
  * fractions since reconstructConvexHull already does the ternaryToCartesian
  * conversion at consumption time).
  */
-function ensureHullX(structures: Structure[], elements: string[]): void {
+function ensureHullX(
+  structures: Structure[],
+  elements: string[],
+  compositionBasis: number[][] = [],
+): void {
   for (const s of structures) {
+    if (compositionBasis.length > 0) {
+      const amounts = componentAmountsFromComposition(s.composition, compositionBasis);
+      if (!amounts) {
+        s.hullX = [Number.NaN];
+        continue;
+      }
+      const totalBlocks = amounts.reduce((sum, value) => sum + value, 0);
+      s.hullX = totalBlocks > 0
+        ? amounts.slice(1).map((value) => value / totalBlocks)
+        : [Number.NaN];
+      continue;
+    }
     const total = totalAtoms(s.composition);
     if (total === 0) {
       s.hullX = elements.length >= 2 ? new Array(elements.length - 1).fill(0) : [0];

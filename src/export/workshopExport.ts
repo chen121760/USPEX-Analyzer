@@ -3,6 +3,7 @@ import type { WorkshopGroup, WorkshopJsonExport, WorkshopJsonStructure } from '@
 import { buildCsvText, type CsvRow } from './csvExport';
 import { downloadBlob, ensureFileExtension } from './exportFileNames';
 import { normalizeStructure } from '@/domain/structure/normalizeStructure';
+import { componentAmountsFromComposition } from '@/parsers/compositionUtils';
 
 type WorkshopStructure = Structure & { groupName?: string };
 
@@ -15,10 +16,12 @@ export function buildWorkshopCsvExport(
   systemInfo: SystemInfo,
   structures: WorkshopStructure[],
 ): WorkshopCsvExport {
-  const { elements, systemType, compositionMode } = systemInfo;
+  const { elements, componentLabels, compositionBasis, systemType, compositionMode } = systemInfo;
 
   const metaHeaders = [
     `# elements: ${elements.join(',')}`,
+    ...(componentLabels?.length ? [`# componentLabels: ${componentLabels.join(',')}`] : []),
+    ...(compositionBasis?.length ? [`# compositionBasis: ${JSON.stringify(compositionBasis)}`] : []),
     `# systemType: ${systemType}`,
     `# compositionMode: ${compositionMode}`,
   ];
@@ -43,7 +46,7 @@ export function buildWorkshopJsonExport(
   systemInfo: SystemInfo,
   visibleGroups: WorkshopGroup[],
 ): WorkshopJsonExport {
-  const { elements, systemType, compositionMode, externalPressure } = systemInfo;
+  const { elements, componentLabels, compositionBasis, systemType, compositionMode, externalPressure } = systemInfo;
 
   return {
     type: 'uspex-workshop',
@@ -51,6 +54,8 @@ export function buildWorkshopJsonExport(
     exportedAt: new Date().toISOString(),
     systemInfo: {
       elements,
+      componentLabels,
+      compositionBasis,
       systemType,
       compositionMode,
       externalPressure,
@@ -174,35 +179,46 @@ function buildWorkshopCsvRows(
   }
 
   if (systemType === 'binary') {
-    const elB = elements[1] || 'B';
+    const components = systemInfo.componentLabels?.length === 2
+      ? systemInfo.componentLabels
+      : elements.slice(0, 2);
+    const elB = components[1] || 'B';
+    const energyUnit = systemInfo.compositionBasis?.length ? 'eV/block' : 'eV/atom';
     return {
-      headers: ['Group', 'EA_ID', 'Formula', `x(${elB})`, 'Formation_Energy(eV/atom)', 'Enthalpy(eV/atom)', 'Fitness(eV/atom)'],
+      headers: ['Group', 'EA_ID', 'Formula', `x(${elB})`, `Formation_Energy(${energyUnit})`, 'Enthalpy(eV/atom)', 'Fitness(eV/block)'],
       rows: structures.map((s) => ({
         'Group': s.groupName ?? '',
         'EA_ID': s.id,
         'Formula': s.formula,
         [`x(${elB})`]: s.hullX?.[0] ?? 0,
-        'Formation_Energy(eV/atom)': s.hullY,
+        [`Formation_Energy(${energyUnit})`]: s.hullY,
         'Enthalpy(eV/atom)': s.enthalpy,
-        'Fitness(eV/atom)': s.fitness,
+        'Fitness(eV/block)': s.fitness,
       })),
     };
   }
 
-  const [elA, elB, elC] = elements;
+  const components = systemInfo.componentLabels?.length === 3
+    ? systemInfo.componentLabels
+    : elements.slice(0, 3);
+  const [elA, elB, elC] = components;
+  const energyUnit = systemInfo.compositionBasis?.length ? 'eV/block' : 'eV/atom';
   return {
-    headers: ['Group', 'EA_ID', 'Formula', `x_${elA}`, `x_${elB}`, `x_${elC}`, 'Enthalpy(eV/atom)', 'Fitness(eV/atom)'],
+    headers: ['Group', 'EA_ID', 'Formula', `x_${elA}`, `x_${elB}`, `x_${elC}`, `E_form(${energyUnit})`, 'Fitness(eV/block)'],
     rows: structures.map((s) => {
-      const total = s.composition.reduce((a: number, b: number) => a + b, 0) || 1;
+      const exportComposition = systemInfo.compositionBasis?.length
+        ? componentAmountsFromComposition(s.composition, systemInfo.compositionBasis) ?? []
+        : s.composition;
+      const total = exportComposition.reduce((a: number, b: number) => a + b, 0) || 1;
       return {
         'Group': s.groupName ?? '',
         'EA_ID': s.id,
         'Formula': s.formula,
-        [`x_${elA}`]: (s.composition[0] / total).toFixed(6),
-        [`x_${elB}`]: (s.composition[1] / total).toFixed(6),
-        [`x_${elC}`]: (s.composition[2] / total).toFixed(6),
-        'Enthalpy(eV/atom)': s.enthalpy,
-        'Fitness(eV/atom)': s.fitness ?? 0,
+        [`x_${elA}`]: (exportComposition[0] / total).toFixed(6),
+        [`x_${elB}`]: (exportComposition[1] / total).toFixed(6),
+        [`x_${elC}`]: (exportComposition[2] / total).toFixed(6),
+        [`E_form(${energyUnit})`]: s.eForm,
+        'Fitness(eV/block)': s.fitness ?? 0,
       };
     }),
   };
