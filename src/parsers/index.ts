@@ -575,13 +575,30 @@ export function parseAllFiles(
   }
 
   // ---- Step 3c: Reconstruct convex hull (compute eForm / eHullRecons) ----
-  structures = reconstructHullStructures(
+  const hullReconstruction = reconstructHullStructures(
     structures,
     systemType,
     compositionMode,
     elements,
     compositionBasis,
   );
+  structures = hullReconstruction.structures;
+  const references = hullReconstruction.references;
+
+  // References come from exact endmembers (pure elements / single composition
+  // blocks).  Without them E_form is not a standard formation enthalpy, so the
+  // affected structures are left without a value instead of being given a
+  // pseudo-reference derived from whatever compound happens to be purest.
+  if (references.reason === 'missing-endmember' && compositionMode !== 'fixed') {
+    const missingLabels = references.missing
+      .map((index) => references.labels[index] ?? `#${index + 1}`)
+      .join(', ');
+    warnings.push(
+      references.kind === 'component'
+        ? `Missing pure composition-block reference for: ${missingLabels} — E_form / E_hull are not available for structures containing them`
+        : `Missing pure elemental reference phase for: ${missingLabels} — E_form / E_hull are not available for structures containing them`,
+    );
+  }
 
   // ---- Step 4: Build system info ----
 
@@ -601,6 +618,14 @@ export function parseAllFiles(
     elements,
     componentLabels: componentLabels.length > 0 ? componentLabels : undefined,
     compositionBasis: compositionBasis.length > 0 ? compositionBasis : undefined,
+    referenceInfo: {
+      kind: references.kind,
+      unit: references.unit,
+      complete: references.complete,
+      labels: references.labels,
+      missing: references.missing.map((index) => references.labels[index] ?? `#${index + 1}`),
+      reason: references.reason,
+    },
     systemType,
     optimizationType,
     compositionMode,

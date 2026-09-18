@@ -116,6 +116,49 @@ export function ConvexHullPage() {
         )}
       </div>
 
+      {/* Reference-phase warning: without an exact endmember the reconstructed
+          E_form / E_hull are undefined for the affected structures — say so
+          instead of letting the plots fall back silently. */}
+      {compositionMode !== 'fixed' &&
+        systemInfo.referenceInfo &&
+        !systemInfo.referenceInfo.complete && (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: '8px 12px',
+              border: '1px solid var(--color-warning, #d97706)',
+              borderRadius: 6,
+              background: 'var(--color-warning-bg, rgba(217,119,6,0.10))',
+              fontSize: 12,
+              lineHeight: 1.5,
+              color: 'var(--color-text-secondary)',
+            }}
+          >
+            <strong style={{ color: 'var(--color-warning, #d97706)' }}>
+              {systemInfo.referenceInfo.reason === 'rank-deficient'
+                ? t('hull.referenceRankDeficient', {
+                    missing: systemInfo.referenceInfo.missing.join(', '),
+                    defaultValue: 'Linearly dependent composition blocks: {{missing}}',
+                  })
+                : t('hull.referenceMissing', {
+                    missing: systemInfo.referenceInfo.missing.join(', '),
+                    defaultValue: 'Missing reference phase: {{missing}}',
+                  })}
+            </strong>
+            <div style={{ marginTop: 2 }}>
+              {systemInfo.referenceInfo.reason === 'rank-deficient'
+                ? t('hull.referenceRankDeficientDetail', {
+                    defaultValue:
+                      'The numSpecies blocks are linearly dependent, so E_form / E_hull cannot be defined.',
+                  })
+                : t('hull.referenceMissingDetail', {
+                    defaultValue:
+                      'This dataset contains no exact endmember for these components, so E_form / E_hull are unavailable for structures containing them.',
+                  })}
+            </div>
+          </div>
+        )}
+
       {compositionMode === 'fixed' ? (
         <EnergyRankingChart structures={structures} systemInfo={systemInfo} />
       ) : systemType === 'ternary' ? (

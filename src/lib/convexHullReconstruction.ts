@@ -12,6 +12,7 @@
 
 import convexHull from 'convex-hull';
 import {
+  buildFormula,
   componentAmountsFromComposition,
   compositionBasisRank,
   ternaryToCartesian,
@@ -39,148 +40,198 @@ function faceNormal(v0: number[], v1: number[], v2: number[]): [number, number, 
   );
 }
 
-// ── Reference potential extraction ──
-
-const PURITY_THRESHOLD = 0.95;
+// ── Reference potentials ──
 
 /**
- * For each element, find the enthalpy (eV/atom) of the "purest" converged structure.
- * Falls back to the maximum fraction found if no structure reaches 95% purity.
+ * Reference chemical potentials are extracted from exact endmembers only: a
+ * structure whose composition consists solely of one component — a pure
+ * elemental phase for the atomic basis, a single numSpecies block for the
+ * composition-block basis.
+ *
+ * Near-endmember phases are deliberately rejected.  Using A19B1 as the "A"
+ * reference shifts every reported formation enthalpy by roughly
+ * (mu_B - mu_A + dHf(A19B1)) / 20, which is the same order of magnitude as the
+ * physics being reported, and it makes E_form depend on which phases the search
+ * happened to visit rather than on the elements themselves.  When a component
+ * has no exact endmember the potential is reported as missing and the affected
+ * structures are marked invalid instead of receiving a pseudo-reference.
+ *
+ * Reference extraction is a pure function of the structure set: it must be
+ * invariant under any permutation of the input rows.  The previous
+ * implementation nested the enthalpy update inside the purity update
+ * (`if (frac > maxFrac) { maxFrac = frac; if (frac >= 0.95 && ...) }`), so two
+ * equally pure phases could never be compared and the extracted potential was
+ * decided by which row of Individuals came first.
  */
-export function extractReferencePotentials(
+export interface ReferenceResolution {
+  /** Normalization the potentials are expressed in. */
+  kind: 'elemental' | 'component';
+  /** Energy unit of formation enthalpies computed with these potentials. */
+  unit: 'eV/atom' | 'eV/block';
+  /** Component labels aligned with `potentials`. */
+  labels: string[];
+  /** Known potentials; NaN for every index listed in `missing`. */
+  potentials: number[];
+  /** Component indices that have no exact endmember in this dataset. */
+  missing: number[];
+  /** Convenience flag: `missing.length === 0`. */
+  complete: boolean;
+  /** Why the resolution is incomplete (or 'ok'). */
+  reason: 'ok' | 'missing-endmember' | 'rank-deficient';
+}
+
+/** Relative tolerance for "all other components are zero". */
+const ENDMEMBER_TOLERANCE = 1e-9;
+
+/** True when the declared numSpecies basis is usable for this dataset. */
+export function usesComponentBasis(
+  compositionMode: CompositionMode,
+  compositionBasis: number[][],
+): boolean {
+  return compositionMode === 'varcomp' &&
+    compositionBasis.length >= 2 &&
+    compositionBasisRank(compositionBasis) === compositionBasis.length;
+}
+
+/** True when every component except `index` is zero. */
+function isEndmemberOf(amounts: number[], index: number): boolean {
+  if (!(amounts[index] > 0)) return false;
+  for (let i = 0; i < amounts.length; i++) {
+    if (i !== index && Math.abs(amounts[i]) > ENDMEMBER_TOLERANCE) return false;
+  }
+  return true;
+}
+
+/** Total energy of one structure in eV (cell), not per atom. */
+function totalEnergyOf(s: Structure): number {
+  return Number.isFinite(s.enthalpyTotal)
+    ? s.enthalpyTotal
+    : s.enthalpy * totalAtoms(s.composition);
+}
+
+function missingIndices(potentials: number[]): number[] {
+  const missing: number[] = [];
+  for (let i = 0; i < potentials.length; i++) {
+    if (!Number.isFinite(potentials[i])) missing.push(i);
+  }
+  return missing;
+}
+
+/**
+ * Resolve the reference potentials of a dataset.
+ *
+ * `kind: 'component'` is used when a valid numSpecies basis is declared,
+ * otherwise the atomic (elemental) basis is used.  Callers that need to report
+ * missing references must use this function: the -1 written into `eForm` is a
+ * display sentinel and must never be used to infer reference availability.
+ */
+export function resolveReferences(
   structures: Structure[],
   elements: string[],
-): number[] {
-  const n = elements.length;
-  const bestEnthalpy: number[] = new Array(n).fill(Infinity);
-  const maxFrac: number[] = new Array(n).fill(-1);
-
-  const converged = structures.filter(
+  compositionMode: CompositionMode,
+  compositionBasis: number[][] = [],
+): ReferenceResolution {
+  // Only converged USPEX structures define a reference, and never user-added
+  // ones: a user-added enthalpy is a hypothesis, not a measurement.
+  const usable = structures.filter(
     (s) => !s.isUserAdded && s.enthalpyTotal <= 900,
   );
 
-  for (const s of converged) {
+  if (usesComponentBasis(compositionMode, compositionBasis)) {
+    const componentCount = compositionBasis.length;
+    const labels = compositionBasis.map((row) => buildFormula(row, elements));
+    const potentials: number[] = new Array(componentCount).fill(Number.NaN);
+    for (const s of usable) {
+      const amounts = componentAmountsFromComposition(s.composition, compositionBasis);
+      if (!amounts) continue;
+      const totalBlocks = amounts.reduce((sum, value) => sum + value, 0);
+      if (!(totalBlocks > 0)) continue;
+      const perBlock = totalEnergyOf(s) / totalBlocks;
+      for (let i = 0; i < componentCount; i++) {
+        if (!isEndmemberOf(amounts, i)) continue;
+        // Several polymorphs of one endmember may exist: keep the ground state.
+        if (!Number.isFinite(potentials[i]) || perBlock < potentials[i]) {
+          potentials[i] = perBlock;
+        }
+      }
+    }
+    const missing = missingIndices(potentials);
+    return {
+      kind: 'component',
+      unit: 'eV/block',
+      labels,
+      potentials,
+      missing,
+      complete: missing.length === 0,
+      reason: missing.length === 0 ? 'ok' : 'missing-endmember',
+    };
+  }
+
+  const labels = [...elements];
+  const potentials: number[] = new Array(elements.length).fill(Number.NaN);
+  for (const s of usable) {
     const total = totalAtoms(s.composition);
-    if (total === 0) continue;
-    for (let i = 0; i < n; i++) {
-      const frac = s.composition[i] / total;
-      if (frac > maxFrac[i]) {
-        maxFrac[i] = frac;
-        if (frac >= PURITY_THRESHOLD && s.enthalpy < bestEnthalpy[i]) {
-          bestEnthalpy[i] = s.enthalpy;
-        }
+    if (!(total > 0)) continue;
+    for (let i = 0; i < elements.length; i++) {
+      if (!isEndmemberOf(s.composition, i)) continue;
+      if (!Number.isFinite(potentials[i]) || s.enthalpy < potentials[i]) {
+        potentials[i] = s.enthalpy;
       }
     }
   }
-
-  // Fallback: for elements without >=95% pure structures, use the maximum-fraction structure
-  for (let i = 0; i < n; i++) {
-    if (bestEnthalpy[i] === Infinity) {
-      let best = Infinity;
-      for (const s of converged) {
-        const total = totalAtoms(s.composition);
-        if (total === 0) continue;
-        const frac = s.composition[i] / total;
-        if (frac >= maxFrac[i] * 0.99 && s.enthalpy < best) {
-          best = s.enthalpy;
-        }
-      }
-      bestEnthalpy[i] = best === Infinity ? 0 : best;
-    }
-  }
-
-  return bestEnthalpy;
+  const missing = missingIndices(potentials);
+  return {
+    kind: 'elemental',
+    unit: 'eV/atom',
+    labels,
+    potentials,
+    missing,
+    complete: missing.length === 0,
+    reason: missing.length === 0 ? 'ok' : 'missing-endmember',
+  };
 }
 
 // ── Formation enthalpy ──
 
 /**
- * E_form = enthalpy - sum(x_i * mu_i), result in eV/atom.
+ * Standard formation enthalpy of one structure, in the resolution's unit.
+ *
+ * Returns null when the value is not defined for this structure: either its
+ * composition needs a reference potential the dataset does not provide, or the
+ * composition cannot be expressed in the declared composition basis.  Callers
+ * must treat null as "not available" and must not decide membership by
+ * comparing a computed value against the -1 sentinel.
  */
-export function computeFormationEnthalpy(
+export function computeFormationEnthalpyWith(
   s: Structure,
-  refPots: number[],
-  elements: string[],
-): number {
+  references: ReferenceResolution,
+  compositionBasis: number[][] = [],
+): number | null {
+  if (references.kind === 'component') {
+    const amounts = componentAmountsFromComposition(s.composition, compositionBasis);
+    if (!amounts) return null;
+    const totalBlocks = amounts.reduce((sum, value) => sum + value, 0);
+    if (!(totalBlocks > 0)) return null;
+    let eForm = totalEnergyOf(s) / totalBlocks;
+    for (let i = 0; i < amounts.length; i++) {
+      if (amounts[i] === 0) continue;
+      const potential = references.potentials[i];
+      if (!Number.isFinite(potential)) return null;
+      eForm -= (amounts[i] / totalBlocks) * potential;
+    }
+    return eForm;
+  }
+
   const total = totalAtoms(s.composition);
-  if (total === 0) return 0;
-  let eForm = s.enthalpy; // eV/atom
-  for (let i = 0; i < elements.length; i++) {
-    eForm -= (s.composition[i] / total) * refPots[i];
+  if (!(total > 0)) return null;
+  let eForm = totalEnergyOf(s) / total; // eV/atom
+  for (let i = 0; i < s.composition.length; i++) {
+    if (s.composition[i] === 0) continue;
+    const potential = references.potentials[i];
+    if (!Number.isFinite(potential)) return null;
+    eForm -= (s.composition[i] / total) * potential;
   }
   return eForm;
-}
-
-/**
- * Extract reference enthalpies for independent numSpecies composition blocks.
- * Energies are normalized by the total number of blocks, not by atom count.
- */
-export function extractComponentReferencePotentials(
-  structures: Structure[],
-  compositionBasis: number[][],
-): number[] {
-  const componentCount = compositionBasis.length;
-  const bestEnthalpy = new Array(componentCount).fill(Infinity);
-  const maxFraction = new Array(componentCount).fill(-1);
-  const candidates: { fractions: number[]; enthalpyPerBlock: number }[] = [];
-
-  for (const s of structures) {
-    if (s.isUserAdded || s.enthalpyTotal > 900) continue;
-    const amounts = componentAmountsFromComposition(s.composition, compositionBasis);
-    if (!amounts) continue;
-    const totalBlocks = amounts.reduce((sum, value) => sum + value, 0);
-    if (!(totalBlocks > 0)) continue;
-
-    const fractions = amounts.map((value) => value / totalBlocks);
-    const totalEnergy = Number.isFinite(s.enthalpyTotal)
-      ? s.enthalpyTotal
-      : s.enthalpy * totalAtoms(s.composition);
-    const enthalpyPerBlock = totalEnergy / totalBlocks;
-    candidates.push({ fractions, enthalpyPerBlock });
-
-    for (let i = 0; i < componentCount; i++) {
-      if (fractions[i] > maxFraction[i]) maxFraction[i] = fractions[i];
-      if (fractions[i] >= PURITY_THRESHOLD && enthalpyPerBlock < bestEnthalpy[i]) {
-        bestEnthalpy[i] = enthalpyPerBlock;
-      }
-    }
-  }
-
-  for (let i = 0; i < componentCount; i++) {
-    if (bestEnthalpy[i] !== Infinity) continue;
-    for (const candidate of candidates) {
-      if (
-        candidate.fractions[i] >= maxFraction[i] * 0.99 &&
-        candidate.enthalpyPerBlock < bestEnthalpy[i]
-      ) {
-        bestEnthalpy[i] = candidate.enthalpyPerBlock;
-      }
-    }
-    if (bestEnthalpy[i] === Infinity) bestEnthalpy[i] = 0;
-  }
-
-  return bestEnthalpy;
-}
-
-/** Formation enthalpy normalized per numSpecies composition block. */
-export function computeComponentFormationEnthalpy(
-  s: Structure,
-  referencePotentials: number[],
-  compositionBasis: number[][],
-): number | null {
-  const amounts = componentAmountsFromComposition(s.composition, compositionBasis);
-  if (!amounts) return null;
-  const totalBlocks = amounts.reduce((sum, value) => sum + value, 0);
-  if (!(totalBlocks > 0)) return null;
-
-  const totalEnergy = Number.isFinite(s.enthalpyTotal)
-    ? s.enthalpyTotal
-    : s.enthalpy * totalAtoms(s.composition);
-  let formationEnthalpy = totalEnergy / totalBlocks;
-  for (let i = 0; i < amounts.length; i++) {
-    formationEnthalpy -= (amounts[i] / totalBlocks) * (referencePotentials[i] ?? 0);
-  }
-  return formationEnthalpy;
 }
 
 // ── 2D point-in-segment helpers ──
@@ -464,7 +515,9 @@ export function ternaryHullDistance(
 
 /**
  * Compute eForm and eHullRecons for all USPEX structures.
- * Mutates the structures array in place.
+ * Mutates the structures array in place and returns the reference resolution
+ * used, so callers can report missing references instead of guessing from the
+ * -1 sentinel written into `eForm`.
  */
 export function reconstructConvexHull(
   structures: Structure[],
@@ -472,62 +525,69 @@ export function reconstructConvexHull(
   compositionMode: CompositionMode,
   elements: string[],
   compositionBasis: number[][] = [],
-): void {
-  const hasCompositionBasis = compositionMode === 'varcomp' && compositionBasis.length >= 2;
-  const useCompositionBasis = hasCompositionBasis &&
-    compositionBasisRank(compositionBasis) === compositionBasis.length;
-  if (hasCompositionBasis && !useCompositionBasis) {
+): ReferenceResolution {
+  const declaredBasis = compositionMode === 'varcomp' && compositionBasis.length >= 2;
+  const basisLabels = declaredBasis
+    ? compositionBasis.map((row) => buildFormula(row, elements))
+    : [];
+  const rankDeficient: ReferenceResolution = {
+    kind: 'component',
+    unit: 'eV/block',
+    labels: basisLabels,
+    potentials: new Array(compositionBasis.length).fill(Number.NaN),
+    missing: compositionBasis.map((_, index) => index),
+    complete: false,
+    reason: 'rank-deficient',
+  };
+  if (declaredBasis && compositionBasisRank(compositionBasis) !== compositionBasis.length) {
+    // Linearly dependent blocks: no structure has unique block coordinates, so
+    // neither E_form nor E_hull is defined for this dataset.
     for (const s of structures) {
       s.eForm = -1;
       s.eHullRecons = -1;
     }
-    return;
+    return rankDeficient;
   }
-  // A composition-block hull is normalized per block.  The identity basis
+
+  // A composition-block hull is normalized per block; the atomic basis
   // naturally reduces to the ordinary elemental eV/atom formulation.
-  const componentRefPots = useCompositionBasis
-    ? extractComponentReferencePotentials(structures, compositionBasis)
-    : [];
-  const elementalRefPots = extractReferencePotentials(structures, elements);
+  const references = resolveReferences(structures, elements, compositionMode, compositionBasis);
+  const useCompositionBasis = references.kind === 'component';
+
+  // Structures whose E_form is not defined.  This set — not a comparison
+  // against the -1 sentinel — decides hull membership, so a legitimate E_form
+  // of exactly -1 is not mistaken for a missing value.
+  const undefinedFormation = new Set<Structure>();
 
   // Step 1: Compute E_form for all structures
   for (const s of structures) {
-    if (s.enthalpyTotal > 900) {
+    const formation = s.enthalpyTotal > 900
+      ? null
+      : computeFormationEnthalpyWith(s, references, compositionBasis);
+    if (formation === null) {
       s.eForm = -1;
       s.eHullRecons = -1;
+      undefinedFormation.add(s);
     } else {
-      if (useCompositionBasis) {
-        const componentFormation = computeComponentFormationEnthalpy(
-          s,
-          componentRefPots,
-          compositionBasis,
-        );
-        if (componentFormation === null) {
-          s.eForm = -1;
-          s.eHullRecons = -1;
-        } else {
-          s.eForm = componentFormation;
-        }
-      } else {
-        s.eForm = computeFormationEnthalpy(s, elementalRefPots, elements);
-      }
+      s.eForm = formation;
     }
   }
 
   const converged = structures.filter(
-    (s) => !s.isUserAdded && s.enthalpyTotal <= 900 && s.eForm !== -1,
+    (s) => !s.isUserAdded && s.enthalpyTotal <= 900 && !undefinedFormation.has(s),
   );
 
   // Step 2: Compute E_HullReconstructed based on composition mode
   if (compositionMode === 'fixed') {
-    // Fixed composition: distance = E_form - min(E_form)
+    // Fixed composition: every structure shares one composition, so the
+    // reference gauge cancels and only differences matter.
     const minEForm = Math.min(
       ...converged.map((s) => s.eForm).filter((e) => isFinite(e)),
     );
     for (const s of converged) {
       s.eHullRecons = s.eForm - minEForm;
     }
-    return;
+    return references;
   }
 
   // Variable composition
@@ -580,4 +640,6 @@ export function reconstructConvexHull(
       s.eHullRecons = 0;
     }
   }
+
+  return references;
 }

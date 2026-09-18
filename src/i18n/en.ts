@@ -178,7 +178,7 @@ const en = {
   'col.deltaE': 'ΔE (eV/atom)',
   'col.deltaObj': 'ΔObj',
   'col.eForm': 'E_form (Recons)',
-  'col.eFormDesc': 'Reconstructed formation enthalpy, computed independently using auto-extracted elemental reference potentials',
+  'col.eFormDesc': 'Reconstructed formation enthalpy, computed independently from exact-endmember reference potentials (pure elemental phases / single composition blocks); left blank when no endmember exists',
   'col.eHullRecons': 'E_hull (Recons)',
   'col.eHullReconsDesc': 'Reconstructed hull distance, recomputed from E_form on USPEX hull geometry (fitness=0 structures)',
   'table.generatedColumns': 'Program-generated columns',
@@ -267,6 +267,10 @@ const en = {
   'hull.tieLines': 'Tie Lines',
   'hull.energyRanking': 'Energy Ranking',
   'hull.energyRankingDesc': 'Fixed composition — showing enthalpy ranking of all structures',
+  'hull.referenceMissing': 'Missing reference phase: {{missing}}',
+  'hull.referenceMissingDetail': 'This dataset contains no exact endmember for these components (a pure elemental phase or a single composition block), so E_form / E_hull are unavailable for structures containing them instead of being replaced by a pseudo-reference.',
+  'hull.referenceRankDeficient': 'Linearly dependent composition blocks: {{missing}}',
+  'hull.referenceRankDeficientDetail': 'The numSpecies blocks declared in Parameters.txt are linearly dependent, so block coordinates are not unique and E_form / E_hull cannot be defined.',
 
   // ---- Hull Workshop ----
   'workshop.title': 'Hull Workshop',

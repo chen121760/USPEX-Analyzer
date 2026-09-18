@@ -1,13 +1,14 @@
 {
   "name": "uspex-analyzer",
   "private": true,
-  "version": "1.4.4",
+  "version": "1.4.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "node scripts/runHullChecks.mjs"
   },
   "dependencies": {
     "@tanstack/react-table": "^8.20.0",

@@ -178,7 +178,7 @@ const zh = {
   'col.deltaE': 'ΔE (eV/atom)',
   'col.deltaObj': 'ΔObj',
   'col.eForm': 'E_form (Recons)',
-  'col.eFormDesc': '重建的形成焓 — 使用自动提取的元素参考化学势独立计算，非 USPEX 原始输出',
+  'col.eFormDesc': '重建的形成焓 — 仅使用精确端元（纯元素相 / 单一组分块）的参考化学势独立计算，非 USPEX 原始输出；缺少端元时不给数值',
   'col.eHullRecons': 'E_hull (Recons)',
   'col.eHullReconsDesc': '重建的凸包距离 — 基于 E_form 和 USPEX 凸包几何（fitness=0 结构）重算，非 USPEX 原始输出',
   'table.generatedColumns': '程序重建列',
@@ -267,6 +267,10 @@ const zh = {
   'hull.tieLines': '相平衡连线',
   'hull.energyRanking': '能量排序',
   'hull.energyRankingDesc': '定组分计算 — 按焓值排序展示所有结构',
+  'hull.referenceMissing': '缺少参考相：{{missing}}',
+  'hull.referenceMissingDetail': '数据集中没有这些组分的纯端元结构（纯元素相或单一组分块），因此 E_form / E_hull 对含这些组分的结构不可用，不会以伪参考数值代替。',
+  'hull.referenceRankDeficient': '组分基线性相关：{{missing}}',
+  'hull.referenceRankDeficientDetail': 'Parameters.txt 声明的 numSpecies 组分块线性相关，组分坐标不唯一，因此 E_form / E_hull 无法定义。',
 
   // ---- Hull Workshop ----
   'workshop.title': '凸包工作台',

@@ -125,6 +125,21 @@ export interface SystemInfo {
   componentLabels?: string[];
   /** numSpecies rows expressed in the atomic element order. */
   compositionBasis?: number[][];
+  /**
+   * Which reference potentials were available when E_form was reconstructed.
+   * `complete: false` means some components have no exact endmember phase, so
+   * E_form / E_hull are undefined for every structure containing them: those
+   * keep the -1 sentinel and must be shown as "not available", never as a
+   * number derived from a pseudo-reference.
+   */
+  referenceInfo?: {
+    kind: 'elemental' | 'component';
+    unit: 'eV/atom' | 'eV/block';
+    complete: boolean;
+    labels: string[];
+    missing: string[];
+    reason: 'ok' | 'missing-endmember' | 'rank-deficient';
+  };
   systemType: SystemType;
   optimizationType: OptimizationType;
   compositionMode: CompositionMode;

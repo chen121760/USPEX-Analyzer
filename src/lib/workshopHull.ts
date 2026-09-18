@@ -7,8 +7,8 @@
  * fitness values from different calculation runs that are not comparable).
  *
  * Strategy:
- *   1. extractReferencePotentials() on all valid structures
- *   2. computeFormationEnthalpy() for each structure
+ *   1. resolveReferences() on all valid structures (exact endmembers only)
+ *   2. computeFormationEnthalpyWith() for each structure
  *   3. Binary:  computeLowerHull2D() on ALL (x, eForm) points,
  *                then binaryHullDistance() for each structure.
  *   4. Ternary: pass ALL structures into ternaryHullDistance().
@@ -20,21 +20,19 @@
 
 import convexHull from 'convex-hull';
 import {
-  extractReferencePotentials,
-  extractComponentReferencePotentials,
-  computeFormationEnthalpy,
-  computeComponentFormationEnthalpy,
+  computeFormationEnthalpyWith,
   computeLowerHull2D,
   binaryHullDistance,
   computeTernaryLowerFaces,
   ternaryHullDistanceFromFaces,
+  resolveReferences,
+  usesComponentBasis,
   type Point2D,
   type Point3D,
   type TernaryLowerFace,
 } from './convexHullReconstruction';
 import {
   componentAmountsFromComposition,
-  compositionBasisRank,
   ternaryToCartesian,
   totalAtoms,
 } from '@/parsers/compositionUtils';
@@ -74,15 +72,15 @@ export function computeGeometricHull(
 ): WorkshopHullResult {
   const { elements, systemType, compositionMode } = systemInfo;
   const compositionBasis = systemInfo.compositionBasis ?? [];
-  const hasCompositionBasis = compositionMode === 'varcomp' && compositionBasis.length >= 2;
-  const useCompositionBasis = hasCompositionBasis &&
-    compositionBasisRank(compositionBasis) === compositionBasis.length;
+  const declaredBasis = compositionMode === 'varcomp' && compositionBasis.length >= 2;
+  const basisUsable = usesComponentBasis(compositionMode, compositionBasis);
 
   if (structures.length === 0) {
     return { structures, hullLine: [], hullEdges: [] };
   }
 
-  if (hasCompositionBasis && !useCompositionBasis) {
+  if (declaredBasis && !basisUsable) {
+    // Linearly dependent composition blocks: E_form is not defined.
     for (const s of structures) {
       s.eForm = -1;
       s.fitness = -1;
@@ -90,30 +88,33 @@ export function computeGeometricHull(
     return { structures, hullLine: [], hullEdges: [] };
   }
 
-  const refPots = extractReferencePotentials(structures, elements);
-  const componentRefPots = useCompositionBasis
-    ? extractComponentReferencePotentials(structures, compositionBasis)
-    : [];
+  const references = resolveReferences(structures, elements, compositionMode, compositionBasis);
+  const useCompositionBasis = references.kind === 'component';
+  // Only a usable basis may drive the plotting coordinates.  Otherwise keep
+  // atomic compositions so the plotted coordinates match the elemental E_form
+  // that was actually used (a declared but rejected basis must not leak in).
+  const plotBasis = useCompositionBasis ? compositionBasis : [];
+
+  // Track undefined formation enthalpies explicitly: the -1 sentinel written
+  // into eForm is a display value and must not decide hull membership, or a
+  // legitimate E_form of exactly -1 would be dropped from the hull.
+  const undefinedFormation = new Set<Structure>();
 
   for (const s of structures) {
-    if (s.enthalpyTotal > 900) {
+    const formation = s.enthalpyTotal > 900
+      ? null
+      : computeFormationEnthalpyWith(s, references, compositionBasis);
+    if (formation === null) {
       s.eForm = -1;
       s.fitness = -1;
+      undefinedFormation.add(s);
     } else {
-      const formation = useCompositionBasis
-        ? computeComponentFormationEnthalpy(s, componentRefPots, compositionBasis)
-        : computeFormationEnthalpy(s, refPots, elements);
-      if (formation === null) {
-        s.eForm = -1;
-        s.fitness = -1;
-      } else {
-        s.eForm = formation;
-        s.hullY = formation;
-      }
+      s.eForm = formation;
+      s.hullY = formation;
     }
   }
 
-  ensureHullX(structures, elements, compositionBasis);
+  ensureHullX(structures, elements, plotBasis);
 
   if (compositionMode === 'fixed') {
     const valid = structures.filter((s) => !s.isUserAdded && s.enthalpyTotal <= 900);
@@ -137,8 +138,8 @@ export function computeGeometricHull(
   }
 
   if (systemType === 'binary') {
-    const valid = structures.filter((s) => !s.isUserAdded && s.enthalpyTotal <= 900 && s.eForm !== -1);
-    const userAdded = structures.filter((s) => s.isUserAdded && s.enthalpyTotal <= 900 && s.eForm !== -1);
+    const valid = structures.filter((s) => !s.isUserAdded && s.enthalpyTotal <= 900 && !undefinedFormation.has(s));
+    const userAdded = structures.filter((s) => s.isUserAdded && s.enthalpyTotal <= 900 && !undefinedFormation.has(s));
     const oldResult = computeBinaryHull(structures, valid);
     // Compute fitness for user-added against old hull
     computeFitnessForUserAdded(userAdded, oldResult.hullLine, systemType);
@@ -159,9 +160,9 @@ export function computeGeometricHull(
   }
 
   if (systemType === 'ternary') {
-    const valid = structures.filter((s) => !s.isUserAdded && s.enthalpyTotal <= 900 && s.eForm !== -1);
-    const userAdded = structures.filter((s) => s.isUserAdded && s.enthalpyTotal <= 900 && s.eForm !== -1);
-    const oldResult = computeTernaryHull(structures, valid, compositionBasis);
+    const valid = structures.filter((s) => !s.isUserAdded && s.enthalpyTotal <= 900 && !undefinedFormation.has(s));
+    const userAdded = structures.filter((s) => s.isUserAdded && s.enthalpyTotal <= 900 && !undefinedFormation.has(s));
+    const oldResult = computeTernaryHull(structures, valid, plotBasis);
     // Pre-compute lower faces from non-user-added hull so we can accurately
     // measure each user-added structure's vertical distance to the old hull
     // WITHOUT re-running convexHull() for every structure.
@@ -175,12 +176,12 @@ export function computeGeometricHull(
     const oldLowerFaces = oldHullPoints3D.length >= 4
       ? computeTernaryLowerFaces(oldHullPoints3D)
       : [];
-    computeFitnessForUserAdded(userAdded, undefined, systemType, oldLowerFaces, compositionBasis);
+    computeFitnessForUserAdded(userAdded, undefined, systemType, oldLowerFaces, plotBasis);
 
     const expanded = userAdded.some((s) => s.fitness <= 0);
     if (expanded && userAdded.length > 0) {
       const allValid = [...valid, ...userAdded];
-      const newResult = computeTernaryHull(structures, allValid, compositionBasis);
+      const newResult = computeTernaryHull(structures, allValid, plotBasis);
       return {
         structures: newResult.structures,
         hullEdges: newResult.hullEdges,
