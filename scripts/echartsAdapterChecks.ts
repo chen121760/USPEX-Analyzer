@@ -1,0 +1,310 @@
+import { adaptToECharts, layoutNeedsEqualScale } from '@/charts/shared/echartsAdapter';
+
+let passed = 0;
+const failures: string[] = [];
+
+function check(name: string, condition: boolean, detail = ''): void {
+  if (condition) {
+    passed += 1;
+    console.log(`  ok   ${name}`);
+  } else {
+    failures.push(`${name}${detail ? ` — ${detail}` : ''}`);
+    console.log(`  FAIL ${name}${detail ? ` — ${detail}` : ''}`);
+  }
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? value as Record<string, unknown> : {};
+}
+
+function records(value: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(value) ? value.map(record) : [];
+}
+
+console.log('\nECharts adapter invariants');
+
+const twoDimensional = adaptToECharts([
+  { type: 'scatter', mode: 'lines', x: [0, 1], y: [0, 1], name: 'guide', showlegend: false },
+  {
+    type: 'scatter',
+    mode: 'markers',
+    x: [0, 1],
+    y: [1, 0],
+    name: 'structures',
+    customdata: [101, 102],
+    marker: { color: [0.125, 0.875], cmin: 0, cmax: 1 },
+  },
+  {
+    type: 'histogram',
+    orientation: 'h',
+    y: [1, 1, 2, 3],
+    name: 'distribution',
+    showlegend: false,
+    xaxis: 'x2',
+    yaxis: 'y',
+  },
+], {
+  xaxis: {},
+  yaxis: {},
+  xaxis2: { domain: [0.8, 1] },
+  showlegend: true,
+});
+
+const option2D = record(twoDimensional.option);
+const series2D = records(option2D.series);
+const visualMap2D = records(option2D.visualMap)[0];
+check('uses the ECharts 2D coordinate system', twoDimensional.is3D === false);
+check('keeps structure ids in native ECharts data items', records(series2D[1].data)[0].customdata === 101);
+check('targets visualMap at the converted series index', visualMap2D.seriesIndex === 1);
+check('renders horizontal histograms as custom rectangles', series2D[2].type === 'custom');
+check('honours showlegend=false', series2D[2].name === '');
+
+// Interaction: clicking a structure point must not be swallowed by panning,
+// the wheel must stay with the page, and the cursor must advertise which
+// elements are clickable.
+const dataZooms = records(option2D.dataZoom);
+check('the wheel is not captured inside the plot',
+  dataZooms.length === 2 && dataZooms.every((entry) => entry.type === 'inside' && entry.zoomOnMouseWheel === false));
+check('the wheel does not pan either',
+  dataZooms.every((entry) => entry.moveOnMouseWheel !== true));
+check('left-drag panning is moved off the plain drag',
+  dataZooms.every((entry) => entry.moveOnMouseMove === 'shift'));
+check('plot area no longer shows the grab cursor',
+  dataZooms.every((entry) => entry.cursorGrab === 'default' && entry.cursorGrabbing === 'default'));
+check('clickable structure points show a pointer cursor', series2D[1].cursor === 'pointer');
+check('non-clickable guides keep the default cursor', series2D[0].cursor === undefined);
+
+// Palette plumbing: `layout.colorway` becomes the ECharts palette, and when no
+// palette is supplied the key must be absent entirely.  An explicit
+// `color: undefined` wipes the palette and leaves pie slices with fill="none"
+// (the Dashboard space-group pie was invisible in the light theme because of it).
+const withPalette = record(adaptToECharts(
+  [{ type: 'pie', labels: ['A', 'B'], values: [5, 3] }],
+  { colorway: ['#6366f1', '#ec4899'] },
+  { displayModeBar: false },
+).option);
+check('layout.colorway becomes the ECharts palette',
+  Array.isArray(withPalette.color) && (withPalette.color as unknown[]).join(',') === '#6366f1,#ec4899');
+
+const withoutPalette = record(adaptToECharts(
+  [{ type: 'pie', labels: ['A'], values: [1] }],
+  {},
+  { displayModeBar: false },
+).option);
+check('omits the color key when no palette is given instead of setting undefined',
+  !('color' in withoutPalette));
+check('pie-only charts emit no cartesian axes',
+  records(withoutPalette.xAxis).length === 0 && records(withoutPalette.yAxis).length === 0);
+check('sets with a cartesian trace keep their axes',
+  records(record(adaptToECharts([{ type: 'scatter', x: [0, 1], y: [0, 1] }], {}, {}).option).xAxis).length === 1);
+
+// Legend anchoring: one edge only, so the box cannot stretch across the plot.
+function legendOf(layout: Record<string, unknown>): Record<string, unknown> {
+  return record(record(adaptToECharts(
+    [{ type: 'scatter', mode: 'markers', x: [0, 1], y: [0, 1], name: 'structures' }],
+    layout as never,
+    { displayModeBar: false },
+  ).option).legend);
+}
+
+const bottomLeftLegend = legendOf({ legend: { x: 0.02, y: 0.02, xanchor: 'left', yanchor: 'bottom' } });
+check('bottom-left legends keep their corner',
+  bottomLeftLegend.left === 12 && bottomLeftLegend.bottom === 8 && !('right' in bottomLeftLegend));
+
+const rightLegend = legendOf({ legend: { x: 1, y: 0.5, orientation: 'v' } });
+check('right-edge legends anchor to the right only',
+  rightLegend.right === 8 && !('left' in rightLegend));
+check('right-edge legends do not also reserve top plot space',
+  rightLegend.top === 8);
+
+const freeLegend = legendOf({ legend: {} });
+check('legends without an anchor stay centred', freeLegend.left === 'center');
+
+const threeDimensional = adaptToECharts([
+  {
+    type: 'mesh3d',
+    name: 'hull',
+    x: [0, 1, 0],
+    y: [0, 0, 1],
+    z: [0, 0, -1],
+    i: [0],
+    j: [1],
+    k: [2],
+  },
+  {
+    type: 'scatter3d',
+    mode: 'lines',
+    x: [0, 1, null, 1, 0],
+    y: [0, 0, null, 0, 1],
+    z: [0, 0, null, 0, -1],
+    showlegend: false,
+  },
+  {
+    type: 'scatter3d',
+    mode: 'markers',
+    x: [0.2],
+    y: [0.3],
+    z: [-0.1],
+    customdata: [501],
+    marker: { color: [-0.1], cmin: -1, cmax: 0 },
+  },
+], { scene: {} });
+
+const option3D = record(threeDimensional.option);
+const series3D = records(option3D.series);
+const visualMap3D = records(option3D.visualMap)[0];
+check('uses ECharts GL for 3D charts', threeDimensional.is3D === true);
+check('converts each indexed hull face into a surface', series3D[0].type === 'surface');
+check('splits disconnected 3D paths into line3D series', series3D.filter((item) => item.type === 'line3D').length === 2);
+check('targets 3D visualMap after generated surface and line series', visualMap3D.seriesIndex === 3);
+check('keeps 3D structure ids clickable', records(series3D[3].data)[0].customdata === 501);
+
+// ── Fixed-aspect 2D charts (ternary phase diagram) ────────────────────────
+const ternaryVertices: Array<[number, number]> = [
+  [0, 0],
+  [0.5, Math.sqrt(3) / 2],
+  [1, 0],
+];
+const ternaryData = [{
+  type: 'scatter',
+  mode: 'markers',
+  x: ternaryVertices.map((vertex) => vertex[0]),
+  y: ternaryVertices.map((vertex) => vertex[1]),
+  name: 'structures',
+}];
+const ternaryLayout = {
+  xaxis: { range: [-0.12, 1.12], showticklabels: false },
+  yaxis: { range: [-0.12, Math.sqrt(3) / 2 + 0.12], showticklabels: false, scaleanchor: 'x', scaleratio: 1 },
+  showlegend: false,
+};
+
+check('detects charts that pin their axis scale', layoutNeedsEqualScale(ternaryLayout));
+check('leaves ordinary charts unconstrained', !layoutNeedsEqualScale({ xaxis: {}, yaxis: {} }));
+
+// A wide, short container is exactly the case that used to stretch the triangle.
+const wideFrame = { width: 1400, height: 620 };
+const constrained = adaptToECharts(ternaryData, ternaryLayout, {}, wideFrame);
+const constrainedGrid = records(record(constrained.option).grid)[0];
+const gridLeft = Number(constrainedGrid.left);
+const gridTop = Number(constrainedGrid.top);
+const boxWidth = wideFrame.width - gridLeft - Number(constrainedGrid.right);
+const boxHeight = wideFrame.height - gridTop - Number(constrainedGrid.bottom);
+const [xMin, xMax] = ternaryLayout.xaxis.range;
+const [yMin, yMax] = ternaryLayout.yaxis.range;
+
+check('fixed-aspect grid keeps equal units per pixel 2D',
+  Math.abs(boxWidth / (xMax - xMin) - boxHeight / (yMax - yMin)) < 0.01);
+check('fixed-aspect grid disables label-driven padding', constrainedGrid.containLabel === false);
+check('fixed-aspect grid stays inside the frame',
+  gridLeft >= 0 && Number(constrainedGrid.right) >= 0 && boxWidth > 0 && boxHeight > 0);
+
+// Map the triangle corners through the same box the adapter produced and
+// measure the drawn edges: an equilateral triangle has three equal sides.
+const toPixels = ([x, y]: [number, number]): [number, number] => [
+  gridLeft + (x - xMin) / (xMax - xMin) * boxWidth,
+  gridTop + (yMax - y) / (yMax - yMin) * boxHeight,
+];
+const pixelCorners = ternaryVertices.map(toPixels);
+const sideLengths = [
+  Math.hypot(pixelCorners[0][0] - pixelCorners[1][0], pixelCorners[0][1] - pixelCorners[1][1]),
+  Math.hypot(pixelCorners[1][0] - pixelCorners[2][0], pixelCorners[1][1] - pixelCorners[2][1]),
+  Math.hypot(pixelCorners[2][0] - pixelCorners[0][0], pixelCorners[2][1] - pixelCorners[0][1]),
+];
+const sideSpread = Math.max(...sideLengths) - Math.min(...sideLengths);
+check('ternary triangle renders equilateral', sideSpread < 0.5, `sides ${sideLengths.map((side) => side.toFixed(1)).join('/')}`);
+check('ternary triangle is not flattened by the wide frame', sideLengths[0] > 200);
+
+// Without a measured frame the adapter must fall back to the full plot area.
+const unmeasured = adaptToECharts(ternaryData, ternaryLayout, {});
+const unmeasuredGrid = records(record(unmeasured.option).grid)[0];
+const unmeasuredWidth = 1400 - Number(unmeasuredGrid.left) - Number(unmeasuredGrid.right);
+check('without a frame size the grid keeps the full width', unmeasuredWidth > boxWidth * 1.5);
+
+// ── Marginal panel layout (Explorer / Beta Explorer) ──────────────────────
+// The layout declares Plotly subplot domains: the scatter keeps [0, 0.8] and the
+// two marginal panels live in [0.83, 1] of the freed band.  Those fractions must
+// be resolved against the measured container, otherwise the panels land in the
+// middle of the scatter (overlapping it) and the top band collapses to nothing.
+const marginalData = [
+  { type: 'scatter', mode: 'markers', x: [0, 1], y: [0, 1], name: 'structures' },
+  { type: 'histogram', x: [0, 1, 1, 2], name: 'x dist', showlegend: false, xaxis: 'x', yaxis: 'y2' },
+  { type: 'scatter', mode: 'lines', x: [0, 1], y: [0, 1], name: 'x kde', showlegend: false, xaxis: 'x', yaxis: 'y2' },
+  { type: 'histogram', orientation: 'h', y: [0, 1, 1, 2], name: 'y dist', showlegend: false, xaxis: 'x3', yaxis: 'y' },
+  { type: 'scatter', mode: 'lines', x: [0, 1], y: [0, 1], name: 'y kde', showlegend: false, xaxis: 'x3', yaxis: 'y' },
+];
+const marginalAxisStyle = { tickfont: { size: 11, color: '#64748b' }, gridcolor: '#e2e8f0', linecolor: '#94a3b8' };
+const marginalLayout = {
+  xaxis: { title: { text: 'Fitness (eV/block)' }, domain: [0, 0.8], ...marginalAxisStyle },
+  yaxis: { title: { text: 'Enthalpy (eV)' }, domain: [0, 0.8], ...marginalAxisStyle },
+  xaxis2: { domain: [0, 0.8], matches: 'x', showticklabels: false, ...marginalAxisStyle },
+  yaxis2: { domain: [0.83, 1], title: { text: 'density', font: { size: 10, color: '#64748b' } }, ...marginalAxisStyle },
+  xaxis3: { domain: [0.83, 1], title: { text: 'density', font: { size: 10, color: '#64748b' } }, ...marginalAxisStyle },
+  yaxis3: { domain: [0, 0.8], matches: 'y', showticklabels: false, ...marginalAxisStyle },
+  showlegend: true,
+  margin: { t: 10, r: 10, l: 60, b: 60 },
+};
+const marginalFrame = { width: 1600, height: 620 };
+const marginalOption = record(adaptToECharts(marginalData, marginalLayout, {}, marginalFrame).option);
+const marginalGrids = records(marginalOption.grid);
+const gridBox = (grid: Record<string, unknown>): { x0: number; x1: number; y0: number; y1: number } => ({
+  x0: Number(grid.left),
+  x1: marginalFrame.width - Number(grid.right),
+  y0: Number(grid.top),
+  y1: marginalFrame.height - Number(grid.bottom),
+});
+const [scatterBox, xMarginalBox, yMarginalBox] = marginalGrids.map(gridBox);
+
+check('a marginal chart emits one grid per subplot', marginalGrids.length === 3, `got ${marginalGrids.length}`);
+check('the scatter keeps the left 80% of the plot area',
+  Math.abs(scatterBox.x0 - 60) < 1 && Math.abs(scatterBox.x1 - (60 + 0.8 * (marginalFrame.width - 70))) < 1);
+check('the right marginal panel starts after the scatter ends',
+  yMarginalBox.x0 >= scatterBox.x1, `scatter ends at ${scatterBox.x1}, panel starts at ${yMarginalBox.x0}`);
+check('the right marginal panel is ~17% wide, not half the chart',
+  Math.abs((yMarginalBox.x1 - yMarginalBox.x0) / (marginalFrame.width - 70) - 0.17) < 0.01);
+check('the top marginal panel has real height',
+  xMarginalBox.y1 - xMarginalBox.y0 > 60, `height ${xMarginalBox.y1 - xMarginalBox.y0}`);
+check('the top marginal panel sits above the scatter',
+  xMarginalBox.y1 <= scatterBox.y0, `panel ends at ${xMarginalBox.y1}, scatter starts at ${scatterBox.y0}`);
+check('the panels stay inside the frame',
+  marginalGrids.every((grid) => {
+    const box = gridBox(grid);
+    return box.x0 >= 0 && box.y0 >= 0 && box.x1 <= marginalFrame.width && box.y1 <= marginalFrame.height;
+  }));
+
+const marginalXAxes = records(marginalOption.xAxis);
+const marginalYAxes = records(marginalOption.yAxis);
+check('the shared marginal x axis repeats no title and no tick labels',
+  marginalXAxes[1].name === '' && record(marginalXAxes[1].axisLabel).show === false);
+check('the shared marginal y axis repeats no title and no tick labels',
+  marginalYAxes[2].name === '' && record(marginalYAxes[2].axisLabel).show === false);
+check('the main axes keep their titles',
+  marginalXAxes[0].name === 'Fitness (eV/block)' && marginalYAxes[0].name === 'Enthalpy (eV)');
+check('the density axes keep their own title',
+  marginalYAxes[1].name === 'density' && marginalXAxes[2].name === 'density');
+
+// A narrow/short container must not push a panel off the canvas either.
+const smallFrame = { width: 640, height: 400 };
+const smallOption = record(adaptToECharts(marginalData, marginalLayout, {}, smallFrame).option);
+const smallBoxes = records(smallOption.grid).map((grid) => ({
+  x0: Number(grid.left),
+  x1: smallFrame.width - Number(grid.right),
+  y0: Number(grid.top),
+  y1: smallFrame.height - Number(grid.bottom),
+}));
+check('a small container keeps both panels visible',
+  smallBoxes[1].y1 - smallBoxes[1].y0 > 20 && smallBoxes[2].x1 - smallBoxes[2].x0 > 20 && smallBoxes[2].x0 >= smallBoxes[0].x1);
+
+// The panels must resolve identically whichever order their traces appear in.
+const reversedOption = record(adaptToECharts([...marginalData].reverse(), marginalLayout, {}, marginalFrame).option);
+const reversedGrids = records(reversedOption.grid).map(gridBox);
+const reversedXAxes = records(reversedOption.xAxis);
+const reversedYAxes = records(reversedOption.yAxis);
+check('panel styling does not depend on trace order (right panel keeps the density axis)',
+  reversedXAxes[1].name === 'density' && record(reversedYAxes[1].axisLabel).show === false);
+check('panel styling does not depend on trace order (top panel hides the shared x axis)',
+  reversedXAxes[2].name === '' && record(reversedXAxes[2].axisLabel).show === false && reversedYAxes[2].name === 'density');
+check('panel geometry does not depend on trace order',
+  reversedGrids[1].x0 >= reversedGrids[0].x1 && reversedGrids[2].y1 <= reversedGrids[0].y0);
+
+console.log(`\nECharts adapter checks: ${passed} passed, ${failures.length} failed`);
+if (failures.length) throw new Error(failures.join('; '));

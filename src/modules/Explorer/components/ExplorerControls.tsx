@@ -11,8 +11,10 @@ interface FieldOption {
 export function ExplorerControls({
   t,
   fields,
+  dimension,
   xKey,
   yKey,
+  zKey,
   colorKey,
   xField,
   yField,
@@ -28,6 +30,11 @@ export function ExplorerControls({
   yMin,
   yMax,
   filteredCount,
+  filterTotalCount,
+  focusMode,
+  filterActive,
+  filterMatchedCount,
+  dimOpacity,
   colorDataRange,
   cMin,
   cMax,
@@ -35,8 +42,10 @@ export function ExplorerControls({
   isExporting,
   playStep,
   playFps,
+  setDimension,
   setXKey,
   setYKey,
+  setZKey,
   setColorKey,
   setShowXMarginal,
   setShowYMarginal,
@@ -50,11 +59,15 @@ export function ExplorerControls({
   handleExportGif,
   setPlayStep,
   setPlayFps,
+  setFocusMode,
+  setDimOpacity,
 }: {
-  t: (k: string) => string;
+  t: (k: string, options?: Record<string, unknown>) => string;
   fields: FieldOption[];
+  dimension: '2d' | '3d';
   xKey: string;
   yKey: string;
+  zKey: string;
   colorKey: string;
   xField: FieldOption;
   yField: FieldOption;
@@ -70,6 +83,11 @@ export function ExplorerControls({
   yMin: string;
   yMax: string;
   filteredCount: number;
+  filterTotalCount: number;
+  focusMode: 'off' | 'highlight' | 'dim' | 'hide';
+  filterActive: boolean;
+  filterMatchedCount: number;
+  dimOpacity: number;
   colorDataRange: { min: number; max: number } | null;
   cMin: number | null;
   cMax: number | null;
@@ -77,8 +95,10 @@ export function ExplorerControls({
   isExporting: boolean;
   playStep: number;
   playFps: number;
+  setDimension: (value: '2d' | '3d') => void;
   setXKey: (value: string) => void;
   setYKey: (value: string) => void;
+  setZKey: (value: string) => void;
   setColorKey: (value: string) => void;
   setShowXMarginal: (value: boolean) => void;
   setShowYMarginal: (value: boolean) => void;
@@ -92,6 +112,8 @@ export function ExplorerControls({
   handleExportGif: () => void;
   setPlayStep: (value: number) => void;
   setPlayFps: (value: number) => void;
+  setFocusMode: (value: 'off' | 'highlight' | 'dim' | 'hide') => void;
+  setDimOpacity: (value: number) => void;
 }) {
   const selectStyle: React.CSSProperties = {
     padding: '5px 8px',
@@ -125,11 +147,19 @@ export function ExplorerControls({
     <>
       <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+          {t('explorer.dimension')}:
+          <select value={dimension} onChange={(e) => setDimension(e.target.value as '2d' | '3d')} style={selectStyle}>
+            <option value="2d">2D</option>
+            <option value="3d">3D</option>
+          </select>
+        </label>
+
+        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
           {t('explorer.xAxis')}:
           <select value={xKey} onChange={(e) => setXKey(e.target.value)} style={selectStyle}>
-            {fields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+            {fields.filter((f) => f.type === 'numeric').map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
           </select>
-          <button
+          {dimension === '2d' && <button
             onClick={() => setShowXMarginal(!showXMarginal)}
             title="Toggle X distribution"
             style={{
@@ -140,8 +170,8 @@ export function ExplorerControls({
             }}
           >
             ∫ dist
-          </button>
-          {showXMarginal && (
+          </button>}
+          {dimension === '2d' && showXMarginal && (
             <button
               onClick={() => setXExcludeZero(!xExcludeZero)}
               title="Exclude zero values from X distribution"
@@ -160,9 +190,9 @@ export function ExplorerControls({
         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
           {t('explorer.yAxis')}:
           <select value={yKey} onChange={(e) => setYKey(e.target.value)} style={selectStyle}>
-            {fields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+            {fields.filter((f) => f.type === 'numeric').map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
           </select>
-          <button
+          {dimension === '2d' && <button
             onClick={() => setShowYMarginal(!showYMarginal)}
             title="Toggle Y distribution"
             style={{
@@ -173,8 +203,8 @@ export function ExplorerControls({
             }}
           >
             ∫ dist
-          </button>
-          {showYMarginal && (
+          </button>}
+          {dimension === '2d' && showYMarginal && (
             <button
               onClick={() => setYExcludeZero(!yExcludeZero)}
               title="Exclude zero values from Y distribution"
@@ -190,6 +220,15 @@ export function ExplorerControls({
           )}
         </label>
 
+        {dimension === '3d' && (
+          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {t('explorer.zAxis')}:
+            <select value={zKey} onChange={(e) => setZKey(e.target.value)} style={selectStyle}>
+              {fields.filter((f) => f.type === 'numeric').map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+            </select>
+          </label>
+        )}
+
         <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
           {t('explorer.colorBy')}:
           <select value={colorKey} onChange={(e) => setColorKey(e.target.value)} style={selectStyle}>
@@ -198,7 +237,7 @@ export function ExplorerControls({
           </select>
         </label>
 
-        {(showXMarginal || showYMarginal) && (
+        {dimension === '2d' && (showXMarginal || showYMarginal) && (
           <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--color-text-muted)' }}>
             bins
             <input
@@ -214,6 +253,42 @@ export function ExplorerControls({
         <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
           {filteredCount} pts
         </span>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+          {t('explorer.filterEffect')}:
+          <select
+            value={focusMode}
+            disabled={!filterActive}
+            onChange={(e) => setFocusMode(e.target.value as 'off' | 'highlight' | 'dim' | 'hide')}
+            style={{ ...selectStyle, opacity: filterActive ? 1 : 0.55 }}
+          >
+            <option value="off">{t('explorer.filterOff')}</option>
+            <option value="highlight">{t('explorer.filterHighlight')}</option>
+            <option value="dim">{t('explorer.filterDim')}</option>
+            <option value="hide">{t('explorer.filterHide')}</option>
+          </select>
+        </label>
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+          {filterActive
+            ? t('explorer.filterMatched', { matched: filterMatchedCount, total: filterTotalCount })
+            : t('explorer.filterInactive')}
+        </span>
+        {filterActive && focusMode === 'dim' && (
+          <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--color-text-muted)' }}>
+            {t('explorer.dimOpacity')}
+            <input
+              type="range"
+              min={0.01}
+              max={0.3}
+              step={0.01}
+              value={dimOpacity}
+              onChange={(e) => setDimOpacity(Number(e.target.value))}
+            />
+            {dimOpacity.toFixed(2)}
+          </label>
+        )}
       </div>
 
       {colorField && colorField.type === 'numeric' && colorDataRange && (

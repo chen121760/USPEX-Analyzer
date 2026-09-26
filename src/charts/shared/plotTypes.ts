@@ -1,10 +1,42 @@
-import type { ComponentProps, HTMLAttributes } from 'react';
-import type Plot from 'react-plotly.js';
+import type { CSSProperties, HTMLAttributes, ReactNode } from 'react';
 
-export type PlotProps = ComponentProps<typeof Plot>;
-export type PlotConfig = NonNullable<PlotProps['config']>;
-export type PlotData = PlotProps['data'];
-export type PlotLayout = NonNullable<PlotProps['layout']>;
+/** Renderer-neutral trace vocabulary consumed by the ECharts adapter. */
+export type PlotTrace = Record<string, unknown>;
+export type PlotData = PlotTrace[];
+export type PlotLayout = Record<string, unknown>;
+export type PlotConfig = Record<string, unknown>;
+
+export interface PlotClickEventLike {
+  points?: Array<{
+    customdata?: unknown;
+    curveNumber?: number;
+    pointIndex?: number;
+    pointNumber?: number;
+    data?: { customdata?: unknown };
+  }>;
+}
+
+export interface PlotFrameProps {
+  data: PlotData;
+  layout?: PlotLayout;
+  config?: PlotConfig;
+  revision?: number;
+  style?: CSSProperties;
+  className?: string;
+  boundaryClassName?: string;
+  boundaryStyle?: CSSProperties;
+  boundaryHandlers?: PlotFrameBoundaryHandlers;
+  hoverTooltip?: ReactNode;
+  useResizeHandler?: boolean;
+  onInitialized?: (figure: unknown, chart: unknown) => void;
+  onUpdate?: (figure: unknown, chart: unknown) => void;
+  onClick?: (event: PlotClickEventLike) => void;
+  onRelayout?: (event: Record<string, unknown>) => void;
+  onStructureClick?: (structureId: number) => void;
+  editableAxisTitles?: { x: string; y: string; z?: string };
+  axisTitleEditHint?: string;
+  onAxisTitleDoubleClick?: (axis: 'x' | 'y' | 'z') => void;
+}
 
 export type PlotFrameBoundaryHandlers = Pick<
   HTMLAttributes<HTMLDivElement>,

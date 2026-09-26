@@ -1,7 +1,7 @@
-{
+﻿{
   "name": "uspex-analyzer",
   "private": true,
-  "version": "1.4.6",
+  "version": "1.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -17,6 +17,8 @@
     "clsx": "^2.1.1",
     "convex-hull": "^1.0.3",
     "d3": "^7.9.0",
+    "echarts": "^6.1.0",
+    "echarts-gl": "^2.1.0",
     "fflate": "^0.8.2",
     "file-saver": "^2.0.5",
     "gif.js": "^0.2.0",
@@ -26,11 +28,9 @@
     "immer": "^10.1.1",
     "jszip": "^3.10.1",
     "lucide-react": "^0.468.0",
-    "plotly.js-dist-min": "^2.35.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-i18next": "^15.4.0",
-    "react-plotly.js": "^2.6.0",
     "react-router-dom": "^7.17.0",
     "sonner": "^1.7.0",
     "tailwind-merge": "^2.6.0",

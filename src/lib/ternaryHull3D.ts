@@ -1,5 +1,5 @@
 /**
- * Helpers for converting 3D convex hull data into Plotly mesh3d arrays.
+ * Helpers for converting 3D convex hull data into indexed mesh arrays.
  */
 
 import type { TernaryLowerFace, Point3D } from './convexHullReconstruction';
@@ -18,7 +18,7 @@ export interface Mesh3DInput {
 
 /**
  * Convert TernaryLowerFace[] (from computeTernaryLowerFaces)
- * into flat vertex/index arrays suitable for Plotly mesh3d.
+ * into flat vertex/index arrays suitable for the ECharts 3D adapter.
  *
  * Deduplicates vertices by exact (x, y, z) match so that the
  * mesh3d trace produces a clean closed surface.

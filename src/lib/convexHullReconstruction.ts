@@ -5,9 +5,12 @@
  *   - eForm: formation enthalpy per atom, or per numSpecies block
  *   - eHullRecons: distance above the reconstructed convex hull in the same unit
  *
- * The hull geometry is defined by fitness === 0 structures (from USPEX's own hull).
- * We recalculate E_form with our own reference potentials and compute the
- * distance to the known hull in (composition, E_form) space.
+ * When the run supplies its own hull distances (`extended_convex_hull`), the
+ * hull geometry is the set of `fitness === 0` structures and we only recompute
+ * E_form with our own reference potentials, plus the distance to that known
+ * hull.  When it does not — an interrupted run leaves `extended_convex_hull`
+ * header-only — no structure has a hull distance and the lower hull is rebuilt
+ * from all converged structures instead.
  */
 
 import convexHull from 'convex-hull';
@@ -18,7 +21,13 @@ import {
   ternaryToCartesian,
   totalAtoms,
 } from '@/parsers/compositionUtils';
+import {
+  computeQuaternaryLowerPlanes,
+  quaternaryHullDistance,
+  type Point4D,
+} from '@/lib/quaternaryHull';
 import type { Structure, SystemType, CompositionMode } from '@/types/structure';
+
 
 // ── 3D geometry helpers (replicated from ternaryHull.ts) ──
 
@@ -83,6 +92,16 @@ export interface ReferenceResolution {
 /** Relative tolerance for "all other components are zero". */
 const ENDMEMBER_TOLERANCE = 1e-9;
 
+/**
+ * Distances at or below this value are reported as exactly zero.
+ *
+ * USPEX prints Ed with four decimals and treats a printed 0.0000 as "on the
+ * hull"; the hull views select stable structures with `fitness === 0`, so the
+ * reconstructed distance has to be snapped to the same grid instead of relying
+ * on raw floating-point noise.
+ */
+const HULL_ZERO_TOLERANCE = 1e-4;
+
 /** True when the declared numSpecies basis is usable for this dataset. */
 export function usesComponentBasis(
   compositionMode: CompositionMode,
@@ -100,6 +119,49 @@ function isEndmemberOf(amounts: number[], index: number): boolean {
     if (i !== index && Math.abs(amounts[i]) > ENDMEMBER_TOLERANCE) return false;
   }
   return true;
+}
+
+function greatestCommonDivisor(a: number, b: number): number {
+  let x = Math.abs(a);
+  let y = Math.abs(b);
+  while (y > 0) {
+    [x, y] = [y, x % y];
+  }
+  return x;
+}
+
+/** Integer composition reduced by its gcd, e.g. `[2 4 0 6]` → `1-2-0-3`. */
+function reducedCompositionKey(composition: readonly number[]): string {
+  let divisor = 0;
+  for (const value of composition) {
+    const count = Math.round(value);
+    if (count !== 0) divisor = greatestCommonDivisor(divisor, count);
+  }
+  if (!(divisor > 0)) return composition.map(() => '0').join('-');
+  return composition.map((value) => Math.round(value) / divisor).join('-');
+}
+
+/**
+ * Keep only the lowest-E_form structure per composition.
+ *
+ * A structure that is not the minimum at its own composition cannot lie on the
+ * lower envelope (the minimum at that composition is a feasible convex
+ * combination and sits strictly below it), so dropping the rest leaves the hull
+ * — and therefore every distance — unchanged.  A USPEX run stores thousands of
+ * duplicates, and the hull algorithms are super-linear, so this is the
+ * difference between a snappy parse and a slow one.
+ */
+function lowestPerComposition(
+  structures: readonly Structure[],
+  keyOf: (structure: Structure) => string,
+): Structure[] {
+  const best = new Map<string, Structure>();
+  for (const structure of structures) {
+    const key = keyOf(structure);
+    const current = best.get(key);
+    if (!current || structure.eForm < current.eForm) best.set(key, structure);
+  }
+  return Array.from(best.values());
 }
 
 /** Total energy of one structure in eV (cell), not per atom. */
@@ -577,6 +639,40 @@ export function reconstructConvexHull(
     (s) => !s.isUserAdded && s.enthalpyTotal <= 900 && !undefinedFormation.has(s),
   );
 
+  // Does any structure carry a genuine hull distance?  Only USPEX's own output
+  // (extended_convex_hull, or an Individuals Fitness column) provides one.  An
+  // interrupted run has none — it writes the extended_convex_hull header but no
+  // rows — and then the hull must come from the structures themselves.  (The
+  // energy above the run's single lowest per-atom enthalpy is NOT a hull
+  // distance: outside a single composition it makes the most cohesive pure
+  // element the only "stable" phase.)
+  const hasKnownFitness = structures.some((s) => s.fitness >= 0);
+
+  /**
+   * Snap reconstructed distances to the hull grid and, when the run supplies no
+   * hull distance of its own, adopt the reconstruction as the fitness — every
+   * hull view classifies structures by `fitness === 0`.
+   */
+  const finalize = (): ReferenceResolution => {
+    for (const s of converged) {
+      if (s.eHullRecons >= 0 && s.eHullRecons <= HULL_ZERO_TOLERANCE) s.eHullRecons = 0;
+    }
+    if (!hasKnownFitness && systemType !== 'unary') {
+      for (const s of converged) {
+        if (s.eHullRecons >= 0) s.fitness = s.eHullRecons;
+      }
+    }
+    return references;
+  };
+
+  // Hull geometry: the stable structures when the run provides them, otherwise
+  // every converged structure (that is what defines a convex hull).  Either way
+  // only the lowest-E_form structure per composition can be a hull vertex.
+  const hullGeometry = lowestPerComposition(
+    hasKnownFitness ? converged.filter((s) => s.fitness <= 0) : converged,
+    (s) => reducedCompositionKey(s.composition),
+  );
+
   // Step 2: Compute E_HullReconstructed based on composition mode
   if (compositionMode === 'fixed') {
     // Fixed composition: every structure shares one composition, so the
@@ -587,14 +683,13 @@ export function reconstructConvexHull(
     for (const s of converged) {
       s.eHullRecons = s.eForm - minEForm;
     }
-    return references;
+    return finalize();
   }
 
   // Variable composition
   if (systemType === 'binary') {
-    // Binary: hull from fitness=0 structures
-    const hullStructures = converged.filter((s) => s.fitness <= 0);
-    const hullCandidates: Point2D[] = hullStructures
+    // Binary: hull from fitness=0 structures (or from all of them when unknown)
+    const hullCandidates: Point2D[] = hullGeometry
       .map((s) => ({ x: s.hullX[0] ?? 0, y: s.eForm }))
       .sort((a, b) => a.x - b.x);
     const hullPoints = computeLowerHull2D(hullCandidates);
@@ -605,8 +700,7 @@ export function reconstructConvexHull(
     }
   } else if (systemType === 'ternary') {
     // Ternary: hull from fitness=0 structures in 3D
-    const hullStructures = converged.filter((s) => s.fitness <= 0);
-    const hullPoints3D: Point3D[] = hullStructures.map((s) => {
+    const hullPoints3D: Point3D[] = hullGeometry.map((s) => {
       const plotComposition = useCompositionBasis
         ? componentAmountsFromComposition(s.composition, compositionBasis) ?? s.composition
         : s.composition;
@@ -629,10 +723,45 @@ export function reconstructConvexHull(
           : 0;
     }
   } else if (systemType === 'quaternary') {
-    // Quaternary: USPEX already provides hull distance via fitness / e_above_hull.
-    // We compute eForm here but skip 4D hull reconstruction.
-    for (const s of converged) {
-      s.eHullRecons = s.fitness >= 0 ? s.fitness : 0;
+    if (hasKnownFitness) {
+      // USPEX already provides the hull distance; reuse it as is.
+      for (const s of converged) {
+        s.eHullRecons = s.fitness >= 0 ? s.fitness : 0;
+      }
+    } else {
+      // Rebuild the 4D lower hull of (3 mole fractions, E_form) and measure the
+      // vertical distance to it.
+      const coordinateOf = (s: Structure): [number, number, number] | null => {
+        const plotComposition = useCompositionBasis
+          ? componentAmountsFromComposition(s.composition, compositionBasis) ?? s.composition
+          : s.composition;
+        if (plotComposition.length !== 4) return null;
+        const total = plotComposition.reduce((sum, value) => sum + value, 0);
+        if (!(total > 0)) return null;
+        return [
+          plotComposition[0] / total,
+          plotComposition[1] / total,
+          plotComposition[2] / total,
+        ];
+      };
+
+      const points: Point4D[] = [];
+      for (const s of hullGeometry) {
+        const xyz = coordinateOf(s);
+        if (xyz) points.push({ x: xyz[0], y: xyz[1], z: xyz[2], e: s.eForm });
+      }
+      const lowerPlanes = computeQuaternaryLowerPlanes(points);
+
+      for (const s of converged) {
+        const xyz = coordinateOf(s);
+        if (!xyz) {
+          // Cannot be placed in 4D composition space — not available.
+          s.eHullRecons = -1;
+          continue;
+        }
+        const distance = quaternaryHullDistance(xyz[0], xyz[1], xyz[2], s.eForm, lowerPlanes);
+        s.eHullRecons = Number.isFinite(distance) ? distance : -1;
+      }
     }
   } else {
     // Unary: no hull needed
@@ -641,5 +770,5 @@ export function reconstructConvexHull(
     }
   }
 
-  return references;
+  return finalize();
 }

@@ -19,12 +19,12 @@ import { useProjectStore } from '@/store/useProjectStore';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT } from '@/lib/constants';
+import { CHART_FONT } from '@/lib/constants';
 import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { PlotFrame } from '@/charts/shared/PlotFrame';
 import { usePlotViewport } from '@/charts/shared/plotRange';
-import { usePlotlyStructurePointClick } from '@/charts/shared/usePlotlyStructurePointClick';
+import { useStructurePointClick } from '@/charts/shared/useStructurePointClick';
 import { buildCsvText, type CsvRow } from '@/export/csvExport';
 import { downloadBlob } from '@/export/exportFileNames';
 import { CONVEX_HULL_PLOT_HEIGHT } from './plotSizing';
@@ -229,7 +229,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
   const { viewportLayout, handleRelayout } = usePlotViewport();
 
   const layout: PlotlyLayout = {
-    font: PLOTLY_FONT,
+    font: CHART_FONT,
     title: {
       text: `${systemInfo.elements.join('-')} ${t('hull.energyRanking', 'Energy Ranking')}`,
       font: { size: 15, color: pt.titleColor },
@@ -327,7 +327,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
     openViewer(structureId);
   };
 
-  const structurePointClick = usePlotlyStructurePointClick({
+  const structurePointClick = useStructurePointClick({
     traces: chartTraces,
     onStructureClick: handleStructurePointClick,
   });

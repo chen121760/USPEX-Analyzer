@@ -1,7 +1,7 @@
 /**
- * Shared Plotly click helpers for resolving structure IDs from chart events.
+ * Shared chart click helpers for resolving structure IDs from chart events.
  *
- * Plotly can expose `customdata` directly on a clicked point or only on the
+ * The renderer can expose `customdata` directly on a clicked point or only on the
  * source trace with a point index. Keeping this logic here prevents each chart
  * page from making slightly different assumptions about the event shape.
  */

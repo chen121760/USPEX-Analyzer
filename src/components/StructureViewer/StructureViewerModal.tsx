@@ -2,7 +2,7 @@
  * Structure viewer modal.
  *
  * Renders the single application-level JSmol viewer for the active structure ID
- * selected from tables or Plotly charts.
+ * selected from tables or ECharts charts.
  */
 
 import { useEffect, useRef, useState } from 'react';

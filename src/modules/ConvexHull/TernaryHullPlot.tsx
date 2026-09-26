@@ -26,13 +26,13 @@ import { useProjectStore } from '@/store/useProjectStore';
 import { computeTernaryHullEdges, uniqueHullPoints, type TernaryHullInput } from '@/lib/ternaryHull';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT } from '@/lib/constants';
+import { CHART_FONT } from '@/lib/constants';
 import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadCsv } from '@/lib/exportCsv';
 import { PlotFrame } from '@/charts/shared/PlotFrame';
 import { usePlotViewport } from '@/charts/shared/plotRange';
-import { usePlotlyStructurePointClick } from '@/charts/shared/usePlotlyStructurePointClick';
+import { useStructurePointClick } from '@/charts/shared/useStructurePointClick';
 import { CONVEX_HULL_PLOT_HEIGHT } from './plotSizing';
 
 /** Structure with computed cartesian coordinates */
@@ -386,7 +386,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
 
   const layout: PlotlyLayout = {
     autosize: true,
-    font: PLOTLY_FONT,
+    font: CHART_FONT,
     title: { text: `${components.map(formulaToHtml).join('-')} ${t('hull.ternaryTitle', 'Ternary Phase Diagram')}`, font: { size: 15, color: pt.titleColor } },
     xaxis: {
       range: [-0.12, 1.12],
@@ -395,6 +395,9 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
       showticklabels: false,
       constrain: 'domain',
     },
+    // `scaleanchor`/`scaleratio` keep the triangle equilateral whatever the
+    // container shape: the ECharts adapter letterboxes the plot box to match
+    // this data aspect (see charts/shared/echartsAdapter.ts).
     yaxis: {
       range: [-0.12, Math.sqrt(3) / 2 + 0.12],
       showgrid: false,
@@ -432,7 +435,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
     openViewer(structureId);
   };
 
-  const structurePointClick = usePlotlyStructurePointClick({
+  const structurePointClick = useStructurePointClick({
     traces,
     onStructureClick: handleStructurePointClick,
   });

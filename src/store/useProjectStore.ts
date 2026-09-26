@@ -17,10 +17,12 @@ import type {
   FilterPreset,
   ProjectFile,
   ParsedFileStatus,
+  AxisRangeSetting,
 } from '@/types/structure';
 import { parseAllFiles, type ParseResult } from '@/parsers';
 import { saveProject, makeProjectId } from '@/lib/projectStorage';
 import { useUIStore } from '@/store/useUIStore';
+import { resetProjectScopedState } from '@/store/resetProjectScopedState';
 import {
   createEmptyParsedFileStatus,
   EMPTY_PARSED_FILE_STATUS,
@@ -28,6 +30,9 @@ import {
   markParsedFileStatus,
 } from '@/domain/project/parsedFileStatus';
 import { normalizeStructure, normalizeStructures } from '@/domain/structure/normalizeStructure';
+import { ML_PROPERTY_MISSING } from '@/domain/structure/mlProperties';
+import { nextPaint } from '@/lib/nextPaint';
+import i18n from '@/i18n/config';
 
 // 这个函数负责把当前 store 的数据导出并存入 IndexedDB
 // get 是 zustand 提供的，可以拿到 store 当前的所有数据
@@ -59,6 +64,18 @@ interface ProjectState {
 
   // ---- Loading state ----
   isLoading: boolean;
+  /**
+   * i18n key of the current loading step, shown by the global loading overlay.
+   * `null` when nothing is loading.
+   */
+  loadingStage: string | null;
+  /** Optional detail line, e.g. how many files or structures are being handled. */
+  loadingDetail: string | null;
+  /**
+   * Completed fraction of the current operation in [0, 1], or `null` when the
+   * work cannot report progress (the overlay then shows an indeterminate bar).
+   */
+  loadingProgress: number | null;
   isDataLoaded: boolean;
   projectId: string;   // stable unique ID, never changes after creation
 
@@ -70,8 +87,8 @@ interface ProjectState {
 
  // ---- Actions ----
   setDetectedFiles: (files: DetectedFile[]) => void;
-  processFiles: (detectedFiles: DetectedFile[], fileContents: Map<USPEXFileType, string>) => void;
-  loadProjectFile: (project: ProjectFile) => void;
+  processFiles: (detectedFiles: DetectedFile[], fileContents: Map<USPEXFileType, string>) => Promise<void>;
+  loadProjectFile: (project: ProjectFile, options?: { preserveFilters?: boolean }) => Promise<void>;
   exportProjectFile: () => ProjectFile;
   projectName: string;  // 存用户起的项目名
   setProjectName: (name: string) => void;  // 设置项目名的方法
@@ -93,6 +110,12 @@ interface ProjectState {
 
   // Reset
   reset: () => void;
+
+  // ---- Explorer axis presentation (project-scoped, keyed by field key) ----
+  explorerAxisLabels: Record<string, string>;
+  setExplorerAxisLabel: (fieldKey: string, label: string) => void;
+  explorerAxisRanges: Record<string, AxisRangeSetting>;
+  setExplorerAxisRange: (fieldKey: string, range: AxisRangeSetting) => void;
 }
 
 const DEFAULT_TAGS: TagDefinition[] = [
@@ -116,14 +139,31 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   parsedFiles: createEmptyParsedFileStatus(),
   parseWarnings: [],
   isLoading: false,
+  loadingStage: null,
+  loadingDetail: null,
+  loadingProgress: null,
   isDataLoaded: false,
   symmetryStatus: { running: false, done: 0, total: 0 },
+  explorerAxisLabels: {},
+  explorerAxisRanges: {},
 
   setDetectedFiles: (files) => set({ detectedFiles: files }),
   setProjectName: (name) => {
     set({ projectName: name });
     autoSave(get);
   },
+
+  // Axis titles/ranges are keyed by field key and live with the project, so a
+  // range typed for one system never appears on another system's chart.
+  setExplorerAxisLabel: (fieldKey, label) => set((state) => {
+    const explorerAxisLabels = { ...state.explorerAxisLabels };
+    if (label.trim()) explorerAxisLabels[fieldKey] = label.trim();
+    else delete explorerAxisLabels[fieldKey];
+    return { explorerAxisLabels };
+  }),
+  setExplorerAxisRange: (fieldKey, range) => set((state) => ({
+    explorerAxisRanges: { ...state.explorerAxisRanges, [fieldKey]: range },
+  })),
 
   setSymmetryStatus: (patch) =>
     set((state) => ({ symmetryStatus: { ...state.symmetryStatus, ...patch } })),
@@ -142,11 +182,54 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }));
   },
 
-  processFiles: (detectedFiles, fileContents) => {
-    set({ isLoading: true });
+  processFiles: async (detectedFiles, fileContents) => {
+    /** Display name of the file being parsed, for the overlay's detail line. */
+    const displayName = (type: USPEXFileType) =>
+      detectedFiles.find((entry) => entry.type === type)?.displayName ?? type;
+
+    const startedAt = performance.now();
+    let yielded = false;
+
+    set({
+      isLoading: true,
+      loadingStage: 'loadStage.parsing',
+      loadingDetail: i18n.t('loadStage.files', { count: detectedFiles.length }),
+      loadingProgress: 0,
+    });
+    // Let the overlay paint before parseAllFiles blocks the main thread.
+    await nextPaint();
 
     try {
-      const result: ParseResult = parseAllFiles(detectedFiles, fileContents);
+      const result: ParseResult = await parseAllFiles(detectedFiles, fileContents, async (step) => {
+        set({
+          loadingStage: step.stage,
+          loadingDetail: step.fileType
+            ? i18n.t('loadStage.file', { name: displayName(step.fileType) })
+            : step.count != null
+              ? i18n.t(step.detailKey ?? 'loadStage.structures', { count: step.count })
+              : null,
+          // `null` from the parser means "this step cannot measure itself"; the
+          // overlay then shows its indeterminate bar rather than a frozen fill.
+          loadingProgress: step.progress,
+        });
+        // Each handler call *is* a step boundary, so yielding here is what makes
+        // the bar advance during the otherwise blocking parse. A run small
+        // enough to finish inside the overlay's anti-flash delay skips the
+        // frames entirely and stays instant.
+        if (yielded || performance.now() - startedAt > 100) {
+          yielded = true;
+          await nextPaint();
+        }
+      });
+
+      // Second stage: the heavy parse is done, the store update and the first
+      // render of the analysis pages still take a moment.
+      set({
+        loadingStage: 'loadStage.finalizing',
+        loadingDetail: i18n.t('loadStage.structures', { count: result.structures.length }),
+        loadingProgress: 1,
+      });
+      await nextPaint();
 
       const parsedFiles = markParsedFileStatus(fileContents);
 
@@ -158,21 +241,41 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         parsedFiles,
         parseWarnings: result.warnings,
         isLoading: false,
+        loadingStage: null,
+        loadingDetail: null,
+        loadingProgress: null,
         isDataLoaded: true,
         projectId: makeProjectId(),   // generate once at creation
+        // A brand-new analysis starts with clean per-project presentation state.
+        explorerAxisLabels: {},
+        explorerAxisRanges: {},
       });
       useUIStore.getState().clearProjectFilters();
+      resetProjectScopedState();
       autoSave(get);
     } catch (error) {
       console.error('Parse error:', error);
       set({
         isLoading: false,
+        loadingStage: null,
+        loadingDetail: null,
+        loadingProgress: null,
         parseWarnings: [`Parse error: ${error instanceof Error ? error.message : 'Unknown error'}`],
       });
     }
   },
 
-  loadProjectFile: (project) => {
+  loadProjectFile: async (project, options) => {
+    // Restoring a saved project has no measurable sub-steps (it is a single
+    // IndexedDB read plus a normalization pass), so the bar stays indeterminate.
+    set({
+      isLoading: true,
+      loadingStage: 'loadStage.restoring',
+      loadingDetail: null,
+      loadingProgress: null,
+    });
+    await nextPaint();
+
     const migratedStructures = normalizeStructures(project.structures);
 
     // Ensure compositionMode exists (backward compat)
@@ -186,6 +289,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       ? { ...EMPTY_PARSED_FILE_STATUS, ...project.parsedFiles }
       : inferParsedFiles(migratedStructures, sysInfo, hullGens.length);
 
+    // Restoring the project that is already active (e.g. session restore on
+    // page load) keeps the user's comparisons/marks; loading a *different*
+    // project drops selections that referenced the previous project's ids.
+    const activeProjectId = get().projectId;
+    const incomingProjectId = project.projectId ?? '';
+    const switchingProject = activeProjectId !== '' && incomingProjectId !== activeProjectId;
+
     set({
       systemInfo: sysInfo,
       structures: migratedStructures,
@@ -195,12 +305,19 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       filterPresets: project.filterPresets ?? [],
       parsedFiles,
       isLoading: false,
+      loadingStage: null,
+      loadingDetail: null,
+      loadingProgress: null,
       isDataLoaded: true,
       parseWarnings: [],
-      projectId: project.projectId ?? makeProjectId(),  // reuse existing ID or mint one for old files
+      projectId: incomingProjectId || makeProjectId(),  // reuse existing ID or mint one for old files
       projectName: project.projectName || project.systemInfo?.elements?.join('-') || '',
+      // Axis titles/ranges are stored with the project itself.
+      explorerAxisLabels: project.explorerAxisLabels ?? {},
+      explorerAxisRanges: project.explorerAxisRanges ?? {},
     });
-    useUIStore.getState().clearProjectFilters();
+    if (!options?.preserveFilters) useUIStore.getState().clearProjectFilters();
+    if (switchingProject) resetProjectScopedState();
   },
 
   exportProjectFile: () => {
@@ -221,6 +338,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       filterPresets: state.filterPresets,
       hullGenerations: state.hullGenerations,
       parsedFiles: state.parsedFiles,
+      explorerAxisLabels: state.explorerAxisLabels,
+      explorerAxisRanges: state.explorerAxisRanges,
     };
   },
 
@@ -250,15 +369,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       parentEnthalpy: 0,
       density: 0,
       paretoFront: -1,
-      bulkModulus: -1,
+      bulkModulus: ML_PROPERTY_MISSING,
       eForm: -1,
       eHullRecons: -1,
-      shearModulus: -1,
-      youngModulus: -1,
-      poissonRatio: -1,
-      pughRatio: -1,
-      vickersHardness: -1,
-      fractureToughness: -1,
+      shearModulus: ML_PROPERTY_MISSING,
+      youngModulus: ML_PROPERTY_MISSING,
+      poissonRatio: ML_PROPERTY_MISSING,
+      pughRatio: ML_PROPERTY_MISSING,
+      vickersHardness: ML_PROPERTY_MISSING,
+      fractureToughness: ML_PROPERTY_MISSING,
       qEntropy: 0,
       aOrder: 0,
       sOrder: 0,
@@ -324,7 +443,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       parsedFiles: createEmptyParsedFileStatus(),
       parseWarnings: [],
       isLoading: false,
+      loadingStage: null,
+      loadingDetail: null,
+      loadingProgress: null,
       isDataLoaded: false,
       symmetryStatus: { running: false, done: 0, total: 0 },
+      explorerAxisLabels: {},
+      explorerAxisRanges: {},
     }),
 }));

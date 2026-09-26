@@ -8,12 +8,12 @@ import { useMarkStore } from '@/store/useMarkStore';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT } from '@/lib/constants';
+import { CHART_FONT } from '@/lib/constants';
 import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadWideCsv } from '@/lib/exportCsv';
 import { PlotFrame } from '@/charts/shared/PlotFrame';
-import { usePlotlyStructurePointClick } from '@/charts/shared/usePlotlyStructurePointClick';
+import { useStructurePointClick } from '@/charts/shared/useStructurePointClick';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyData = any;
 
@@ -75,7 +75,7 @@ export function ParetoPage() {
 
     return (
       `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
-      `Fitness: ${s.fitness.toFixed(4)}<br>` +
+      `Fitness: ${Number.isFinite(s.fitness) ? s.fitness.toFixed(4) : '—'}<br>` +
       `${objName}: ${typeof objectiveValue === 'number' ? objectiveValue.toFixed(3) : '—'}<br>` +
       `SG: ${s.spaceGroup} | Origin: ${s.origin}`
     );
@@ -163,7 +163,7 @@ export function ParetoPage() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const layout: any = {
-    font: PLOTLY_FONT,
+    font: CHART_FONT,
     title: { text: `${systemInfo?.elements.join('-')} ${t('pareto.title')}`, font: { size: 15, color: pt.titleColor } },
     xaxis: { title: { text: t('pareto.xAxis'), font: titleFont }, ...axisStyle },
     yaxis: { title: { text: objName, font: titleFont }, ...axisStyle },
@@ -179,7 +179,7 @@ export function ParetoPage() {
     paper_bgcolor: pt.paperBg,
   };
 
-  const structurePointClick = usePlotlyStructurePointClick({
+  const structurePointClick = useStructurePointClick({
     traces,
     onStructureClick: openViewer,
   });

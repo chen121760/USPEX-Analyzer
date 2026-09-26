@@ -32,8 +32,8 @@ export default defineConfig({
           if (!id.includes('node_modules')) {
             return undefined;
           }
-          if (id.includes('plotly.js-dist-min')) {
-            return 'plotly';
+          if (id.includes('/echarts/') || id.includes('\\echarts\\') || id.includes('/zrender/') || id.includes('\\zrender\\')) {
+            return 'echarts';
           }
           if (id.includes('/d3/') || id.includes('\\d3\\')) {
             return 'd3';

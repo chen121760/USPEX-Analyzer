@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useCompareStore } from '@/store/useCompareStore';
 import { collectDynamicFieldKeys } from '@/domain/structure/dynamicFields';
+import { hasMLProperties } from '@/domain/structure/mlProperties';
 import { CompareEmptyState } from './components/CompareEmptyState';
 import { ComparePropertyTable } from './components/ComparePropertyTable';
 import { CompareStructureCard } from './components/CompareStructureCard';
@@ -22,7 +23,7 @@ export function ComparePage() {
   }, [compareIds, structures]);
 
   // 动态检测：ML 属性与指纹数据是否存在
-  const hasML          = structures.some((s) => s.bulkModulus >= 0);
+  const hasML          = hasMLProperties(structures);
   const hasFingerprint = structures.some((s) => s.qEntropy > 0);
 
   const extraPropKeys = useMemo(() => collectDynamicFieldKeys(structures), [structures]);

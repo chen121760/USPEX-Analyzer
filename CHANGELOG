@@ -2,6 +2,17 @@
 
 ## 版本更新记录
 
+### V1.5.0
+
+绘图引擎迁移到 ECharts，修正凸包 / Ed 与筛选链路，补齐加载反馈
+
+- **Plotly → ECharts**：移除 `plotly.js-dist-min` / `react-plotly.js`，改用 `echarts` + `echarts-gl`；`PlotFrame` 收敛为统一的选项适配层（`echartsAdapter.ts`），图表 JPEG / GIF 导出同步改写
+- **凸包与 Ed 不再伪造**：中断运行（`extended_convex_hull` 只有表头、无数据行）时不再用「E/atom − 体系最低 E/atom」冒充 hull distance——那会让最内聚的纯元素成为唯一「稳定」相；改为按组成取最低能、剪枝后重建凸包（四元走 4D 下凸包），结果与 USPEX 自己 `Pareto_ranking` 的 `ConvexHull` 列最大偏差 5×10⁻⁴ eV/atom
+- **ML 目标列占位值**：USPEX 写入的 `100000` 目标占位值不再当作真实数值（表格显示 `—`、CSV/JSON 留空、不参与绘图与统计）
+- **筛选工作区打通**：DataTable / Filter / Explorer 共用同一套筛选条件与标签状态；Explorer 新增横纵 DIS 边分布直方图面板，轴标题与范围按项目保存，取消滚轮缩放，三元坐标改为等边三角形
+- **加载反馈与骨架屏**：全局遮罩分阶段显示确定进度（文件名 → 合并 → 重建凸包及候选数 → 汇总），未知耗时的阶段回退滑动条；分析页按路由切分代码块，首帧显示骨架屏（数据表保留真实表头）
+- `npm test` 扩至 290 条独立 node 断言（新增 `parseProgressChecks.ts`、`loadingStateChecks.ts`、`echartsAdapterChecks.ts` 等）
+
 ### V1.4.6
 
 接入 moyo (spglib) 多容忍度空间群判定 — 结构详情页给出与 symm-USPEX 的对照

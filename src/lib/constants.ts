@@ -62,11 +62,11 @@ export const ORIGIN_COLORS: Record<string, string> = {
   Unknown: '#9ca3af',
 };
 
-/** System-first sans-serif stack shared by the app shell, SVG logo, and Plotly. */
+/** System-first sans-serif stack shared by the app shell, SVG logo, and charts. */
 export const UI_FONT_FAMILY = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", sans-serif';
 
-/** Shared Plotly font matching the app UI. */
-export const PLOTLY_FONT = {
+/** Shared chart font matching the app UI. */
+export const CHART_FONT = {
   family: UI_FONT_FAMILY,
   size: 13,
 };
@@ -89,6 +89,18 @@ export const ML_FIELD_KEYS = [
 ] as const;
 
 export type MLFieldKey = typeof ML_FIELD_KEYS[number];
+
+/**
+ * USPEX's "property not evaluated" placeholder for objective columns.
+ *
+ * `Individuals` initialises every requested property to this value and only
+ * replaces the ones it has evaluated, so a second-objective column such as
+ * `ML_Bulk_Modul` reads `100000.000` for most structures (7201 of 7677 rows in a
+ * real ML run; only 476 carried a value).  The measured prediction lives in the
+ * separate `MLProperties` file, which is why the two columns disagree.  No
+ * elastic property in these files comes anywhere near 1e5.
+ */
+export const USPEX_OBJECTIVE_PLACEHOLDER = 100000;
 
 /** Map ML field key → i18n key */
 export const ML_FIELD_I18N: Record<MLFieldKey, string> = {

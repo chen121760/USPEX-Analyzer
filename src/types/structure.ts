@@ -104,7 +104,10 @@ export interface Structure {
   // Keys: "{name}-Individuals" and "{name}-Pareto_ranking"
   extraProps?: ParserExtras;
 
-  // --- ML Elastic Properties ---
+  // --- ML Elastic Properties (from MLProperties) ---
+  // NaN = this structure has no MLProperties row (see ML_PROPERTY_MISSING).
+  // Real USPEX ML predictions can be negative — e.g. an unstable structure
+  // with a negative bulk modulus — so never test these with `>= 0`.
   bulkModulus: number;        // GPa
   shearModulus: number;       // GPa
   youngModulus: number;       // GPa
@@ -264,6 +267,7 @@ export type CompOperator = '>' | '<' | '>=' | '<=' | '=';
 
 export type UnifiedCondition =
   | { kind: 'numeric'; field: string; operator: NumericOperator; value: number }
+  | { kind: 'text'; field: 'formula' | 'origin'; operator: 'contains' | 'notContains' | 'equals' | 'notEquals'; values: string[] }
   | { kind: 'nComponents'; value: 1 | 2 | 3 | 4 }
   | { kind: 'elementFraction'; element: string; operator: CompOperator; value: number };
 
@@ -427,6 +431,19 @@ export interface ProjectFile {
   hullGenerations?: HullGeneration[];
   /** Which files were originally parsed (persisted for project restore) */
   parsedFiles?: ParsedFileStatus;
+  /**
+   * Explorer axis titles/ranges belong to the project they were typed in —
+   * field keys and numeric ranges differ per system, so they travel with the
+   * project file instead of living in the global chart-settings store.
+   */
+  explorerAxisLabels?: Record<string, string>;
+  explorerAxisRanges?: Record<string, AxisRangeSetting>;
+}
+
+/** User-typed min/max for one Explorer axis, keyed by field key. */
+export interface AxisRangeSetting {
+  min: string;
+  max: string;
 }
 
 // ============================================================

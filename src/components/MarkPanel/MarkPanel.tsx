@@ -4,7 +4,7 @@ import { useProjectStore } from '@/store/useProjectStore';
 import { parseEaIds } from '@/lib/parseEaIds';
 
 /**
- * MarkPanel — shared overlay-mark control panel for all Plotly chart pages.
+ * MarkPanel — shared overlay-mark control panel for all chart pages.
  *
  * Reads/writes mark state from MarkStore directly (no props needed).
  * Renders tag toggle buttons and an EA ID search input.

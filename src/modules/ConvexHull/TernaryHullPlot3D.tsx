@@ -1,7 +1,7 @@
 /**
  * 3D ternary phase diagram convex hull plot.
  *
- * Renders the full 3D convex hull (cartX, cartY, eForm) using Plotly's
+ * Renders the full 3D convex hull (cartX, cartY, eForm) using ECharts GL
  * scatter3d and mesh3d traces, instead of the 2D equilateral-triangle
  * projection used by TernaryHullPlot.
  */
@@ -29,7 +29,7 @@ import { parseEaIds } from '@/lib/parseEaIds';
 import { getStructureIdFromPlotClick, type PlotTraceLike } from '@/charts/shared/plotClick';
 import type { PlotClickEvent } from '@/charts/shared/plotClick';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT } from '@/lib/constants';
+import { CHART_FONT } from '@/lib/constants';
 import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadCsv } from '@/lib/exportCsv';
@@ -89,7 +89,7 @@ export function TernaryHullPlot3D({
     }
   }, [structures]);
 
-  // Capture camera on user rotation/zoom via Plotly relayout events
+  // Capture camera on user rotation/zoom via renderer relayout events
   const handleRelayout = useCallback((event: any) => {
     const cam = event?.['scene.camera'] ?? event?.scene?.camera;
     if (cam) {
@@ -607,7 +607,7 @@ export function TernaryHullPlot3D({
     autosize: true,
     dragmode: 'turntable',
     hovermode: 'closest',
-    font: PLOTLY_FONT,
+    font: CHART_FONT,
     title: {
       text: `${components.map(formulaToHtml).join('-')} 3D Ternary Phase Diagram`,
       font: { size: 15, color: pt.titleColor },
@@ -655,7 +655,7 @@ export function TernaryHullPlot3D({
     paper_bgcolor: pt.paperBg,
   };
 
-  // ── Plotly config ──
+  // ── Chart config ──
   const config = {
     responsive: true,
     displayModeBar: true,
@@ -675,7 +675,7 @@ export function TernaryHullPlot3D({
     ],
   };
 
-  // ── Click handling (native Plotly onClick, 3D-compatible) ──
+  // ── Click handling (native ECharts click, 3D-compatible) ──
   const handlePlotClick = useCallback(
     (event: PlotClickEvent) => {
       const structureId = getStructureIdFromPlotClick(

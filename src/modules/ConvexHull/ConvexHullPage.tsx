@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
+import { PageSkeleton } from '@/components/ui/Skeleton';
+import { useProgressiveData } from '@/hooks/useProgressiveData';
 import { BinaryHullPlot } from './BinaryHullPlot';
 import { TernaryHullPlot } from './TernaryHullPlot';
 import { TernaryHullPlot3D } from './TernaryHullPlot3D';
@@ -9,8 +11,29 @@ import { EnergyRankingChart } from './EnergyRankingChart';
 
 export function ConvexHullPage() {
   const { t } = useTranslation();
-  const structures = useProjectStore((s) => s.structures);
+  const rawStructures = useProjectStore((s) => s.structures);
   const systemInfo = useProjectStore((s) => s.systemInfo);
+  const { data: structures, ready } = useProgressiveData(rawStructures);
+
+  const compositionMode = systemInfo?.compositionMode ?? 'fixed';
+  const systemType = systemInfo?.systemType ?? 'binary';
+  const isTernaryVarcomp = compositionMode !== 'fixed' && systemType === 'ternary';
+
+  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
+
+  // Reset to 2D when switching project / system type
+  const prevIsTernaryVarcomp = useRef(isTernaryVarcomp);
+  useEffect(() => {
+    if (prevIsTernaryVarcomp.current !== isTernaryVarcomp) {
+      setViewMode('2d');
+      prevIsTernaryVarcomp.current = isTernaryVarcomp;
+    }
+  }, [isTernaryVarcomp]);
+
+  // Every hook above is unconditional; the loading and empty states come after.
+  if (!ready) {
+    return <PageSkeleton label={t('loading')} />;
+  }
 
   if (!structures.length || !systemInfo) {
     return (
@@ -25,20 +48,6 @@ export function ConvexHullPage() {
       </div>
     );
   }
-
-  const { compositionMode, systemType } = systemInfo;
-  const isTernaryVarcomp = compositionMode !== 'fixed' && systemType === 'ternary';
-
-  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
-
-  // Reset to 2D when switching project / system type
-  const prevIsTernaryVarcomp = useRef(isTernaryVarcomp);
-  useEffect(() => {
-    if (prevIsTernaryVarcomp.current !== isTernaryVarcomp) {
-      setViewMode('2d');
-      prevIsTernaryVarcomp.current = isTernaryVarcomp;
-    }
-  }, [isTernaryVarcomp]);
 
   // Determine page title based on mode
   const pageTitle =

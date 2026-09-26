@@ -4,6 +4,7 @@ import type {
   SystemInfo,
   USPEXFileType,
 } from '@/types/structure';
+import { hasMLProperties } from '@/domain/structure/mlProperties';
 
 export const EMPTY_PARSED_FILE_STATUS: ParsedFileStatus = {
   parameters: false,
@@ -52,7 +53,9 @@ export function inferParsedFiles(
     extended_convex_hull: structures.some((s) => !Number.isNaN(s.fitness)),
     individuals: structures.some((s) => s.generation > 0),
     pareto_ranking: structures.some((s) => s.paretoFront >= 0),
-    ml_properties: structures.some((s) => s.bulkModulus >= 0),
+    // MLProperties predictions may legitimately be negative, so presence is
+    // "any finite value", not "any value >= 0".
+    ml_properties: hasMLProperties(structures),
     origin: structures.some((s) => s.origin !== 'Unknown'),
     gathered_poscars: structures.some((s) => !!s.poscarData),
     gathered_poscars_unrelaxed: false,

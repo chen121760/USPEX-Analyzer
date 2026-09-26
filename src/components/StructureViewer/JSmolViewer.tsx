@@ -3,7 +3,7 @@
  *
  * JSmol keeps part of its mouse state and load monitor in global DOM objects.
  * This component owns the applet lifecycle and explicitly removes those
- * globals on unmount so Plotly hover/click hit-testing is not blocked after the
+ * globals on unmount so chart hover/click hit-testing is not blocked after the
  * structure modal closes.
  */
 import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';

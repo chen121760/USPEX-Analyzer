@@ -10,12 +10,20 @@ import {
 } from '@/store/uiPersistence';
 
 interface ChartSettingsState {
+  explorerDimension: '2d' | '3d';
+  setExplorerDimension: (dimension: '2d' | '3d') => void;
   explorerXKey: string;
   setExplorerXKey: (key: string) => void;
   explorerYKey: string;
   setExplorerYKey: (key: string) => void;
+  explorerZKey: string;
+  setExplorerZKey: (key: string) => void;
   explorerColorKey: string;
   setExplorerColorKey: (key: string) => void;
+  explorerFocusMode: 'off' | 'highlight' | 'dim' | 'hide';
+  setExplorerFocusMode: (mode: 'off' | 'highlight' | 'dim' | 'hide') => void;
+  explorerDimOpacity: number;
+  setExplorerDimOpacity: (opacity: number) => void;
   explorerShowXMarginal: boolean;
   setExplorerShowXMarginal: (value: boolean) => void;
   explorerShowYMarginal: boolean;
@@ -62,21 +70,44 @@ interface ChartSettingsState {
   setParetoSelectedFronts: (fronts: number[]) => void;
   paretoShowLines: boolean;
   setParetoShowLines: (show: boolean) => void;
+
+  /**
+   * Clear the settings that only mean something for the currently loaded
+   * project (front indices, manual beta reference point).  Axis titles and
+   * ranges are not here: they live in the project store.
+   */
+  resetProjectScopedChartSettings: () => void;
 }
 
 function isBetaRefMode(value: unknown): value is ChartSettingsState['betaRefMode'] {
   return value === 'auto' || value === 'manual';
 }
 
+function isExplorerDimension(value: unknown): value is ChartSettingsState['explorerDimension'] {
+  return value === '2d' || value === '3d';
+}
+
+function isExplorerFocusMode(value: unknown): value is ChartSettingsState['explorerFocusMode'] {
+  return value === 'off' || value === 'highlight' || value === 'dim' || value === 'hide';
+}
+
 export const useChartSettingsStore = create<ChartSettingsState>()(
   persist(
     (set) => ({
+      explorerDimension: getLegacyUIValue('explorerDimension', '2d', isExplorerDimension),
+      setExplorerDimension: (dimension) => set({ explorerDimension: dimension }),
       explorerXKey: getLegacyUIValue('explorerXKey', 'fitness', isString),
       setExplorerXKey: (key) => set({ explorerXKey: key }),
       explorerYKey: getLegacyUIValue('explorerYKey', 'enthalpy', isString),
       setExplorerYKey: (key) => set({ explorerYKey: key }),
+      explorerZKey: getLegacyUIValue('explorerZKey', 'spaceGroup', isString),
+      setExplorerZKey: (key) => set({ explorerZKey: key }),
       explorerColorKey: getLegacyUIValue('explorerColorKey', 'origin', isString),
       setExplorerColorKey: (key) => set({ explorerColorKey: key }),
+      explorerFocusMode: getLegacyUIValue('explorerFocusMode', 'off', isExplorerFocusMode),
+      setExplorerFocusMode: (mode) => set({ explorerFocusMode: mode }),
+      explorerDimOpacity: getLegacyUIValue('explorerDimOpacity', 0.08, isNumber),
+      setExplorerDimOpacity: (opacity) => set({ explorerDimOpacity: opacity }),
       explorerShowXMarginal: getLegacyUIValue('explorerShowXMarginal', false, isBoolean),
       setExplorerShowXMarginal: (value) => set({ explorerShowXMarginal: value }),
       explorerShowYMarginal: getLegacyUIValue('explorerShowYMarginal', false, isBoolean),
@@ -123,14 +154,36 @@ export const useChartSettingsStore = create<ChartSettingsState>()(
       setParetoSelectedFronts: (fronts) => set({ paretoSelectedFronts: fronts }),
       paretoShowLines: getLegacyUIValue('paretoShowLines', true, isBoolean),
       setParetoShowLines: (show) => set({ paretoShowLines: show }),
+
+      resetProjectScopedChartSettings: () => set({
+        paretoSelectedFronts: [],
+        betaRefX: null,
+        betaRefY: null,
+      }),
     }),
     {
       name: 'uspex-chart-settings-state',
-      version: 1,
+      version: 2,
+      // v1 kept explorerAxisRanges/explorerAxisLabels here, which leaked the
+      // previous project's axis titles and ranges onto the next project.  They
+      // now live in the project store; drop the stale copies.
+      migrate: (persisted, version) => {
+        if (version >= 2 || typeof persisted !== 'object' || persisted === null) {
+          return persisted as ChartSettingsState;
+        }
+        const migrated = { ...(persisted as Record<string, unknown>) };
+        delete migrated.explorerAxisRanges;
+        delete migrated.explorerAxisLabels;
+        return migrated as unknown as ChartSettingsState;
+      },
       partialize: (state) => ({
+        explorerDimension: state.explorerDimension,
         explorerXKey: state.explorerXKey,
         explorerYKey: state.explorerYKey,
+        explorerZKey: state.explorerZKey,
         explorerColorKey: state.explorerColorKey,
+        explorerFocusMode: state.explorerFocusMode,
+        explorerDimOpacity: state.explorerDimOpacity,
         explorerShowXMarginal: state.explorerShowXMarginal,
         explorerShowYMarginal: state.explorerShowYMarginal,
         explorerMarginalBins: state.explorerMarginalBins,

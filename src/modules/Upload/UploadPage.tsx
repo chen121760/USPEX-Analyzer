@@ -23,6 +23,8 @@ import { QuickPackCommand } from '@/components/QuickPackCommand';
 import { extractArchive, entriesToFiles, isArchive } from '@/utils/extractArchive';
 import { CitePopover } from '@/components/CitePopover';
 import { useThemeStore } from '@/theme/themeStore';
+import { Spinner, progressPercent } from '@/components/ui/Spinner';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 
 /**
  * Build auto project name.
@@ -64,6 +66,9 @@ export function UploadPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const processFiles = useProjectStore((s) => s.processFiles);
+  const isParsing = useProjectStore((s) => s.isLoading);
+  const loadingProgress = useProjectStore((s) => s.loadingProgress);
+  const parsingPercent = progressPercent(loadingProgress);
   const setProjectName = useProjectStore((s) => s.setProjectName);
   const loadProjectFile = useProjectStore((s) => s.loadProjectFile);
   const theme = useThemeStore((s) => s.theme);
@@ -84,10 +89,16 @@ export function UploadPage() {
 
   // 存储历史项目列表
   const [recentProjects, setRecentProjects] = useState<StoredProject[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+  // The panel is reserved while the list is being read, so finishing the read
+  // does not re-flow the whole page (the container switches to a row layout).
+  const showProjectsPanel = projectsLoading || recentProjects.length > 0;
 
   // 页面挂载时读取一次 IndexedDB
   useEffect(() => {
-    loadRecentProjects().then(setRecentProjects);
+    loadRecentProjects()
+      .then(setRecentProjects)
+      .finally(() => setProjectsLoading(false));
   }, []); // [] 表示只在组件第一次渲染时执行
 
   // Enter 键快捷启动分析（ref 在每次渲染时更新，effect 只在挂载时注册一次）
@@ -106,8 +117,8 @@ export function UploadPage() {
   }, []);
 
   // 点击历史项目 → 恢复数据 → 跳转到 Dashboard
-  const handleRestoreProject = (stored: StoredProject) => {
-    loadProjectFile(stored.project); // 这个函数 store 里已有
+  const handleRestoreProject = async (stored: StoredProject) => {
+    await loadProjectFile(stored.project);
     setProjectName(stored.name);
     navigate('/dashboard');
   };
@@ -154,7 +165,7 @@ export function UploadPage() {
         if (detected.type === 'project_json') {
           try {
             const project: ProjectFile = JSON.parse(content);
-            loadProjectFile(project);
+            await loadProjectFile(project);
             const name = project.projectName || file.name.replace(/\.json$/i, '') || 'Imported Project';
             setProjectName(name);
             saveProject(project, name);
@@ -235,9 +246,11 @@ export function UploadPage() {
       ? t('upload.requiredFilesHint')
       : t('upload.requiredFilesFallback');
 
-  const startAnalysis = () => {
-    processFiles(detectedFiles, fileContents);
-    // Build auto name from parsed systemInfo (processFiles is synchronous)
+  const startAnalysis = async () => {
+    // Parsing a large run takes seconds and blocks the main thread, so the store
+    // paints its loading overlay first (see `nextPaint`) and the button below
+    // stays disabled with a spinner until the data is in.
+    await processFiles(detectedFiles, fileContents);
     const state = useProjectStore.getState();
     const si = state.systemInfo;
     const fixedFormula = state.structures?.[0]?.formula;
@@ -258,7 +271,7 @@ export function UploadPage() {
       const res = await fetch(`${import.meta.env.BASE_URL}examples/example.json`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const project: ProjectFile = await res.json();
-      loadProjectFile(project);
+      await loadProjectFile(project);
       const name = project.projectName || 'Sample';
       setProjectName(name);
       saveProject(project, name);
@@ -363,15 +376,15 @@ export function UploadPage() {
       {/* Main content: upload + recent side by side when history exists */}
       <div style={{
         display: 'flex',
-        flexDirection: recentProjects.length > 0 ? 'row' : 'column',
-        alignItems: recentProjects.length > 0 ? 'flex-start' : 'center',
+        flexDirection: showProjectsPanel ? 'row' : 'column',
+        alignItems: showProjectsPanel ? 'flex-start' : 'center',
         gap: 24,
         width: '100%',
-        maxWidth: recentProjects.length > 0 ? 1100 : 560,
+        maxWidth: showProjectsPanel ? 1100 : 560,
         justifyContent: 'center',
       }}>
         {/* Left: naming + drop zone + start button */}
-        <div style={{ flex: recentProjects.length > 0 ? '0 0 560px' : undefined, width: recentProjects.length > 0 ? undefined : '100%' }}>
+        <div style={{ flex: showProjectsPanel ? '0 0 560px' : undefined, width: showProjectsPanel ? undefined : '100%' }}>
 
           {/* Suffix input — optional, above dropzone */}
           <div style={{ marginBottom: 8 }}>
@@ -531,14 +544,30 @@ export function UploadPage() {
             <button
               className="btn btn-primary"
               onClick={startAnalysis}
-              disabled={!canStart}
+              disabled={!canStart || isParsing}
+              aria-busy={isParsing}
               style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
                 padding: '10px 32px', fontSize: 15,
-                opacity: canStart ? 1 : 0.4,
-                cursor: canStart ? 'pointer' : 'not-allowed',
+                opacity: canStart && !isParsing ? 1 : 0.55,
+                cursor: canStart && !isParsing ? 'pointer' : 'not-allowed',
               }}
             >
-              {t('btn.startAnalysis')} →
+              {isParsing ? (
+                <>
+                  <Spinner size={16} />
+                  {t('upload.parsing')}
+                  {/* The same fraction the overlay shows, with reserved width so
+                      the button does not resize as it counts up. */}
+                  {parsingPercent != null ? (
+                    <span className="loading-percent">{parsingPercent}%</span>
+                  ) : null}
+                </>
+              ) : (
+                <>{t('btn.startAnalysis')} →</>
+              )}
             </button>
             {!canStart && (
               <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 8 }}>
@@ -549,7 +578,7 @@ export function UploadPage() {
         </div>
 
         {/* Right: Recent projects */}
-        {recentProjects.length > 0 && (
+        {showProjectsPanel && (
           <div style={{ flex: '1 1 300px', minWidth: 260, maxWidth: 400 }}>
             <h3 style={{
               fontSize: 13, fontWeight: 600, marginBottom: 10,
@@ -559,6 +588,11 @@ export function UploadPage() {
               <Clock size={14} />
               {t('upload.recentProjects')}
             </h3>
+            {projectsLoading ? (
+              <div aria-busy="true" aria-label={t('upload.projectsLoading')}>
+                <SkeletonRows rows={3} height={38} />
+              </div>
+            ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {recentProjects.map((stored) => {
                 const si = stored.project.systemInfo;
@@ -604,6 +638,7 @@ export function UploadPage() {
                 );
               })}
             </div>
+            )}
           </div>
         )}
       </div>

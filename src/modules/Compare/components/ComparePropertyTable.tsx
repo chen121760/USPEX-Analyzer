@@ -1,4 +1,5 @@
 import { FormulaDisplay } from '@/components/FormulaDisplay';
+import { hasMLProperties } from '@/domain/structure/mlProperties';
 import type { Structure } from '@/types/structure';
 
 function PropRow({
@@ -83,7 +84,7 @@ export function ComparePropertyTable({
             </>
           )}
 
-          {hasML && compareStructures.some((s) => s.youngModulus >= 0) && (
+          {hasML && hasMLProperties(compareStructures) && (
             <>
               <tr><td colSpan={compareStructures.length + 1} style={{ padding: '10px 12px 4px', fontSize: 11, fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: 1 }}>Elastic Properties (ML)</td></tr>
               <PropRow label={t('col.young')} values={compareStructures.map((s) => s.youngModulus)} fmt={numFmt(1)} />

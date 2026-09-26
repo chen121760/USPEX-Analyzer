@@ -1,39 +1,25 @@
 import GIF from 'gif.js';
+import * as echarts from 'echarts';
+import { adaptToECharts } from '@/charts/shared/echartsAdapter';
+import type { PlotData, PlotLayout } from '@/charts/shared/plotTypes';
 import { downloadBlob, ensureFileExtension } from './exportFileNames';
 
-export type PlotlyExportData = unknown;
-export type PlotlyExportLayout = Record<string, unknown>;
-export type PlotlyExportConfig = Record<string, unknown>;
-
-interface PlotlyRenderer {
-  react: (
-    element: HTMLElement,
-    data: PlotlyExportData[],
-    layout: PlotlyExportLayout,
-    config?: PlotlyExportConfig,
-  ) => Promise<unknown>;
-  toImage: (
-    element: HTMLElement,
-    options: { format: 'png'; width: number; height: number },
-  ) => Promise<string>;
-  purge?: (element: HTMLElement) => void;
-}
-
-export interface ExportAnimatedPlotlyGifOptions<TFrame> {
+export interface ExportAnimatedEChartsGifOptions<TFrame> {
   filename: string;
   frames: readonly TFrame[];
   sourceElement?: HTMLElement | null;
   width?: number;
   height?: number;
-  layout?: PlotlyExportLayout;
+  layout?: PlotLayout;
   delayMs: number;
   workerScript?: string;
   workers?: number;
   quality?: number;
-  buildFrameData: (frame: TFrame, index: number) => PlotlyExportData[] | Promise<PlotlyExportData[]>;
+  buildFrameData: (frame: TFrame, index: number) => PlotData | Promise<PlotData>;
 }
 
-export async function exportAnimatedPlotlyGif<TFrame>({
+/** Render an animated chart entirely with Apache ECharts. */
+export async function exportAnimatedEChartsGif<TFrame>({
   filename,
   frames,
   sourceElement,
@@ -45,36 +31,25 @@ export async function exportAnimatedPlotlyGif<TFrame>({
   workers = 2,
   quality = 10,
   buildFrameData,
-}: ExportAnimatedPlotlyGifOptions<TFrame>): Promise<void> {
+}: ExportAnimatedEChartsGifOptions<TFrame>): Promise<void> {
   if (frames.length === 0) return;
 
-  const size = resolvePlotlyExportSize(sourceElement, width, height);
-  const Plotly = await loadPlotlyRenderer();
-  const renderHost = createOffscreenPlotHost(size.width, size.height);
+  const size = resolveExportSize(sourceElement, width, height);
+  const renderHost = createOffscreenChartHost(size.width, size.height);
+  const chart = echarts.init(renderHost, undefined, { renderer: 'canvas', width: size.width, height: size.height });
 
   try {
     const gif = new GIF({ workers, quality, workerScript });
-    const baseLayout = clonePlotlyValue({
-      ...layout,
-      width: size.width,
-      height: size.height,
-      autosize: false,
-    });
-
     for (const [index, frame] of frames.entries()) {
       const frameData = await buildFrameData(frame, index);
-      await Plotly.react(
-        renderHost,
-        clonePlotlyValue(frameData),
-        clonePlotlyValue(baseLayout),
-        { staticPlot: true, displayModeBar: false, responsive: false },
-      );
+      const adapted = adaptToECharts(frameData, { ...layout }, { displayModeBar: false });
+      chart.setOption(adapted.option, { notMerge: true, lazyUpdate: false });
       await waitForAnimationFrame();
 
-      const dataUrl = await Plotly.toImage(renderHost, {
-        format: 'png',
-        width: size.width,
-        height: size.height,
+      const dataUrl = chart.getDataURL({
+        type: 'png',
+        pixelRatio: 1,
+        backgroundColor: resolveBackground(layout),
       });
       const image = await loadImage(dataUrl);
       gif.addFrame(image, { delay: delayMs });
@@ -83,26 +58,25 @@ export async function exportAnimatedPlotlyGif<TFrame>({
     const blob = await renderGif(gif);
     downloadBlob(blob, ensureFileExtension(filename, '.gif'));
   } finally {
-    Plotly.purge?.(renderHost);
+    chart.dispose();
     renderHost.remove();
   }
 }
 
-function resolvePlotlyExportSize(
+function resolveExportSize(
   sourceElement?: HTMLElement | null,
   width?: number,
   height?: number,
 ): { width: number; height: number } {
-  const graphElement = sourceElement?.querySelector<HTMLElement>('.js-plotly-plot') ?? sourceElement;
+  const graphElement = sourceElement?.querySelector<HTMLElement>('[data-chart-engine="echarts"]') ?? sourceElement;
   const rect = graphElement?.getBoundingClientRect();
-
   return {
     width: Math.max(1, Math.round(width ?? rect?.width ?? graphElement?.offsetWidth ?? 900)),
     height: Math.max(1, Math.round(height ?? rect?.height ?? graphElement?.offsetHeight ?? 550)),
   };
 }
 
-function createOffscreenPlotHost(width: number, height: number): HTMLElement {
+function createOffscreenChartHost(width: number, height: number): HTMLElement {
   const element = document.createElement('div');
   Object.assign(element.style, {
     position: 'fixed',
@@ -116,31 +90,19 @@ function createOffscreenPlotHost(width: number, height: number): HTMLElement {
   return element;
 }
 
-async function loadPlotlyRenderer(): Promise<PlotlyRenderer> {
-  const module = await import('plotly.js-dist-min');
-  const maybeDefault = module as unknown as { default?: PlotlyRenderer };
-  return maybeDefault.default ?? (module as unknown as PlotlyRenderer);
-}
-
-function clonePlotlyValue<T>(value: T): T {
-  try {
-    return structuredClone(value);
-  } catch {
-    return JSON.parse(JSON.stringify(value)) as T;
-  }
+function resolveBackground(layout: PlotLayout): string {
+  return typeof layout.paper_bgcolor === 'string' ? layout.paper_bgcolor : '#fff';
 }
 
 function waitForAnimationFrame(): Promise<void> {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-  });
+  return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error('Failed to load Plotly frame image.'));
+    image.onerror = () => reject(new Error('Failed to load ECharts frame image.'));
     image.src = src;
   });
 }

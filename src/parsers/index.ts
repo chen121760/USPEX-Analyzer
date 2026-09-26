@@ -39,6 +39,8 @@ import {
   totalAtoms,
 } from './compositionUtils';
 import { reconstructHullStructures } from '@/domain/hull/reconstructHull';
+import { ML_PROPERTY_MISSING } from '@/domain/structure/mlProperties';
+import { ML_FIELD_KEYS, type MLFieldKey } from '@/lib/constants';
 
 // Re-export individual parsers for direct use
 export {
@@ -72,6 +74,62 @@ export interface ParseResult {
   hullGenerations: HullGeneration[];
   warnings: string[];
 }
+
+/**
+ * One step of the parsing pipeline, published so the UI can show real progress
+ * instead of an indefinite spinner.
+ *
+ * The parser stays free of translations: it reports the i18n *key* for the
+ * headline plus the machine-readable file type, and the caller resolves the
+ * display name from the files it detected.
+ *
+ * `progress` is the fraction of the pipeline that has already completed.  The
+ * weights are tuned against a real run (7677 structures, ~4.2 s) so the bar
+ * advances roughly in proportion to the time each step takes — most of the
+ * cost is reading `Individuals` and `gatheredPOSCARS`, then rebuilding the hull.
+ */
+export interface ParseProgress {
+  /** i18n key for the headline, e.g. `loadStage.parsing`. */
+  stage: string;
+  /**
+   * Completed fraction of the pipeline, in [0, 1], or `null` when the step
+   * cannot report one. `null` makes the overlay fall back to its indeterminate
+   * (sliding) bar instead of freezing a number it cannot know.
+   */
+  progress: number | null;
+  /** The file that just finished parsing, when the step is per-file. */
+  fileType?: USPEXFileType;
+  /** How many items the step is working on, when it can say. */
+  count?: number;
+  /** i18n key used to render `count`; defaults to `loadStage.structures`. */
+  detailKey?: string;
+}
+
+export type ParseProgressHandler = (progress: ParseProgress) => void | Promise<void>;
+
+/**
+ * How far the bar has moved once each file has been read.
+ *
+ * These are the measured time shares of a real 7677-structure run (~0.5 s of
+ * file work): reading `gatheredPOSCARS` and `Individuals` dominates, every other
+ * file is noise. Absent files are simply skipped, so the numbers stay monotonic
+ * for any combination of inputs.
+ */
+const FILE_PROGRESS: ReadonlyArray<readonly [USPEXFileType, number]> = [
+  ['parameters', 0.01],
+  ['extended_convex_hull', 0.02],
+  ['individuals', 0.20],
+  ['pareto_ranking', 0.21],
+  ['ml_properties', 0.26],
+  ['origin', 0.31],
+  ['gathered_poscars', 0.55],
+  ['convex_hull', 0.56],
+];
+
+/** Progress published when the merge into Structure records begins. */
+const MERGE_START = 0.65;
+/** Progress published when SystemInfo is assembled (the last step). */
+const FINALIZE_START = 0.99;
 
 function inferElementsFromPoscars(poscarMap: Map<number, ParsedPoscar>): string[] {
   const elements: string[] = [];
@@ -120,6 +178,24 @@ function inferHullCoordinates(
   return [0];
 }
 
+/**
+ * MLProperties-derived fields for one structure.
+ *
+ * An empty MLProperties row lookup yields `NaN` for every field — see
+ * `ML_PROPERTY_MISSING`.  Do not use `-1` (or any negative value) as the
+ * "missing" marker: USPEX ML predictions really can be negative.
+ */
+function mlPropertiesFor(ml: ParsedMLProperties | undefined): Record<MLFieldKey, number> {
+  const values = {} as Record<MLFieldKey, number>;
+  for (const key of ML_FIELD_KEYS) {
+    const value = ml?.[key];
+    values[key] = typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : ML_PROPERTY_MISSING;
+  }
+  return values;
+}
+
 function inferCompositionModeFromIndividuals(
   individualsResult: IndividualsParseResult | null,
 ): CompositionMode {
@@ -132,12 +208,27 @@ function inferCompositionModeFromIndividuals(
 
 /**
  * Run the full parsing pipeline on all detected files.
+ *
+ * Asynchronous only because of `onProgress`: the caller's handler is awaited at
+ * every step boundary, which is what lets a UI paint a determinate progress bar
+ * while the parsing itself keeps blocking the main thread.  Without a handler
+ * the function resolves on the next microtask and nothing else changes.
  */
-export function parseAllFiles(
+export async function parseAllFiles(
   detectedFiles: DetectedFile[],
   fileContents: Map<USPEXFileType, string>,
-): ParseResult {
+  onProgress?: ParseProgressHandler,
+): Promise<ParseResult> {
   const warnings: string[] = [];
+
+  const report = async (progress: ParseProgress): Promise<void> => {
+    if (!onProgress) return;
+    await onProgress(progress);
+  };
+  const fileProgress = (fileType: USPEXFileType): number =>
+    FILE_PROGRESS.find(([type]) => type === fileType)?.[1] ?? 0;
+  const reportFile = (fileType: USPEXFileType) =>
+    report({ stage: 'loadStage.parsing', progress: fileProgress(fileType), fileType });
 
   // ---- Step 1: Parse each file ----
 
@@ -151,6 +242,7 @@ export function parseAllFiles(
         'Invalid numSpecies block: every row must contain one non-negative integer count per atomType entry',
       );
     }
+    await reportFile('parameters');
   }
 
   // Elements: primary from Parameters.txt, with POSCAR fallback below.
@@ -174,6 +266,7 @@ export function parseAllFiles(
   const hullContent = fileContents.get('extended_convex_hull');
   if (hullContent) {
     hullData = parseExtendedConvexHull(hullContent);
+    await reportFile('extended_convex_hull');
   }
 
   // Individuals
@@ -181,6 +274,7 @@ export function parseAllFiles(
   const indContent = fileContents.get('individuals');
   if (indContent) {
     individualsResult = parseIndividuals(indContent);
+    await reportFile('individuals');
   }
 
   // Pareto ranking
@@ -188,6 +282,7 @@ export function parseAllFiles(
   const paretoContent = fileContents.get('pareto_ranking');
   if (paretoContent) {
     paretoResult = parseParetoRanking(paretoContent);
+    await reportFile('pareto_ranking');
   }
 
   // ML Properties
@@ -195,6 +290,7 @@ export function parseAllFiles(
   const mlContent = fileContents.get('ml_properties');
   if (mlContent) {
     mlData = parseMLProperties(mlContent);
+    await reportFile('ml_properties');
   }
 
   // Origin
@@ -202,6 +298,7 @@ export function parseAllFiles(
   const originContent = fileContents.get('origin');
   if (originContent) {
     originData = parseOrigin(originContent);
+    await reportFile('origin');
   }
 
   // POSCAR data
@@ -209,6 +306,7 @@ export function parseAllFiles(
   const poscarContent = fileContents.get('gathered_poscars');
   if (poscarContent) {
     poscarMap = parseGatheredPoscars(poscarContent);
+    await reportFile('gathered_poscars');
   } else {
     warnings.push('gatheredPOSCARS not found — structure viewing will be unavailable');
   }
@@ -223,6 +321,7 @@ export function parseAllFiles(
   const hullGenContent = fileContents.get('convex_hull');
   if (hullGenContent) {
     hullGenerations = parseConvexHullGenerations(hullGenContent);
+    await reportFile('convex_hull');
   }
 
   // ---- Step 1b: Determine system properties ----
@@ -291,14 +390,13 @@ export function parseAllFiles(
   if (hullData.length === 0 && individualsResult) {
     if (compositionMode === 'fixed') {
       warnings.push('Fixed composition — no convex hull. Building structure list from Individuals file');
+    } else if (hullContent) {
+      warnings.push(
+        'extended_convex_hull has no data rows (interrupted run?) — rebuilding the hull and Ed from Individuals instead of using USPEX output',
+      );
     } else {
-      warnings.push('extended_convex_hull file not found — building from Individuals file');
+      warnings.push('extended_convex_hull file not found — rebuilding the hull and Ed from Individuals');
     }
-    const minEnthalpy = Math.min(
-      ...individualsResult.data.map(
-        (ind) => ind.enthalpy / Math.max(1, totalAtoms(ind.composition))
-      )
-    );
     const hasIndividualsFitness =
       individualsResult.midColNames.includes('Fitness') ||
       individualsResult.midColNames.includes('e_above_hull');
@@ -307,9 +405,12 @@ export function parseAllFiles(
       composition: ind.composition,
       enthalpy: ind.enthalpy / Math.max(1, totalAtoms(ind.composition)),
       volume: ind.volume / Math.max(1, totalAtoms(ind.composition)),
-      fitness: hasIndividualsFitness
-        ? ind.indFitness
-        : ind.enthalpy / Math.max(1, totalAtoms(ind.composition)) - minEnthalpy,
+      // No fabricated hull distance: without USPEX's own Ed the value is
+      // unknown (NaN) here and the convex-hull reconstruction in Step 3c fills
+      // in a real one.  "E/atom minus the run's lowest E/atom" is not a hull
+      // distance — for a multi-element system it makes the most cohesive pure
+      // element the only stable phase.
+      fitness: hasIndividualsFitness ? ind.indFitness : Number.NaN,
       symm: ind.symm,
       x: inferHullCoordinates(ind.composition, systemType, compositionBasis),
       y: 0,
@@ -386,6 +487,8 @@ export function parseAllFiles(
 
   // ---- Step 3: Merge into unified Structure records ----
 
+  await report({ stage: 'loadStage.merging', progress: MERGE_START });
+
   let structures: Structure[] = hullData.map((hull) => {
     const ind = individualsMap.get(hull.id);
     const pareto = paretoMap.get(hull.id);
@@ -460,13 +563,7 @@ export function parseAllFiles(
       extraProps: Object.keys(extraProps).length > 0 ? extraProps : undefined,
 
       // ML Properties
-      bulkModulus: ml?.bulkModulus ?? -1,
-      shearModulus: ml?.shearModulus ?? -1,
-      youngModulus: ml?.youngModulus ?? -1,
-      poissonRatio: ml?.poissonRatio ?? -1,
-      pughRatio: ml?.pughRatio ?? -1,
-      vickersHardness: ml?.vickersHardness ?? -1,
-      fractureToughness: ml?.fractureToughness ?? -1,
+      ...mlPropertiesFor(ml),
 
       // Fingerprint
       qEntropy: ind?.qEntropy ?? 0,
@@ -551,13 +648,8 @@ export function parseAllFiles(
           Object.assign(ep, ind.extras);
           return Object.keys(ep).length > 0 ? ep : undefined;
         })(),
-        bulkModulus: ml?.bulkModulus ?? -1,
-        shearModulus: ml?.shearModulus ?? -1,
-        youngModulus: ml?.youngModulus ?? -1,
-        poissonRatio: ml?.poissonRatio ?? -1,
-        pughRatio: ml?.pughRatio ?? -1,
-        vickersHardness: ml?.vickersHardness ?? -1,
-        fractureToughness: ml?.fractureToughness ?? -1,
+        // ML Properties
+        ...mlPropertiesFor(ml),
         qEntropy: ind.qEntropy ?? 0,
         aOrder: ind.aOrder ?? 0,
         sOrder: ind.sOrder ?? 0,
@@ -575,6 +667,20 @@ export function parseAllFiles(
   }
 
   // ---- Step 3c: Reconstruct convex hull (compute eForm / eHullRecons) ----
+  // This step reports no fraction on purpose. The hull rebuild is a single
+  // opaque `convex-hull` call whose cost depends on how many compositions need
+  // hulling — 0.15 s for a run that already carries USPEX's own hull distances,
+  // but ~3.5 s for an interrupted run whose hull must be rebuilt from 2400+
+  // compositions. A frozen number would be a lie; the overlay shows its
+  // indeterminate bar instead, and the detail line names the candidate count.
+  const hullCandidates = structures.filter((s) => !s.isUserAdded && s.enthalpyTotal <= 900).length;
+  await report({
+    stage: 'loadStage.hull',
+    progress: null,
+    count: hullCandidates,
+    detailKey: 'loadStage.hullDetail',
+  });
+
   const hullReconstruction = reconstructHullStructures(
     structures,
     systemType,
@@ -601,6 +707,8 @@ export function parseAllFiles(
   }
 
   // ---- Step 4: Build system info ----
+
+  await report({ stage: 'loadStage.finalizing', progress: FINALIZE_START, count: structures.length });
 
   const fitnessValues = structures.map((s) => s.fitness).filter((f) => f >= 0);
   const unconvergedCount = structures.filter((s) => s.enthalpyTotal > 900).length;

@@ -7,7 +7,9 @@ import { ChevronDown, ChevronUp, Check, X, AlertTriangle, Info } from 'lucide-re
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
 import { PlotFrame } from '@/charts/shared/PlotFrame';
-import { PLOTLY_FONT } from '@/lib/constants';
+import { PageSkeleton } from '@/components/ui/Skeleton';
+import { useProgressiveData } from '@/hooks/useProgressiveData';
+import { CHART_FONT } from '@/lib/constants';
 
 /** Count occurrences of a field value */
 function countBy<T>(items: T[], accessor: (item: T) => string): Record<string, number> {
@@ -126,7 +128,8 @@ function Banner({ type, children }: { type: 'warning' | 'info'; children: React.
 
 export function DashboardPage() {
   const { t } = useTranslation();
-  const structures = useProjectStore((s) => s.structures);
+  const rawStructures = useProjectStore((s) => s.structures);
+  const { data: structures, ready } = useProgressiveData(rawStructures);
   const systemInfo = useProjectStore((s) => s.systemInfo);
   const parsedFiles = useProjectStore((s) => s.parsedFiles);
   const parseWarnings = useProjectStore((s) => s.parseWarnings);
@@ -168,6 +171,13 @@ export function DashboardPage() {
       originCount,
     };
   }, [structures, systemInfo]);
+
+  // Statistics and the two distribution charts are derived from the whole data
+  // set; the first pass runs after the shell is on screen, so the page shows its
+  // reserved skeleton instead of an empty "no data" frame that then jumps.
+  if (!ready) {
+    return <PageSkeleton label={t('loading')} />;
+  }
 
   if (!systemInfo || !stats) {
     return <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)' }}>{t('noData')}</div>;
@@ -294,6 +304,9 @@ export function DashboardPage() {
               }]}
               layout={{
                 showlegend: true,
+                // Pie slices take their colours from the palette; without one
+                // they are drawn with no fill at all.
+                colorway: plotTheme.categoricalColors,
                 legend: {
                   bgcolor: theme === 'dark' ? 'rgba(24, 24, 37, 0.86)' : 'rgba(255,255,255,0.4)',
                   bordercolor: theme === 'dark' ? '#313244' : '#e2e8f0',
@@ -305,7 +318,7 @@ export function DashboardPage() {
                 margin: { t: 4, b: 4, l: 4, r: 80 },
                 paper_bgcolor: 'transparent',
                 plot_bgcolor: 'transparent',
-                font: { ...PLOTLY_FONT, color: plotTheme.titleColor },
+                font: { ...CHART_FONT, color: plotTheme.titleColor },
               }}
               useResizeHandler
               style={{ width: '100%', height: 260 }}

@@ -128,10 +128,11 @@ export function useRestoreSession(): { restored: boolean; loading: boolean } {
 
     setLoading(true);
     restoreFromDB()
-      .then((project) => {
+      .then(async (project) => {
         if (cancelled) return;
         if (project && !useProjectStore.getState().isDataLoaded) {
-          loadProjectFile(project);
+          // Await: the boot screen stays up until the structures are in place.
+          await loadProjectFile(project, { preserveFilters: true });
         }
       })
       .finally(() => {

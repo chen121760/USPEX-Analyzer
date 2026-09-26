@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useLayoutStore } from '@/store/useLayoutStore';
 import { useUIStore } from '@/store/useUIStore';
@@ -7,6 +8,8 @@ import { useSymmetryAutoAnalysis } from '@/hooks/useSymmetryAnalysis';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { HintDrawer } from '@/components/HintCard/HintDrawer';
+import { Spinner } from '@/components/ui/Spinner';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 
 const loadStructureViewerModal = () =>
   import('@/components/StructureViewer/StructureViewerModal').then((module) => ({
@@ -68,7 +71,7 @@ export function AppShell() {
           // 只处理右侧外边距动画结束，避免被子元素的 transition 冒泡触发
           if (event.propertyName !== 'margin-right') return;
 
-          // 等浏览器完成一帧布局后再通知 Plotly，尺寸结果更稳定
+          // 等浏览器完成一帧布局后再通知图表，尺寸结果更稳定
           requestAnimationFrame(() => {
             window.dispatchEvent(new Event('resize'));
           });
@@ -90,6 +93,7 @@ export function AppShell() {
 }
 
 function StructureViewerFallback({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation();
   return (
     <div
       onClick={onClose}
@@ -106,17 +110,23 @@ function StructureViewerFallback({ onClose }: { onClose: () => void }) {
       <div
         onClick={(event) => event.stopPropagation()}
         style={{
-          width: 280,
-          padding: 18,
-          borderRadius: 8,
+          width: 300,
+          padding: 22,
+          borderRadius: 10,
           background: 'var(--color-surface, #fff)',
           color: 'var(--color-text, #333)',
           boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-          textAlign: 'center',
-          fontSize: 13,
+          display: 'grid',
+          justifyItems: 'center',
+          gap: 12,
         }}
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
       >
-        正在加载结构查看器……
+        <Spinner size={24} />
+        <span style={{ fontSize: 13 }}>{t('viewer.loading')}</span>
+        <SkeletonRows rows={2} height={10} />
       </div>
     </div>
   );

@@ -17,14 +17,14 @@ import { useProjectStore } from '@/store/useProjectStore';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT } from '@/lib/constants';
+import { CHART_FONT } from '@/lib/constants';
 import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadMultiSectionCsv } from '@/lib/exportCsv';
 import { computeLowerHull2D } from '@/lib/convexHullReconstruction';
 import { PlotFrame } from '@/charts/shared/PlotFrame';
 import { usePlotViewport } from '@/charts/shared/plotRange';
-import { usePlotlyStructurePointClick } from '@/charts/shared/usePlotlyStructurePointClick';
+import { useStructurePointClick } from '@/charts/shared/useStructurePointClick';
 import { CONVEX_HULL_PLOT_HEIGHT } from './plotSizing';
 
 interface Props {
@@ -313,7 +313,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
   const { viewportLayout, handleRelayout } = usePlotViewport();
 
   const layout: PlotlyLayout = {
-    font: PLOTLY_FONT,
+    font: CHART_FONT,
     title: { text: `${components.map(formulaToHtml).join('-')} ${t('hull.title')}`, font: { size: 15, color: pt.titleColor } },
     xaxis: { title: { text: `x(${formulaToHtml(componentB)}) = ${formulaToHtml(componentB)}/(${formulaToHtml(componentA)}+${formulaToHtml(componentB)})`, font: titleFont }, ...axisStyle },
     yaxis: { title: { text: t('hull.formationEnergy'), font: titleFont }, range: [-0.001, undefined], ...axisStyle },
@@ -344,7 +344,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
     openViewer(structureId);
   };
 
-  const structurePointClick = usePlotlyStructurePointClick({
+  const structurePointClick = useStructurePointClick({
     traces,
     onStructureClick: handleStructurePointClick,
   });

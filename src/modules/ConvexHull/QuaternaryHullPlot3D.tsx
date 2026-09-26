@@ -35,7 +35,7 @@ import { parseEaIds } from '@/lib/parseEaIds';
 import { getStructureIdFromPlotClick, type PlotTraceLike } from '@/charts/shared/plotClick';
 import type { PlotClickEvent } from '@/charts/shared/plotClick';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT } from '@/lib/constants';
+import { CHART_FONT } from '@/lib/constants';
 import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadCsv } from '@/lib/exportCsv';
@@ -741,7 +741,7 @@ export function QuaternaryHullPlot3D({
     return result;
   }, [structures, coordMap, markEaInput, getHoverText]);
 
-  // ── Build Plotly traces ──
+  // ── Build renderer-neutral traces ──
   const traces: PlotlyData[] = useMemo(() => {
     const ts: PlotlyData[] = [];
 
@@ -847,8 +847,8 @@ export function QuaternaryHullPlot3D({
           color: fitnessVals,
           colorscale: 'Viridis',
           colorbar: {
-            title: { text: 'Fitness (eV/block)', font: PLOTLY_FONT },
-            tickfont: PLOTLY_FONT,
+            title: { text: 'Fitness (eV/block)', font: CHART_FONT },
+            tickfont: CHART_FONT,
             len: 0.5,
           },
           cmin: 0,
@@ -921,7 +921,7 @@ export function QuaternaryHullPlot3D({
 
     return {
       ...plotlyTheme,
-      font: { ...PLOTLY_FONT },
+      font: { ...CHART_FONT },
       dragmode: 'turntable',
       scene: {
         xaxis: { title: '', showgrid: false, zeroline: false, showticklabels: false, showspikes: false },
@@ -932,7 +932,7 @@ export function QuaternaryHullPlot3D({
       },
       margin: { l: 0, r: 0, t: 30, b: 0 },
       showlegend: true,
-      legend: { x: 0.01, y: 0.99, font: PLOTLY_FONT, bgcolor: 'rgba(0,0,0,0)' },
+      legend: { x: 0.01, y: 0.99, font: CHART_FONT, bgcolor: 'rgba(0,0,0,0)' },
       hovermode: 'closest' as const,
     };
   }, [theme]);

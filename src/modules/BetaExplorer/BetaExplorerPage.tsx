@@ -8,17 +8,18 @@ import { useMarkStore } from '@/store/useMarkStore';
 import { formulaToHtml } from '@/parsers/compositionUtils';
 import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
-import { PLOTLY_FONT, ML_FIELD_KEYS, ML_FIELD_I18N } from '@/lib/constants';
+import { CHART_FONT, ML_FIELD_KEYS, ML_FIELD_I18N } from '@/lib/constants';
 import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
-import { exportAnimatedPlotlyGif } from '@/export/chartImageExport';
+import { exportAnimatedEChartsGif } from '@/export/chartImageExport';
 import { layerClassification, computeHypervolume2D, autoReferencePoint } from '@/domain/pareto/paretoFronts';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadWideCsv } from '@/lib/exportCsv';
 import { PlotFrame } from '@/charts/shared/PlotFrame';
-import { usePlotlyStructurePointClick } from '@/charts/shared/usePlotlyStructurePointClick';
+import { useStructurePointClick } from '@/charts/shared/useStructurePointClick';
 import { RangeInputs } from '@/charts/shared/RangeControls';
 import { buildXMarginalTraces, buildYMarginalTraces } from '@/charts/shared/marginalTraces';
-import { collectDynamicFieldKeys } from '@/domain/structure/dynamicFields';
+import { collectDynamicFieldKeys, numericStructureFieldValue } from '@/domain/structure/dynamicFields';
+import { hasMLProperties, mlPropertyValue } from '@/domain/structure/mlProperties';
 import { BetaExplorerControls } from './components/BetaExplorerControls';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyData = any;
@@ -78,7 +79,8 @@ function getFieldOptions(
       opts.push({
         key,
         label: t(ML_FIELD_I18N[key]),
-        accessor: (s) => s[key],
+        // Negative ML predictions are real data; non-finite means "no row".
+        accessor: (s) => mlPropertyValue(s, key),
         type: 'numeric',
       });
     }
@@ -96,7 +98,7 @@ function getFieldOptions(
   }
 
   for (const key of extraPropKeys) {
-    opts.push({ key: `extra_${key}`, label: key, accessor: (s) => s.extraProps?.[key], type: 'numeric' });
+    opts.push({ key: `extra_${key}`, label: key, accessor: (s) => numericStructureFieldValue(s, key), type: 'numeric' });
   }
 
   return opts;
@@ -113,7 +115,7 @@ export function BetaExplorerPage() {
   const theme          = useThemeStore((s) => s.theme);
   const plotTheme      = useMemo(() => getPlotlyTheme(theme), [theme]);
 
-  const hasML     = structures.some((s) => s.youngModulus >= 0);
+  const hasML     = hasMLProperties(structures);
   const hasPareto = systemInfo?.optimizationType === 'multi';
   const isVarcomp = systemInfo?.compositionMode === 'varcomp';
   const hasVolume  = structures.some((s) => s.volume > 0);
@@ -222,7 +224,7 @@ export function BetaExplorerPage() {
     if (frames.length === 0) return;
     setIsExporting(true);
     try {
-      await exportAnimatedPlotlyGif({
+      await exportAnimatedEChartsGif({
         filename: 'beta-explorer.gif',
         sourceElement: plotRef.current,
         frames,
@@ -604,7 +606,7 @@ export function BetaExplorerPage() {
     const titleFont = { size: 13, color: pt.axisTitleColor };
 
     const base: any = {
-      font: PLOTLY_FONT,
+      font: CHART_FONT,
       title: hasMarginal ? undefined : { text: `${xField.label} vs ${yField.label}`, font: { size: 15, color: pt.titleColor } },
       xaxis: { title: { text: xField.label, font: titleFont }, ...(xRange ? { range: xRange } : {}), domain: mainXDomain, ...axisStyle },
       yaxis: { title: { text: yField.label, font: titleFont }, ...(yRange ? { range: yRange } : {}), domain: mainYDomain, ...axisStyle },
@@ -630,7 +632,7 @@ export function BetaExplorerPage() {
 
   layoutRef.current = layout;
   const scatterTraces = [...traces, ...overlayTraces, ...marginalTraces];
-  const structurePointClick = usePlotlyStructurePointClick({
+  const structurePointClick = useStructurePointClick({
     traces: scatterTraces,
     onStructureClick: openViewer,
   });
@@ -760,7 +762,7 @@ export function BetaExplorerPage() {
             <PlotFrame
               data={hvTraces}
               layout={{
-                font: PLOTLY_FONT,
+                font: CHART_FONT,
                 title: { text: t('beta.hvTitle'), font: { size: 15, color: getPlotlyTheme(theme).titleColor } },
                 xaxis: { title: { text: t('col.generation'), font: { size: 13, color: getPlotlyTheme(theme).axisTitleColor } }, tickfont: { size: 11, color: getPlotlyTheme(theme).tickColor }, gridcolor: getPlotlyTheme(theme).gridColor, zerolinecolor: getPlotlyTheme(theme).zerolineColor, linecolor: getPlotlyTheme(theme).lineColor },
                 yaxis: { title: { text: t('beta.hvYAxis'), font: { size: 13, color: getPlotlyTheme(theme).axisTitleColor } }, tickfont: { size: 11, color: getPlotlyTheme(theme).tickColor }, gridcolor: getPlotlyTheme(theme).gridColor, zerolinecolor: getPlotlyTheme(theme).zerolineColor, linecolor: getPlotlyTheme(theme).lineColor },

@@ -22,6 +22,17 @@ export function getStructureFieldValue(structure: Structure, field: string): unk
   return structure.extraProps?.[field];
 }
 
+/**
+ * Read a dynamic field as a plottable number.
+ *
+ * `NaN` marks a value USPEX never evaluated (see `normalizeExtraProps`), and a
+ * chart has to skip such a point instead of drawing it at 100000.
+ */
+export function numericStructureFieldValue(structure: Structure, field: string): number | undefined {
+  const value = getStructureFieldValue(structure, field);
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
 export function describeDynamicField(
   key: string,
   secondObjectiveName = '',

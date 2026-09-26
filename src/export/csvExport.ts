@@ -166,25 +166,27 @@ export function buildStructureCsvRows(
     'Composition': quoted(s.composition.join(' ')),
     'SpaceGroup': s.spaceGroup,
     'Generation': s.generation,
-    'Enthalpy_eV_atom': s.enthalpy,
-    'Volume_A3_atom': s.volume,
-    'Fitness_eV_block': s.fitness,
-    'Density_g_cm3': s.density,
+    // NaN means "not available" (unconverged, no MLProperties row, no hull) and
+    // must not reach the file as the literal `NaN`.
+    'Enthalpy_eV_atom': finiteOrBlank(s.enthalpy),
+    'Volume_A3_atom': finiteOrBlank(s.volume),
+    'Fitness_eV_block': finiteOrBlank(s.fitness),
+    'Density_g_cm3': finiteOrBlank(s.density),
     'Origin': s.origin,
     'ParentIDs': quoted(s.parentIds.join(' ')),
     ...(hasPareto ? {
       'ParetoFront': s.paretoFront >= 0 ? s.paretoFront : '',
       'ExtraProps': serializeExtraProps(s),
     } : {}),
-    ...Object.fromEntries(extraPropKeys.map((key) => [key, s.extraProps?.[key] ?? ''])),
+    ...Object.fromEntries(extraPropKeys.map((key) => [key, extraPropCell(s.extraProps?.[key])])),
     ...(hasML ? {
-      'BulkModulus_GPa': nonNegativeOrBlank(s.bulkModulus),
-      'ShearModulus_GPa': nonNegativeOrBlank(s.shearModulus),
-      'YoungModulus_GPa': nonNegativeOrBlank(s.youngModulus),
-      'PoissonRatio': nonNegativeOrBlank(s.poissonRatio),
-      'PughRatio': nonNegativeOrBlank(s.pughRatio),
-      'VickersHardness_GPa': nonNegativeOrBlank(s.vickersHardness),
-      'FractureToughness': nonNegativeOrBlank(s.fractureToughness),
+      'BulkModulus_GPa': finiteOrBlank(s.bulkModulus),
+      'ShearModulus_GPa': finiteOrBlank(s.shearModulus),
+      'YoungModulus_GPa': finiteOrBlank(s.youngModulus),
+      'PoissonRatio': finiteOrBlank(s.poissonRatio),
+      'PughRatio': finiteOrBlank(s.pughRatio),
+      'VickersHardness_GPa': finiteOrBlank(s.vickersHardness),
+      'FractureToughness': finiteOrBlank(s.fractureToughness),
     } : {}),
     ...(hasFingerprint ? {
       'Q_Entropy': s.qEntropy > 0 ? s.qEntropy : '',
@@ -210,12 +212,22 @@ function quoted(value: CsvPrimitive): CsvCell {
   return { value, forceQuote: true };
 }
 
-function nonNegativeOrBlank(value: number): number | '' {
-  return value >= 0 ? value : '';
+function finiteOrBlank(value: number): number | '' {
+  return Number.isFinite(value) ? value : '';
+}
+
+/**
+ * A dynamic field is blank when it is missing — `NaN` marks a USPEX objective the
+ * run never evaluated, and writing the literal `NaN` into the CSV would look like
+ * data.
+ */
+function extraPropCell(value: number | undefined): number | '' {
+  return typeof value === 'number' && Number.isFinite(value) ? value : '';
 }
 
 function serializeExtraProps(structure: Structure): string {
   return Object.entries(structure.extraProps ?? {})
+    .filter(([, value]) => typeof value !== 'number' || Number.isFinite(value))
     .map(([key, value]) => `${key}:${value}`)
     .join(';');
 }

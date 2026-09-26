@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { useCompareStore } from '@/store/useCompareStore';
 import { useTableStore } from '@/store/useTableStore';
+import { useFilterStore } from '@/store/useFilterStore';
 import { useUIStore } from '@/store/useUIStore';
 import {
   useReactTable,
@@ -19,23 +20,42 @@ import {
 } from 'lucide-react';
 import { LineagePanel } from './LineagePanel';
 import { NotesEditor, SortIcon, TagPicker } from './components/DataTableCellControls';
-import { DataTableFilterBuilder } from './components/DataTableFilterBuilder';
+import {
+  DataTableFilterBuilder,
+  type FilterKind,
+  type TextFilterField,
+  type TextFilterOperator,
+} from './components/DataTableFilterBuilder';
+import { UnifiedTagFilter } from '@/components/filters/UnifiedTagFilter';
+import { TableSkeletonRows } from '@/components/ui/Skeleton';
+import { useProgressiveData } from '@/hooks/useProgressiveData';
+import { matchesActiveFilter } from '@/modules/Filter/filterLogic';
 import { FormulaDisplay } from '@/components/FormulaDisplay';
 import { ML_FIELD_KEYS, ML_FIELD_I18N } from '@/lib/constants';
 import { collectDynamicFieldKeys } from '@/domain/structure/dynamicFields';
+import { hasMLProperties, isMLPropertyValue } from '@/domain/structure/mlProperties';
 import type {
   Structure,
-  NumericFilterColumn,
-  TextFilterColumn,
-  NumericFilterCondition,
-  TextFilterCondition,
-  ElementFractionFilterCondition,
+  CompOperator,
+  NumericOperator,
   TableFilterCondition,
-  TableFilterGroup,
+  UnifiedCondition,
+  UnifiedConditionGroup,
 } from '@/types/structure';
 
-// 本地别名，保持组件内部代码不变
-type FilterCondition = TableFilterCondition;
+function migrateTableCondition(condition: TableFilterCondition): UnifiedCondition {
+  if (condition.kind === 'numeric') {
+    const operators: Record<typeof condition.operator, NumericOperator> = {
+      '>': 'gt', '>=': 'gte', '<': 'lt', '<=': 'lte', '=': 'eq',
+    };
+    return { kind: 'numeric', field: condition.column, operator: operators[condition.operator], value: condition.value };
+  }
+  if (condition.kind === 'text') {
+    return { kind: 'text', field: condition.column, operator: condition.operator, values: condition.values };
+  }
+  if (condition.kind === 'nComponents') return { kind: 'nComponents', value: condition.value };
+  return { kind: 'elementFraction', element: condition.element, operator: condition.operator, value: condition.value };
+}
 
 const DEFAULT_COLUMN_VISIBILITY: VisibilityState = {
   eForm: false,
@@ -46,7 +66,11 @@ const PROGRAM_GENERATED_COLUMN_IDS = ['eForm', 'eHullRecons'] as const;
 
 export function DataTablePage() {
   const { t } = useTranslation();
-  const structures = useProjectStore((s) => s.structures);
+  const rawStructures = useProjectStore((s) => s.structures);
+  // The table engine re-derives every row model from the data: hand it the real
+  // array one frame after mount, so the toolbar and the header paint first and
+  // the body shows reserved skeleton rows meanwhile.
+  const { data: structures, ready } = useProgressiveData(rawStructures);
   const systemInfo = useProjectStore((s) => s.systemInfo);
   const tags = useProjectStore((s) => s.tags);
   const updateStructureTags = useProjectStore((s) => s.updateStructureTags);
@@ -79,8 +103,8 @@ export function DataTablePage() {
     }
   };
   const [lineageId, setLineageId] = useState<number | null>(null);
-  const selectedTag = useTableStore((s) => s.tableSelectedTag);
-  const setSelectedTag = useTableStore((s) => s.setTableSelectedTag);
+  const tagStates = useFilterStore((s) => s.filterTagStates);
+  const setTagStates = useFilterStore((s) => s.setFilterTagStates);
   const columnVisibilityRaw = useTableStore((s) => s.tableColumnVisibility);
   const setColumnVisibilityRaw = useTableStore((s) => s.setTableColumnVisibility);
   const columnVisibility = useMemo<VisibilityState>(
@@ -97,9 +121,13 @@ export function DataTablePage() {
     }
   };
 
-  // 筛选条件组接入 TableStore，切换页面后不丢失
-  const filterGroups    = useTableStore((s) => s.tableFilterGroups);
-  const setFilterGroups = useTableStore((s) => s.setTableFilterGroups);
+  // Data Table、筛选导出和 Explorer 共享同一筛选工作区。
+  const filterGroups = useFilterStore((s) => s.filterConditionGroups);
+  const setFilterGroups = useFilterStore((s) => s.setFilterConditionGroups);
+  const legacyFilterGroups = useTableStore((s) => s.tableFilterGroups);
+  const setLegacyFilterGroups = useTableStore((s) => s.setTableFilterGroups);
+  const legacySelectedTag = useTableStore((s) => s.tableSelectedTag);
+  const setLegacySelectedTag = useTableStore((s) => s.setTableSelectedTag);
   // 当前追加目标组（null = 新建组）
   const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
 
@@ -107,40 +135,50 @@ export function DataTablePage() {
   const [isColumnPanelOpen, setIsColumnPanelOpen] = useState(false);
   const pageSize = 50;
 
+  // One-time upgrade for filters saved by versions that kept Data Table state separately.
+  useEffect(() => {
+    if (filterGroups.length === 0 && legacyFilterGroups.length > 0) {
+      setFilterGroups(legacyFilterGroups.map((group) => ({
+        id: group.id,
+        conditions: group.conditions.map(migrateTableCondition),
+      })));
+      setLegacyFilterGroups([]);
+    }
+    if (Object.keys(tagStates).length === 0 && legacySelectedTag) {
+      setTagStates({ [legacySelectedTag]: 'include' });
+      setLegacySelectedTag('');
+    }
+  }, [filterGroups.length, legacyFilterGroups, legacySelectedTag, setFilterGroups, setLegacyFilterGroups, setLegacySelectedTag, setTagStates, tagStates]);
+
   // 这三个变量要在 numericFilterColumns 之前定义，因为后者依赖它们
   const isVarcomp      = systemInfo?.compositionMode === 'varcomp';
   const hasPareto      = systemInfo?.optimizationType === 'multi';
-  const hasML          = structures.some((s) => s.bulkModulus >= 0);
+  const hasML          = hasMLProperties(structures);
   const hasFingerprint = structures.some((s) => s.qEntropy > 0);
   const hasVolume      = structures.some((s) => s.volume > 0);
   const hasDensity     = structures.some((s) => s.density > 0);
 
-  // Columns where -1 is the sentinel for "no data"
-  const SENTINEL_COLS = useMemo(() => new Set([
-    'paretoFront', 'eForm', 'eHullRecons',
-    ...ML_FIELD_KEYS,
-    'aOrder', 'sOrder',
-  ]), []);
-
   // 当前正在编辑的筛选条件（还没点"添加"）
-  const [colKind, setColKind] = useState<'numeric' | 'text' | 'nComponents' | 'elementFraction'>('numeric');
-  const [filterNumCol, setFilterNumCol] = useState<NumericFilterColumn>('enthalpy');
-  const [filterNumOp, setFilterNumOp] = useState<NumericFilterCondition['operator']>('>');
+  const [colKind, setColKind] = useState<FilterKind>('numeric');
+  const [filterNumCol, setFilterNumCol] = useState('enthalpy');
+  const [filterNumOp, setFilterNumOp] = useState<NumericOperator>('gt');
   const [filterNumVal, setFilterNumVal] = useState('');
-  const [filterTextCol, setFilterTextCol] = useState<TextFilterColumn>('formula');
-  const [filterTextOp, setFilterTextOp] = useState<TextFilterCondition['operator']>('contains');
+  const [filterTextCol, setFilterTextCol] = useState<TextFilterField>('formula');
+  const [filterTextOp, setFilterTextOp] = useState<TextFilterOperator>('contains');
   const [filterTextInput, setFilterTextInput] = useState('');
   // 体系类型筛选：1=一元, 2=二元, 3=三元, 4=四元
   const [filterNComp, setFilterNComp] = useState<1 | 2 | 3 | 4>(2);
   // 元素摩尔分数筛选
   const [filterElemEl, setFilterElemEl] = useState('');
-  const [filterElemOp, setFilterElemOp] = useState<ElementFractionFilterCondition['operator']>('>');
+  const [filterElemOp, setFilterElemOp] = useState<CompOperator>('>');
   const [filterElemVal, setFilterElemVal] = useState('');
+
+  const extraPropKeys = useMemo(() => collectDynamicFieldKeys(structures), [structures]);
 
   // 所有可选的数字列（从数据里动态判断哪些有值）
   const numericFilterColumns = useMemo(() => {
     // 基础列：永远存在
-    const base: { key: NumericFilterColumn; label: string }[] = [
+    const base: { key: string; label: string }[] = [
       { key: 'enthalpy',      label: t('col.enthalpy') },
       { key: 'enthalpyTotal', label: t('col.enthalpyTotal') },
       { key: 'fitness',       label: t('col.fitness') },
@@ -165,11 +203,12 @@ export function DataTablePage() {
       base.push({ key: 'aOrder',   label: t('col.aOrder') });
       base.push({ key: 'sOrder',   label: t('col.sOrder') });
     }
+    for (const key of extraPropKeys) base.push({ key, label: t(`col.${key}`) || key });
     return base;
-  }, [t, isVarcomp, hasPareto, hasML, hasFingerprint, hasVolume, hasDensity]);
+  }, [t, isVarcomp, hasPareto, hasML, hasFingerprint, hasVolume, hasDensity, extraPropKeys]);
 
   // 文字列：固定两个
-  const textFilterColumns: { key: TextFilterColumn; label: string }[] = useMemo(() => [
+  const textFilterColumns: { key: TextFilterField; label: string }[] = useMemo(() => [
     { key: 'formula', label: t('col.formula') },
     { key: 'origin',  label: t('col.origin') },
   ], [t]);
@@ -183,8 +222,6 @@ export function DataTablePage() {
       origin:  Array.from(originSet).sort(),
     };
   }, [structures]);
-
-  const extraPropKeys = useMemo(() => collectDynamicFieldKeys(structures), [structures]);
 
   const columns = useMemo<ColumnDef<Structure, unknown>[]>(() => {
     const cols: ColumnDef<Structure, unknown>[] = [      {
@@ -284,7 +321,8 @@ export function DataTablePage() {
         size: 110,
         cell: ({ getValue }) => {
           const v = getValue<number | null>();
-          if (v == null || v < 0) return '—';
+          // NaN = the run provides no hull distance for this structure.
+          if (v == null || !Number.isFinite(v) || v < 0) return '—';
           return (
             <span style={{ color: v === 0 ? 'var(--color-success)' : undefined, fontWeight: v === 0 ? 600 : undefined }}>
               {v.toFixed(4)}
@@ -375,57 +413,62 @@ export function DataTablePage() {
       });
     }
 
-    // ML columns (conditional)
+    // ML columns (conditional).  Negative values are real predictions
+    // (e.g. negative bulk modulus), so only a non-finite value is "—".
     if (hasML) {
+      const mlCell = (decimals: number) => ({ getValue }: { getValue: () => unknown }) => {
+        const v = getValue();
+        return isMLPropertyValue(v) ? v.toFixed(decimals) : '—';
+      };
       cols.push(
         {
           id: 'bulkModulus',
           accessorKey: 'bulkModulus',
           header: t('col.bulk'),
           size: 140,
-          cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(1) : '—'; },
+          cell: mlCell(1),
         },
         {
           id: 'shearModulus',
           accessorKey: 'shearModulus',
           header: t('col.shear'),
           size: 150,
-          cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(1) : '—'; },
+          cell: mlCell(1),
         },
         {
           id: 'youngModulus',
           accessorKey: 'youngModulus',
           header: t('col.young'),
           size: 150,
-          cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(1) : '—'; },
+          cell: mlCell(1),
         },
         {
           id: 'poissonRatio',
           accessorKey: 'poissonRatio',
           header: t('col.poisson'),
           size: 120,
-          cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(3) : '—'; },
+          cell: mlCell(3),
         },
         {
           id: 'pughRatio',
           accessorKey: 'pughRatio',
           header: t('col.pugh'),
           size: 120,
-          cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(3) : '—'; },
+          cell: mlCell(3),
         },
         {
           id: 'vickersHardness',
           accessorKey: 'vickersHardness',
           header: t('col.hardness'),
           size: 160,
-          cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(2) : '—'; },
+          cell: mlCell(2),
         },
         {
           id: 'fractureToughness',
           accessorKey: 'fractureToughness',
           header: t('col.toughness'),
           size: 200,
-          cell: ({ getValue }) => { const v = getValue<number>(); return v >= 0 ? v.toFixed(2) : '—'; },
+          cell: mlCell(2),
         },
       );
     }
@@ -467,69 +510,14 @@ export function DataTablePage() {
   }, [t, isVarcomp, hasPareto, hasML, hasFingerprint, hasVolume, hasDensity, extraPropKeys, tags, compareIds, openViewer, toggleCompare]);
 
   const tableData = useMemo(() => {
-    let data = structures;
-
-    // 标签筛选
-    if (selectedTag) {
-      data = data.filter((s) => s.tags.includes(selectedTag));
-    }
-
-    // 条件组：组间 OR，组内 AND
-    if (filterGroups.length > 0) {
-      data = data.filter((s) =>
-        filterGroups.some((group) =>
-          group.conditions.every((f) => {
-            if (f.kind === 'numeric') {
-              const val = (s as unknown as Record<string, number>)[f.column];
-              if (val == null) return false;
-              // Sentinel -1 means "no data" for these fields — exclude from numeric filters
-              if (val === -1 && SENTINEL_COLS.has(f.column)) return false;
-              switch (f.operator) {
-                case '>':  return val > f.value;
-                case '<':  return val < f.value;
-                case '>=': return val >= f.value;
-                case '<=': return val <= f.value;
-                case '=':  return Math.abs(val - f.value) < 0.0001;
-                default:   return true;
-              }
-            } else if (f.kind === 'text') {
-              const val = String((s as unknown as Record<string, unknown>)[f.column] ?? '').toLowerCase();
-              const matchesAny = f.values.some((v) => {
-                const target = v.toLowerCase();
-                return (f.operator === 'contains' || f.operator === 'notContains')
-                  ? val.includes(target) : val === target;
-              });
-              return (f.operator === 'contains' || f.operator === 'equals') ? matchesAny : !matchesAny;
-            } else if (f.kind === 'nComponents') {
-              return s.composition.filter((c) => c > 0).length === f.value;
-            } else if (f.kind === 'elementFraction') {
-              const elIdx = systemInfo?.elements.indexOf(f.element) ?? -1;
-              if (elIdx === -1) return true;
-              const total = s.composition.reduce((a, b) => a + b, 0);
-              if (total === 0) return false;
-              const frac = s.composition[elIdx] / total;
-              switch (f.operator) {
-                case '>':  return frac > f.value;
-                case '<':  return frac < f.value;
-                case '>=': return frac >= f.value;
-                case '<=': return frac <= f.value;
-                case '=':  return Math.abs(frac - f.value) < 0.001;
-                default:   return true;
-              }
-            }
-            return true;
-          })
-        )
-      );
-    }
-
-    return data;
-  }, [structures, selectedTag, filterGroups, systemInfo]);
+    const elements = systemInfo?.elements ?? [];
+    return structures.filter((structure) => matchesActiveFilter(structure, elements, filterGroups, tagStates));
+  }, [structures, filterGroups, tagStates, systemInfo]);
 
   // 把一个条件追加到目标组（null = 追加到最后一组，或新建）
-  const addToGroup = (cond: FilterCondition, forceNewGroup = false) => {
+  const addToGroup = (cond: UnifiedCondition, forceNewGroup = false) => {
     if (forceNewGroup) {
-      const newGroup: TableFilterGroup = { id: crypto.randomUUID(), conditions: [cond] };
+      const newGroup: UnifiedConditionGroup = { id: crypto.randomUUID(), conditions: [cond] };
       setFilterGroups([...filterGroups, newGroup]);
       setTargetGroupId(null);
     } else if (targetGroupId !== null) {
@@ -542,7 +530,7 @@ export function DataTablePage() {
         g.id === last.id ? { ...g, conditions: [...g.conditions, cond] } : g
       ));
     } else {
-      const newGroup: TableFilterGroup = { id: crypto.randomUUID(), conditions: [cond] };
+      const newGroup: UnifiedConditionGroup = { id: crypto.randomUUID(), conditions: [cond] };
       setFilterGroups([newGroup]);
     }
   };
@@ -662,36 +650,15 @@ export function DataTablePage() {
         </div>
       )}
 
-      {/* 标签筛选行 */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{t('table.tagLabel')}</span>
-        <button
-          className={`btn btn-sm ${!selectedTag ? 'btn-primary' : 'btn-outline'}`}
-          onClick={() => { setSelectedTag(''); setPageIndex(0); }}
-          style={{ fontSize: 11, padding: '2px 8px' }}
-        >
-          {t('btn.all')}
-        </button>
-        {tags.map((tag) => {
-          const count = structures.filter((s) => s.tags.includes(tag.id)).length;
-          if (count === 0) return null;
-          return (
-            <button
-              key={tag.id}
-              className={`btn btn-sm ${selectedTag === tag.id ? 'btn-primary' : 'btn-outline'}`}
-              onClick={() => { setSelectedTag(selectedTag === tag.id ? '' : tag.id); setPageIndex(0); }}
-              style={{
-                fontSize: 11, padding: '2px 8px',
-                borderColor: tag.color,
-                color: selectedTag === tag.id ? '#fff' : tag.color,
-                background: selectedTag === tag.id ? tag.color : 'transparent',
-              }}
-            >
-              {t(tag.nameKey)} ({count})
-            </button>
-          );
-        })}
-      </div>
+      <UnifiedTagFilter
+        t={t}
+        tags={tags}
+        structures={structures}
+        tagStates={tagStates}
+        setTagStates={setTagStates}
+        compact
+        onChanged={() => setPageIndex(0)}
+      />
 
       <DataTableFilterBuilder
         t={t}
@@ -726,7 +693,7 @@ export function DataTablePage() {
         targetGroupId={targetGroupId}
         setTargetGroupId={setTargetGroupId}
         addToGroup={addToGroup}
-        onResetFilters={() => { setFilterGroups([]); setTargetGroupId(null); setSelectedTag(''); setGlobalFilter(''); setPageIndex(0); }}
+        onResetFilters={() => { setFilterGroups([]); setTargetGroupId(null); setTagStates({}); setGlobalFilter(''); setPageIndex(0); }}
         onFilterChanged={() => setPageIndex(0)}
       />
     </div>
@@ -799,7 +766,10 @@ export function DataTablePage() {
           ))}
         </thead>
         <tbody>
-          {table.getRowModel().rows
+          {!ready && (
+            <TableSkeletonRows columns={table.getVisibleLeafColumns().length} />
+          )}
+          {ready && table.getRowModel().rows
             .slice(currentPageIndex * pageSize, (currentPageIndex + 1) * pageSize)
             .map((row) => (
             <tr key={row.original.id}>

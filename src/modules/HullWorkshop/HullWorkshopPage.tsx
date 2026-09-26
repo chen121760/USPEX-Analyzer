@@ -22,6 +22,7 @@ import { WorkspaceSidebar } from './WorkspaceSidebar';
 import type { WorkshopGroup, WorkshopJsonExport } from './types';
 import { GROUP_COLORS, defaultGroupName } from './types';
 import { buildFormula, totalAtoms } from '@/parsers/compositionUtils';
+import { ML_PROPERTY_MISSING } from '@/domain/structure/mlProperties';
 import type { ManualStructureData } from './components/AddStructureModal';
 import { WorkshopContent } from './components/WorkshopContent';
 
@@ -257,13 +258,14 @@ export function HullWorkshopPage() {
         parentIds: [],
         parentEnthalpy: 0,
         paretoFront: 0,
-        bulkModulus: 0,
-        shearModulus: 0,
-        youngModulus: 0,
-        poissonRatio: 0,
-        pughRatio: 0,
-        vickersHardness: 0,
-        fractureToughness: 0,
+        // Manually added structures have no MLProperties row.
+        bulkModulus: ML_PROPERTY_MISSING,
+        shearModulus: ML_PROPERTY_MISSING,
+        youngModulus: ML_PROPERTY_MISSING,
+        poissonRatio: ML_PROPERTY_MISSING,
+        pughRatio: ML_PROPERTY_MISSING,
+        vickersHardness: ML_PROPERTY_MISSING,
+        fractureToughness: ML_PROPERTY_MISSING,
         qEntropy: 0,
         aOrder: 0,
         sOrder: 0,
