@@ -1,4 +1,4 @@
-﻿import './persistenceShim';
+import './persistenceShim';
 
 import { useChartSettingsStore } from '@/store/useChartSettingsStore';
 import { useCompareStore } from '@/store/useCompareStore';
