@@ -308,12 +308,29 @@ export interface Point2D { x: number; y: number }
  * Compute the 2D lower convex hull of a set of (x, y) points.
  * Uses Andrew's monotone chain algorithm (single pass, lower envelope only).
  * Points are sorted by x (then y); cross-product <= 0 pops non-hull points.
+ *
+ * The lower hull is a function of x, so only the lowest-energy point at a given
+ * x can be on it.  Keeping the others would draw a vertical segment at that
+ * composition (visible whenever a run has several structures of one composition
+ * on the hull, e.g. pure-element polymorphs) and would make "the hull energy at
+ * x" ambiguous.
  */
 export function computeLowerHull2D(points: Point2D[]): Point2D[] {
   if (points.length < 2) return [...points];
   const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
-  const hull: Point2D[] = [];
+  const unique: Point2D[] = [];
   for (const p of sorted) {
+    // Sorted by y within an x, so the first one seen is the lowest.  The
+    // tolerance matters: 2/6, 3/9 and 1/3 are the same composition but not the
+    // same double, and without it those duplicates reappear as zero-width
+    // vertical segments in the drawn hull.
+    if (unique.length > 0 && p.x - unique[unique.length - 1].x < 1e-9) continue;
+    unique.push(p);
+  }
+  if (unique.length < 2) return unique;
+
+  const hull: Point2D[] = [];
+  for (const p of unique) {
     while (hull.length >= 2) {
       const a = hull[hull.length - 2];
       const b = hull[hull.length - 1];
@@ -648,28 +665,41 @@ export function reconstructConvexHull(
   // element the only "stable" phase.)
   const hasKnownFitness = structures.some((s) => s.fitness >= 0);
 
+  // ...but "some structures have an Ed" is not "every structure has one".
+  // USPEX's extended_convex_hull lists only the near-hull subset of a run (the
+  // MgO–HfO2 sample has 350 rows for 4150 structures), so a run can be partly
+  // measured.  Rows without an Ed are *unknown*, not "on the hull": they stay
+  // hull candidates, and their distance has to come from the reconstruction
+  // instead of being left at NaN — otherwise most of the data set is never
+  // classified and the hull is built from a subset that may miss its vertices.
+  const partialFitness = hasKnownFitness && converged.some((s) => !(s.fitness >= 0));
+
   /**
-   * Snap reconstructed distances to the hull grid and, when the run supplies no
-   * hull distance of its own, adopt the reconstruction as the fitness — every
-   * hull view classifies structures by `fitness === 0`.
+   * Snap reconstructed distances to the hull grid and publish the hull distance.
+   *
+   * USPEX's own Ed wins wherever it exists; where it does not, the
+   * reconstruction is the only hull distance available and becomes the fitness —
+   * every hull view classifies structures by `fitness === 0`.
    */
   const finalize = (): ReferenceResolution => {
     for (const s of converged) {
       if (s.eHullRecons >= 0 && s.eHullRecons <= HULL_ZERO_TOLERANCE) s.eHullRecons = 0;
     }
-    if (!hasKnownFitness && systemType !== 'unary') {
+    if (systemType !== 'unary') {
       for (const s of converged) {
-        if (s.eHullRecons >= 0) s.fitness = s.eHullRecons;
+        if (s.eHullRecons >= 0 && !(s.fitness >= 0)) s.fitness = s.eHullRecons;
       }
     }
     return references;
   };
 
-  // Hull geometry: the stable structures when the run provides them, otherwise
-  // every converged structure (that is what defines a convex hull).  Either way
-  // only the lowest-E_form structure per composition can be a hull vertex.
+  // Hull geometry: every structure that is not *known* to sit above the hull.
+  // With a complete set of hull distances that is exactly the stable subset;
+  // with a partial (or empty) one, the structures without a distance are
+  // candidates too, so a hull vertex the file omitted is still found.  Either
+  // way only the lowest-E_form structure per composition can be a vertex.
   const hullGeometry = lowestPerComposition(
-    hasKnownFitness ? converged.filter((s) => s.fitness <= 0) : converged,
+    hasKnownFitness && !partialFitness ? converged.filter((s) => s.fitness <= 0) : converged,
     (s) => reducedCompositionKey(s.composition),
   );
 
@@ -723,8 +753,8 @@ export function reconstructConvexHull(
           : 0;
     }
   } else if (systemType === 'quaternary') {
-    if (hasKnownFitness) {
-      // USPEX already provides the hull distance; reuse it as is.
+    if (hasKnownFitness && !partialFitness) {
+      // USPEX already provides the hull distance for the whole run; reuse it.
       for (const s of converged) {
         s.eHullRecons = s.fitness >= 0 ? s.fitness : 0;
       }

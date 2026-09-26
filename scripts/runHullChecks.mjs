@@ -15,7 +15,7 @@ import { build } from 'rolldown';
 
 const root = path.resolve(import.meta.dirname, '..');
 const outDir = path.join(root, 'node_modules', '.cache', 'node-checks');
-const checkFiles = ['hullReferenceChecks.ts', 'quaternaryHullChecks.ts', 'objectivePlaceholderChecks.ts', 'loadingStateChecks.ts', 'parseProgressChecks.ts', 'manifestChecks.ts', 'symmetryChecks.ts', 'echartsAdapterChecks.ts', 'chartPaintChecks.ts', 'filterLogicChecks.ts', 'persistenceChecks.ts'];
+const checkFiles = ['hullReferenceChecks.ts', 'quaternaryHullChecks.ts', 'binaryHullChecks.ts', 'objectivePlaceholderChecks.ts', 'loadingStateChecks.ts', 'parseProgressChecks.ts', 'manifestChecks.ts', 'symmetryChecks.ts', 'echartsAdapterChecks.ts', 'chartPaintChecks.ts', 'filterLogicChecks.ts', 'persistenceChecks.ts'];
 
 fs.mkdirSync(outDir, { recursive: true });
 

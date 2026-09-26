@@ -691,6 +691,23 @@ export async function parseAllFiles(
   structures = hullReconstruction.structures;
   const references = hullReconstruction.references;
 
+  // Keep the legacy `hullY` field in the same gauge as the reconstruction.
+  // It is documented as the formation energy, but rows that only exist in
+  // Individuals used to carry their raw per-atom enthalpy here, which made the
+  // binary hull plot draw two different energy scales in one scatter.
+  //
+  // The plotting coordinates are recomputed from the composition for the same
+  // reason: the hull file prints X rounded to three decimals while the excess
+  // structures get exact fractions, so one composition could appear at two
+  // slightly different x values (a hair-thin vertical segment in the drawn hull).
+  for (const s of structures) {
+    if (Number.isFinite(s.eForm) && s.eForm !== -1) s.hullY = s.eForm;
+    const coordinates = inferHullCoordinates(s.composition, systemType, compositionBasis);
+    if (coordinates.length > 0 && coordinates.every((value) => Number.isFinite(value))) {
+      s.hullX = coordinates;
+    }
+  }
+
   // References come from exact endmembers (pure elements / single composition
   // blocks).  Without them E_form is not a standard formation enthalpy, so the
   // affected structures are left without a value instead of being given a
