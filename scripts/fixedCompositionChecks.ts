@@ -111,6 +111,13 @@ check('Property_X preserves the USPEX sign convention across both files',
   byId.get(1)?.extraProps?.['Property_X-Individuals'] === -221 &&
     byId.get(1)?.extraProps?.['Property_X-Pareto_ranking'] === 221,
   JSON.stringify(byId.get(1)?.extraProps));
+check('the plain Property_X column is the Individuals copy, not the raw Pareto value',
+  byId.get(1)?.extraProps?.['Property_X'] === -221,
+  JSON.stringify(byId.get(1)?.extraProps));
+check('the plain column and its -Individuals twin never disagree',
+  structures.every((structure) =>
+    structure.extraProps?.['Property_X'] === structure.extraProps?.['Property_X-Individuals']),
+  structures.map((structure) => `${structure.id}:${structure.extraProps?.['Property_X']}`).join(', '));
 
 console.log(
   `\n${failures.length === 0 ? 'PASS' : 'FAIL'}: ${passed} check(s) passed, ${failures.length} failed`,

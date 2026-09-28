@@ -196,6 +196,34 @@ function mlPropertiesFor(ml: ParsedMLProperties | undefined): Record<MLFieldKey,
   return values;
 }
 
+/**
+ * Pin the plain second-objective column to the value USPEX wrote in
+ * `Individuals`.
+ *
+ * A larger-is-better custom property is written as the raw value in
+ * `Pareto_ranking` and kept as the **negated copy** in the `Individuals` column,
+ * so the Analyzer exposes `{name}-Individuals` (negated) and
+ * `{name}-Pareto_ranking` (raw), and defines the plain `{name}` column to be the
+ * `Individuals` copy.
+ *
+ * `extraProps` also absorbs every unrecognised column of the hull and
+ * `Individuals` files, so the plain key is assigned *after* those merges instead
+ * of relying on `Object.assign` order: a hull file that happens to carry its own
+ * (positive) `Property_X` must not win.  A structure with no `Individuals` row
+ * (hull-only) keeps whatever the hull file supplied rather than being blanked.
+ */
+function pinSecondObjectiveColumn(
+  extraProps: Record<string, number>,
+  secondObjectiveName: string,
+  individual: { extras: Record<string, number> } | undefined,
+): void {
+  if (secondObjectiveName === '' || individual === undefined) return;
+  const individualsValue = individual.extras[secondObjectiveName];
+  if (individualsValue !== undefined) {
+    extraProps[secondObjectiveName] = individualsValue;
+  }
+}
+
 function inferCompositionModeFromIndividuals(
   individualsResult: IndividualsParseResult | null,
 ): CompositionMode {
@@ -532,6 +560,7 @@ export async function parseAllFiles(
       if (hasIndCol('Fitness') || hasIndCol('e_above_hull')) extraProps['Fitness-Individuals'] = ind.indFitness;
       Object.assign(extraProps, ind.extras);
     }
+    pinSecondObjectiveColumn(extraProps, secondObjectiveName, ind);
 
     const structure: Structure = {
       // Identity
@@ -646,6 +675,7 @@ export async function parseAllFiles(
           if (midCols.includes('Spec_surf_area')) ep['Spec_surf_area'] = ind.specSurfArea;
           if (midCols.includes('Fitness') || midCols.includes('e_above_hull')) ep['Fitness-Individuals'] = ind.indFitness;
           Object.assign(ep, ind.extras);
+          pinSecondObjectiveColumn(ep, secondObjectiveName, ind);
           return Object.keys(ep).length > 0 ? ep : undefined;
         })(),
         // ML Properties

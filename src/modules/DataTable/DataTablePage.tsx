@@ -32,7 +32,7 @@ import { useProgressiveData } from '@/hooks/useProgressiveData';
 import { matchesActiveFilter } from '@/modules/Filter/filterLogic';
 import { FormulaDisplay } from '@/components/FormulaDisplay';
 import { ML_FIELD_KEYS, ML_FIELD_I18N } from '@/lib/constants';
-import { collectDynamicFieldKeys } from '@/domain/structure/dynamicFields';
+import { collectDynamicFieldKeys, dynamicFieldValue } from '@/domain/structure/dynamicFields';
 import { hasMLProperties, isMLPropertyValue } from '@/domain/structure/mlProperties';
 import type {
   Structure,
@@ -153,6 +153,7 @@ export function DataTablePage() {
   // 这三个变量要在 numericFilterColumns 之前定义，因为后者依赖它们
   const isVarcomp      = systemInfo?.compositionMode === 'varcomp';
   const hasPareto      = systemInfo?.optimizationType === 'multi';
+  const secondObjectiveName = systemInfo?.secondObjectiveName ?? '';
   const hasML          = hasMLProperties(structures);
   const hasFingerprint = structures.some((s) => s.qEntropy > 0);
   const hasVolume      = structures.some((s) => s.volume > 0);
@@ -401,13 +402,23 @@ export function DataTablePage() {
 
     // Dynamic extraProps columns (second objective from Individuals / Pareto_ranking)
     for (const key of extraPropKeys) {
+      // The plain second-objective column (`Property_X`) is defined to be the
+      // `Individuals` copy — USPEX stores a larger-is-better objective there
+      // negated — so those three columns may show a negative number.  Every other
+      // dynamic field keeps the old rule, where a negative value means "absent".
+      const isSecondObjectiveColumn = secondObjectiveName !== '' && (
+        key === secondObjectiveName ||
+        key === `${secondObjectiveName}-Individuals` ||
+        key === `${secondObjectiveName}-Pareto_ranking`
+      );
       cols.push({
         id: `extra_${key}`,
-        accessorFn: (s) => s.extraProps?.[key] ?? -1,
+        accessorFn: (s) => dynamicFieldValue(s, key, secondObjectiveName) ?? Number.NaN,
         header: key,
         size: 150,
         cell: ({ getValue }) => {
           const v = getValue<number>();
+          if (isSecondObjectiveColumn) return Number.isFinite(v) ? v.toFixed(4) : '—';
           return v >= 0 ? v.toFixed(4) : '—';
         },
       });

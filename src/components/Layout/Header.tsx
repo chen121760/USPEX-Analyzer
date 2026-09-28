@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useCompareStore } from '@/store/useCompareStore';
 import { useLayoutStore } from '@/store/useLayoutStore';
 import { useProjectStore } from '@/store/useProjectStore';
-import { Globe, UploadCloud, HelpCircle, Contact, Monitor, Moon, Sun, Loader2 } from 'lucide-react';
+import { Globe, UploadCloud, HelpCircle, Contact, Github, Monitor, Moon, Sun, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { CitePopover } from '@/components/CitePopover';
 import { useThemeStore } from '@/theme/themeStore';
@@ -135,6 +135,17 @@ export function Header() {
         title={i18n.language === 'zh' ? '联系作者' : 'Contact Author'}
       >
         <Contact size={16} />
+      </a>
+
+      {/* Source repository */}
+      <a
+        className="btn btn-ghost btn-sm"
+        href="https://github.com/chen121760/USPEX-Analyzer"
+        target="_blank"
+        rel="noopener noreferrer"
+        title={i18n.language === 'zh' ? 'GitHub 仓库' : 'GitHub repository'}
+      >
+        <Github size={16} />
       </a>
 
       {/* Help / hint panel toggle */}

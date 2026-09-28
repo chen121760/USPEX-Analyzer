@@ -2,6 +2,15 @@
 
 ## 版本更新记录
 
+### V1.5.2
+
+自定义目标列（10.6 `max_x` 的 `Property_X`）在 Explorer 与数据表中统一取 Individuals 的取反副本
+
+- **普通列名固定为 Individuals 副本**：USPEX 把「越大越好」的自定义属性按原始值写进 `Pareto_ranking`，在 `Individuals` 里存的是取反副本（让所有目标列共用同一内部方向）。解析阶段现在在合并完 hull / Individuals 的所有额外列之后，把普通列名（`Property_X`）显式钉在 Individuals 值上，不再依赖 `Object.assign` 的先后顺序；原始正值继续以 `Property_X-Pareto_ranking` 字段保留
+- **旧项目同样生效**：Explorer 与数据表读取该列时优先解析 `{name}-Individuals`，早先保存的项目里残留的正值不会再被当成原始属性值；没有 Individuals 行的结构（仅出现在凸包里的那些）仍回落到普通列，不会被清空
+- **数据表不再隐藏负值**：第二目标列（`Property_X`、`-Individuals`、`-Pareto_ranking`）显示真实负值，消除同一列在 Explorer 显示 `-221`、在数据表显示 `—` 的不一致；`100000` 占位值仍显示 `—`
+- `npm test` 新增 8 条断言（固定组分 `Property_X` 绑定、第二目标列解析与回落），全套 336 条全绿
+
 ### V1.5.1
 
 二元凸包修复 — 能量标度混用与纵轴下限导致「凸包变平」

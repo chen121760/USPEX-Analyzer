@@ -18,7 +18,7 @@ import { PlotFrame } from '@/charts/shared/PlotFrame';
 import { useStructurePointClick } from '@/charts/shared/useStructurePointClick';
 import { RangeInputs } from '@/charts/shared/RangeControls';
 import { buildXMarginalTraces, buildYMarginalTraces } from '@/charts/shared/marginalTraces';
-import { collectDynamicFieldKeys, numericStructureFieldValue } from '@/domain/structure/dynamicFields';
+import { collectDynamicFieldKeys, dynamicFieldValue } from '@/domain/structure/dynamicFields';
 import { hasMLProperties, mlPropertyValue } from '@/domain/structure/mlProperties';
 import { ExplorerControls } from './components/ExplorerControls';
 import { ChartSkeleton } from '@/components/ui/Skeleton';
@@ -35,7 +35,7 @@ interface FieldOption {
   type: 'numeric' | 'categorical';
 }
 
-function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: boolean, extraPropKeys: string[], elements: string[], structureMap: Map<number, Structure>, isVarcomp: boolean, hasVolume: boolean, hasDensity: boolean): FieldOption[] {
+function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: boolean, extraPropKeys: string[], elements: string[], structureMap: Map<number, Structure>, isVarcomp: boolean, hasVolume: boolean, hasDensity: boolean, secondObjectiveName: string): FieldOption[] {
   const opts: FieldOption[] = [
     { key: 'enthalpy', label: t('col.enthalpy'), accessor: (s) => s.enthalpy, type: 'numeric' },
     { key: 'enthalpyTotal', label: t('col.enthalpyTotal'), accessor: (s) => s.enthalpyTotal, type: 'numeric' },
@@ -95,7 +95,11 @@ function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: bo
   }
 
   for (const key of extraPropKeys) {
-    opts.push({ key: `extra_${key}`, label: key, accessor: (s) => numericStructureFieldValue(s, key), type: 'numeric' });
+    // The plain second-objective column (`Property_X`) is the `Individuals`
+    // copy — USPEX stores a larger-is-better property there negated — so it is
+    // read through `{name}-Individuals`; the raw value stays available as
+    // `{name}-Pareto_ranking`.
+    opts.push({ key: `extra_${key}`, label: key, accessor: (s) => dynamicFieldValue(s, key, secondObjectiveName), type: 'numeric' });
   }
 
   // Generate Δ (delta) variants for all numeric fields
@@ -149,7 +153,7 @@ export function ExplorerPage() {
   }, [structures]);
 
   const fields = useMemo(
-    () => getFieldOptions(t, hasML, hasPareto, extraPropKeys, systemInfo?.elements ?? [], structureMap, isVarcomp, hasVolume, hasDensity),
+    () => getFieldOptions(t, hasML, hasPareto, extraPropKeys, systemInfo?.elements ?? [], structureMap, isVarcomp, hasVolume, hasDensity, systemInfo?.secondObjectiveName ?? ''),
     [t, hasML, hasPareto, extraPropKeys, systemInfo, structureMap, isVarcomp, hasVolume, hasDensity],
   );
 

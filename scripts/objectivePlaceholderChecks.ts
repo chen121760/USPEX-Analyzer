@@ -18,7 +18,7 @@
  */
 import { parseAllFiles } from '@/parsers';
 import { normalizeStructure } from '@/domain/structure/normalizeStructure';
-import { numericStructureFieldValue } from '@/domain/structure/dynamicFields';
+import { numericStructureFieldValue, dynamicFieldValue } from '@/domain/structure/dynamicFields';
 import { buildStructureCsvRows, structuresToCSV } from '@/export/csvExport';
 import { USPEX_OBJECTIVE_PLACEHOLDER } from '@/lib/constants';
 import type { DetectedFile, Structure, USPEXFileType } from '@/types/structure';
@@ -137,6 +137,28 @@ const legacy = normalizeStructure({
 } as Partial<Structure> & { id: number });
 check('a real Pareto objective survives normalisation',
   legacy.extraProps?.['Property_X-Pareto_ranking'] === 3.5);
+
+console.log('\nSecond-objective column resolution (Explorer / DataTable)');
+// A project saved before the plain column was pinned can still hold a positive
+// `Property_X` that a hull file contributed; the plain name must read the
+// Individuals copy anyway, while the raw Pareto column stays positive.
+const stale = normalizeStructure({
+  id: 9,
+  extraProps: { 'Property_X': 221, 'Property_X-Individuals': -221, 'Property_X-Pareto_ranking': 221 },
+});
+check('the plain second-objective column reads the Individuals copy',
+  dynamicFieldValue(stale, 'Property_X', 'Property_X') === -221,
+  String(dynamicFieldValue(stale, 'Property_X', 'Property_X')));
+check('the raw Pareto column stays positive',
+  dynamicFieldValue(stale, 'Property_X-Pareto_ranking', 'Property_X') === 221);
+check('the explicit -Individuals column is unchanged',
+  dynamicFieldValue(stale, 'Property_X-Individuals', 'Property_X') === -221);
+check('other dynamic fields are read as they are',
+  dynamicFieldValue(normalizeStructure({ id: 10, extraProps: { Surf_area: -2.5 } }), 'Surf_area', 'Property_X') === -2.5);
+check('a structure with no Individuals row falls back to the plain column',
+  dynamicFieldValue(normalizeStructure({ id: 11, extraProps: { 'Property_X': 42 } }), 'Property_X', 'Property_X') === 42);
+check('a run without a second objective keeps the plain column',
+  dynamicFieldValue(normalizeStructure({ id: 12, extraProps: { 'Property_X': 7 } }), 'Property_X', '') === 7);
 
 console.log(
   `\n${failures.length === 0 ? 'PASS' : 'FAIL'}: ${passed} check(s) passed, ${failures.length} failed`,
