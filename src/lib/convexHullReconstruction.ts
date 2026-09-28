@@ -685,7 +685,12 @@ export function reconstructConvexHull(
     for (const s of converged) {
       if (s.eHullRecons >= 0 && s.eHullRecons <= HULL_ZERO_TOLERANCE) s.eHullRecons = 0;
     }
-    if (systemType !== 'unary') {
+    // A fixed-composition search always has a meaningful energy distance from
+    // its lowest-enthalpy structure, including a one-element ("unary") run.
+    // Without this exception unary fixed-composition runs kept fitness=NaN,
+    // even though eHullRecons had just been computed above, leaving the Energy
+    // Ranking chart with no finite y values.
+    if (compositionMode === 'fixed' || systemType !== 'unary') {
       for (const s of converged) {
         if (s.eHullRecons >= 0 && !(s.fitness >= 0)) s.fitness = s.eHullRecons;
       }
