@@ -77,6 +77,39 @@ export function ternaryZoomWindow(anchor: Point2D, scale: number): TernaryZoomWi
   };
 }
 
+export interface TernaryZoomFrame {
+  centre: Point2D;
+  scale: number;
+  vertices: [Point2D, Point2D, Point2D];
+}
+
+/**
+ * Recover the window a set of axis ranges describes.
+ *
+ * Every window keeps the base aspect ratio, so the frame the chart is showing
+ * can be read straight back out of the ranges; null means "not zoomed" (or
+ * ranges that no triangle window produced).
+ */
+export function ternaryFrameFromRanges(
+  x: readonly [number, number],
+  y: readonly [number, number],
+): TernaryZoomFrame | null {
+  const width = x[1] - x[0];
+  const scale = width / (1 + 2 * TERNARY_PADDING);
+  if (!Number.isFinite(scale) || scale >= 1 - 1e-6 || scale < MIN_TERNARY_SCALE - 1e-6) return null;
+
+  const expectedHeight = scale * (Math.sqrt(3) / 2 + 2 * TERNARY_PADDING);
+  const height = y[1] - y[0];
+  if (Math.abs(height - expectedHeight) > Math.max(1e-9, expectedHeight * 1e-6)) return null;
+
+  const centre: Point2D = [
+    (x[0] + x[1]) / 2,
+    y[0] + scale * (Math.sqrt(3) / 6 + TERNARY_PADDING),
+  ];
+
+  return { centre, scale, vertices: ternaryZoomWindow(centre, scale).vertices };
+}
+
 /**
  * Window size implied by dragging `distance` data units away from the anchor.
  * Moving by the triangle's inradius opens the window to the whole diagram.

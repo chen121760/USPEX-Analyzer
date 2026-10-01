@@ -12,6 +12,7 @@ import {
   TERNARY_VERTICES,
   clampToTriangle,
   isInsideTernary,
+  ternaryFrameFromRanges,
   ternaryZoomScale,
   ternaryZoomWindow,
 } from '@/charts/ternary/ternaryZoom';
@@ -68,8 +69,13 @@ const corner = ternaryZoomWindow([1.4, -0.9], 0.35);
 check('a window anchored outside the diagram is pulled back inside',
   corner.vertices.every((vertex) => isInsideTernary(vertex, 1e-9)),
   JSON.stringify(corner.vertices));
-check('the pulled-back window still contains the clamped anchor',
-  isInsideTernary(corner.vertices[0]) && isInsideTernary(corner.vertices[2]));
+const cornerCentre: [number, number] = [
+  (corner.vertices[0][0] + corner.vertices[1][0] + corner.vertices[2][0]) / 3,
+  (corner.vertices[0][1] + corner.vertices[1][1] + corner.vertices[2][1]) / 3,
+];
+check('a window anchored outside the diagram is clamped rather than stretched',
+  corner.scale === 0.35 && isInsideTernary(cornerCentre, 1e-9),
+  `centre ${cornerCentre.map((v) => v.toFixed(4)).join(',')}`);
 
 const deepCorner = ternaryZoomWindow([1, 0], MIN_TERNARY_SCALE);
 check('an extreme zoom near a corner stays inside the diagram',
@@ -111,6 +117,22 @@ check('clamping leaves interior points untouched',
   && clampToTriangle([0.4, 0.3], TERNARY_VERTICES)[1] === 0.3);
 check('inside test rejects the margin and the outside',
   isInsideTernary([0.5, 0.2]) && !isInsideTernary([-0.05, 0.5]) && !isInsideTernary([0.5, 0.95]));
+
+// The frame overlay reads the window back out of whatever ranges the chart is
+// drawn with, so the two directions have to agree exactly.
+const windowForFrame = ternaryZoomWindow([0.62, 0.21], 0.3);
+const recovered = ternaryFrameFromRanges(windowForFrame.ranges.x, windowForFrame.ranges.y);
+check('ranges round-trip back to the window that produced them',
+  recovered !== null
+  && Math.abs(recovered.scale - 0.3) < 1e-9
+  && Math.abs(recovered.centre[0] - windowForFrame.vertices.reduce((sum, v) => sum + v[0], 0) / 3) < 1e-9
+  && Math.abs(recovered.centre[1] - windowForFrame.vertices.reduce((sum, v) => sum + v[1], 0) / 3) < 1e-9,
+  JSON.stringify(recovered));
+check('the unzoomed base ranges report no zoom frame',
+  ternaryFrameFromRanges(BASE_X, BASE_Y) === null);
+check('ranges that no window produced are rejected',
+  ternaryFrameFromRanges([-0.12, 0.6], [-0.12, 0.986]) === null
+  && ternaryFrameFromRanges([-0.12, 1.12], [-0.12, 0.5]) === null);
 
 console.log(`\nTernary zoom checks: ${passed} passed, ${failures.length} failed`);
 if (failures.length) throw new Error(failures.join('; '));

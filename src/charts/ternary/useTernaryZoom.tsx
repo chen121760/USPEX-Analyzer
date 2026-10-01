@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ECharts } from 'echarts';
 import {
   isInsideTernary,
+  ternaryFrameFromRanges,
   ternaryZoomScale,
   ternaryZoomWindow,
   type Point2D,
@@ -21,29 +22,166 @@ interface DragState {
   window: TernaryZoomWindow | null;
 }
 
+/** Pixel geometry of the triangle the chart is currently showing. */
+interface ZoomFrame {
+  /** Grid box with the triangle punched out (even-odd), in host pixels. */
+  maskPath: string;
+  /** The triangle outline itself. */
+  outlinePoints: string;
+  /** Corner labels of the zoomed view (the diagram's own ones get blanked). */
+  labels: Array<{ key: string; x: number; y: number; text: string; anchor: 'start' | 'middle' | 'end' }>;
+  /** Identity of the frame, used to skip redundant state updates. */
+  signature: string;
+}
+
 export interface TernaryZoomOptions {
   /** Live ECharts instance, captured through `PlotFrame`'s `onInitialized`. */
   chart: ECharts | null;
   /** Receives the same relayout patch shape the rest of the app already uses. */
   onZoom: (patch: Record<string, unknown>) => void;
+  /** Axis ranges the chart is currently drawn with — drives the zoom frame. */
+  ranges?: { x: [number, number]; y: [number, number] } | null;
+  /** Paper colour, used to blank everything outside the zoom triangle. */
+  background?: string;
+  /** Diagram edge colour, used for the frame outline. */
+  frameColor?: string;
+  /** Element symbol per triangle vertex, drawn on the zoomed frame's corners. */
+  cornerLabels?: readonly [string, string, string];
+  labelColor?: string;
   enabled?: boolean;
 }
 
 /**
- * Magnifier-style triangle zoom for the ternary phase diagram.
+ * Triangle-shaped zoom for the ternary phase diagram.
  *
- * Press anywhere in the diagram: that point becomes the centre of the new view.
- * Drag outwards and an upright equilateral triangle grows around it; release
- * and the chart zooms to exactly that triangle, so the frame that comes out is
- * the same triangle shape the diagram started with.  Undo, the toolbox restore
- * button and the blank double-click keep working because the result is an
- * ordinary viewport range patch.
+ * A rectangle brush cannot frame a triangle: the diagram's edges run out of the
+ * frame and the corners show neighbouring compositions.  So the view is always
+ * an upright equilateral sub-triangle of the diagram — press a point to centre
+ * on it, drag outwards to size the window, release to zoom.  While zoomed the
+ * area outside the current triangle is blanked and the triangle is outlined, so
+ * the frame the user gets is the same triangle shape as the initial view.
+ *
+ * Undo, the toolbox restore button and the blank double-click keep working
+ * because the result is an ordinary viewport range patch.
  */
-export function useTernaryZoom({ chart, onZoom, enabled = true }: TernaryZoomOptions): { overlay: ReactNode } {
+export function useTernaryZoom({
+  chart,
+  onZoom,
+  ranges = null,
+  background,
+  frameColor,
+  cornerLabels,
+  labelColor,
+  enabled = true,
+}: TernaryZoomOptions): { overlay: ReactNode } {
   const [preview, setPreview] = useState<{ points: string; text: string; x: number; y: number } | null>(null);
+  const [frame, setFrame] = useState<ZoomFrame | null>(null);
+  const frameRef = useRef<ZoomFrame | null>(null);
+  const [revision, setRevision] = useState(0);
   const dragRef = useRef<DragState | null>(null);
   const onZoomRef = useRef(onZoom);
   onZoomRef.current = onZoom;
+
+  // The grid box keeps its aspect ratio at every zoom level, but it still moves
+  // when the container resizes, so the frame has to be recomputed there too.
+  useEffect(() => {
+    if (!chart) return undefined;
+    const host = chart.getDom();
+    if (!host || typeof ResizeObserver === 'undefined') return undefined;
+    let lastSize = '';
+    const observer = new ResizeObserver(() => {
+      const rect = host.getBoundingClientRect();
+      const size = `${Math.round(rect.width)}x${Math.round(rect.height)}`;
+      if (size === lastSize) return;
+      lastSize = size;
+      setRevision((value) => value + 1);
+    });
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, [chart]);
+
+  // Ranges arrive as a fresh object on every render, so the effect keys off the
+  // four numbers instead — depending on the object re-ran it forever.
+  const rangeX0 = ranges?.x[0];
+  const rangeX1 = ranges?.x[1];
+  const rangeY0 = ranges?.y[0];
+  const rangeY1 = ranges?.y[1];
+  const commitFrame = (next: ZoomFrame | null) => {
+    const previous = frameRef.current;
+    const unchanged = next && previous ? next.signature === previous.signature : next === previous;
+    if (unchanged) return;
+    frameRef.current = next;
+    setFrame(next);
+  };
+
+  // Runs after PlotFrame has pushed the new ranges into ECharts, so the pixel
+  // conversions below describe the frame that is actually on screen.
+  useEffect(() => {
+    if (
+      !chart
+      || rangeX0 === undefined || rangeX1 === undefined
+      || rangeY0 === undefined || rangeY1 === undefined
+    ) {
+      commitFrame(null);
+      return;
+    }
+
+    const xRange: [number, number] = [rangeX0, rangeX1];
+    const yRange: [number, number] = [rangeY0, rangeY1];
+    const window = ternaryFrameFromRanges(xRange, yRange);
+    if (!window) {
+      commitFrame(null);
+      return;
+    }
+
+    const toPixel = (point: Point2D): [number, number] | null => {
+      try {
+        const pixel = chart.convertToPixel({ gridIndex: 0 }, [point[0], point[1]]) as number[];
+        return Array.isArray(pixel) && Number.isFinite(pixel[0]) && Number.isFinite(pixel[1])
+          ? [pixel[0], pixel[1]]
+          : null;
+      } catch {
+        return null;
+      }
+    };
+
+    const corners = [
+      toPixel([xRange[0], yRange[1]]),
+      toPixel([xRange[1], yRange[1]]),
+      toPixel([xRange[1], yRange[0]]),
+      toPixel([xRange[0], yRange[0]]),
+    ];
+    const triangle = window.vertices.map(toPixel);
+    if (corners.some((corner) => corner === null) || triangle.some((vertex) => vertex === null)) {
+      commitFrame(null);
+      return;
+    }
+
+    const path = (points: Array<[number, number]>): string =>
+      points.map(([x, y], index) => `${index === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ') + ' Z';
+    const vertices = triangle as Array<[number, number]>;
+    const maskPath = `${path(corners as Array<[number, number]>)} ${path(vertices)}`;
+    const outlinePoints = vertices.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+    const centrePixel: [number, number] = [
+      (vertices[0][0] + vertices[1][0] + vertices[2][0]) / 3,
+      (vertices[0][1] + vertices[1][1] + vertices[2][1]) / 3,
+    ];
+    const labels = (cornerLabels ?? []).slice(0, 3).map((text, index) => {
+      const [x, y] = vertices[index];
+      const dx = x - centrePixel[0];
+      const dy = y - centrePixel[1];
+      const length = Math.hypot(dx, dy) || 1;
+      const anchor = dx > length * 0.35 ? 'start' as const : dx < -length * 0.35 ? 'end' as const : 'middle' as const;
+      return { key: text + index, x: x + (dx / length) * 16, y: y + (dy / length) * 16, text, anchor };
+    });
+
+    commitFrame({
+      maskPath,
+      outlinePoints,
+      labels,
+      signature: `${maskPath}|${outlinePoints}|${labels.map((label) => label.text).join(',')}`,
+    });
+  }, [chart, rangeX0, rangeX1, rangeY0, rangeY1, revision, cornerLabels]);
 
   useEffect(() => {
     if (!enabled || !chart) return undefined;
@@ -52,12 +190,6 @@ export function useTernaryZoom({ chart, onZoom, enabled = true }: TernaryZoomOpt
     const boundary = host?.parentElement ?? null;
     const canvas = host?.querySelector('canvas') ?? null;
     if (!host || !boundary || !canvas) return undefined;
-
-    const hostOffset = (): [number, number] => {
-      const hostRect = host.getBoundingClientRect();
-      const boundaryRect = boundary.getBoundingClientRect();
-      return [hostRect.left - boundaryRect.left, hostRect.top - boundaryRect.top];
-    };
 
     const toData = (px: number, py: number): Point2D | null => {
       try {
@@ -118,7 +250,7 @@ export function useTernaryZoom({ chart, onZoom, enabled = true }: TernaryZoomOpt
       }
 
       // The drag belongs to the zoom tool from here on: keep it away from the
-      // chart's own pointer handling (Pan/Zoom roaming, hover, brush).
+      // chart's own pointer handling (roaming, hover, brush).
       event.preventDefault();
       event.stopPropagation();
 
@@ -129,18 +261,16 @@ export function useTernaryZoom({ chart, onZoom, enabled = true }: TernaryZoomOpt
       const window = ternaryZoomWindow(drag.anchor, ternaryZoomScale(distance));
       drag.window = window;
 
-      const [offsetX, offsetY] = hostOffset();
       const points = window.vertices
         .map((vertex) => toPixel(vertex))
-        .filter((pixel): pixel is [number, number] => pixel !== null)
-        .map(([x, y]) => `${(x + offsetX).toFixed(1)},${(y + offsetY).toFixed(1)}`);
+        .filter((pixel): pixel is [number, number] => pixel !== null);
       const centre = toPixel(drag.anchor);
 
       if (points.length === 3 && centre) {
         setPreview({
-          points: points.join(' '),
-          x: centre[0] + offsetX + 10,
-          y: centre[1] + offsetY - 8,
+          points: points.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' '),
+          x: centre[0] + 10,
+          y: centre[1] - 8,
           text: `×${(1 / window.scale).toFixed(window.scale < 0.1 ? 0 : 1)}`,
         });
       }
@@ -188,30 +318,74 @@ export function useTernaryZoom({ chart, onZoom, enabled = true }: TernaryZoomOpt
     };
   }, [chart, enabled]);
 
-  const overlay = preview ? (
-    <svg
-      className="ternary-zoom-preview notranslate"
-      aria-hidden="true"
-      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 6 }}
-    >
-      <polygon
-        points={preview.points}
-        style={{
-          fill: 'color-mix(in srgb, var(--color-primary) 16%, transparent)',
-          stroke: 'var(--color-primary)',
-          strokeWidth: 1.6,
-          strokeDasharray: '6 4',
-        }}
-      />
-      <text
-        x={preview.x}
-        y={preview.y}
-        style={{ fill: 'var(--color-primary)', fontSize: 12, fontWeight: 600 }}
-      >
-        {preview.text}
-      </text>
-    </svg>
-  ) : null;
+  const overlay = (
+    <>
+      {frame && (
+        <svg
+          className="ternary-zoom-frame notranslate"
+          aria-hidden="true"
+          // The root has to stay transparent to pointer events or it swallows
+          // every later gesture; the blanked corners opt back in below.
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 5, pointerEvents: 'none' }}
+        >
+          {/* Everything outside the current triangle is blanked, so the frame the
+              user sees is the triangle itself rather than a rectangle that cuts
+              it off. */}
+          <path
+            d={frame.maskPath}
+            fillRule="evenodd"
+            fill={background || '#fff'}
+            // `painted` + `evenodd` keeps the triangle itself clickable while the
+            // blanked corners stop hover/click on points that are no longer shown.
+            style={{ pointerEvents: 'painted' }}
+          />
+          <polygon
+            points={frame.outlinePoints}
+            fill="none"
+            stroke={frameColor || 'currentColor'}
+            strokeWidth={1.5}
+            style={{ pointerEvents: 'none' }}
+          />
+          {frame.labels.map((label) => (
+            <text
+              key={label.key}
+              x={label.x}
+              y={label.y}
+              textAnchor={label.anchor}
+              dominantBaseline="middle"
+              style={{ fill: labelColor || frameColor, fontSize: 13, fontWeight: 700, pointerEvents: 'none' }}
+            >
+              {label.text}
+            </text>
+          ))}
+        </svg>
+      )}
+      {preview && (
+        <svg
+          className="ternary-zoom-preview notranslate"
+          aria-hidden="true"
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 6 }}
+        >
+          <polygon
+            points={preview.points}
+            style={{
+              fill: 'color-mix(in srgb, var(--color-primary) 16%, transparent)',
+              stroke: 'var(--color-primary)',
+              strokeWidth: 1.6,
+              strokeDasharray: '6 4',
+            }}
+          />
+          <text
+            x={preview.x}
+            y={preview.y}
+            style={{ fill: 'var(--color-primary)', fontSize: 12, fontWeight: 600 }}
+          >
+            {preview.text}
+          </text>
+        </svg>
+      )}
+    </>
+  );
 
   return { overlay };
 }

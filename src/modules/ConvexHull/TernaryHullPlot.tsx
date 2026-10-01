@@ -388,7 +388,6 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
   // Triangle zoom: press a point to centre on it, drag out, release.  The chart
   // instance comes from PlotFrame, which is the only place that owns it.
   const [chart, setChart] = useState<ECharts | null>(null);
-  const { overlay: zoomOverlay } = useTernaryZoom({ chart, onZoom: handleRelayout });
 
   const layout: PlotlyLayout = mergePlotViewport({
     autosize: true,
@@ -429,6 +428,22 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
     plot_bgcolor: pt.plotBg,
     paper_bgcolor: pt.paperBg,
   }, viewportLayout);
+
+  // The zoom frame is read back out of the ranges the chart is drawn with, so
+  // the hook has to sit below `layout`.
+  const zoomRange = {
+    x: (layout.xaxis as { range?: [number, number] })?.range ?? null,
+    y: (layout.yaxis as { range?: [number, number] })?.range ?? null,
+  };
+  const { overlay: zoomOverlay } = useTernaryZoom({
+    chart,
+    onZoom: handleRelayout,
+    ranges: zoomRange.x && zoomRange.y ? { x: zoomRange.x, y: zoomRange.y } : null,
+    background: pt.paperBg,
+    frameColor: pt.structureLineColor,
+    cornerLabels: [labels[0], labels[1], labels[2]],
+    labelColor: pt.annotationColor,
+  });
 
   const handleStructurePointClick = (structureId: number) => {
     if (onStructureClick) {
