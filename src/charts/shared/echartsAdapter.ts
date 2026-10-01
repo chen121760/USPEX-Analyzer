@@ -6,6 +6,17 @@ type Dict = Record<string, unknown>;
 
 const VIRIDIS = ['#440154', '#3b528b', '#21918c', '#5ec962', '#fde725'];
 
+/** Continuous colour bar geometry, in pixels. */
+const COLOR_BAR_WIDTH = 12;
+const COLOR_BAR_HEIGHT = 120;
+const COLOR_BAR_GAP = 8;
+const COLOR_BAR_STACK_STEP = 48;
+
+interface ColorBarPlacement {
+  left: number;
+  top: number;
+}
+
 /**
  * Family every chart text element falls back to.
  *
@@ -77,6 +88,10 @@ function adapt2D(
   const xAxes: Dict[] = [];
   const yAxes: Dict[] = [];
   const pairIndex = new Map<string, number>();
+  // A letterboxed (fixed-aspect) grid keeps a margin of empty axis range around
+  // the data, so a colour bar pinned to the box edge floats away from the
+  // diagram.  Remember where the content actually ends.
+  let mainContentRight: number | null = null;
 
   for (const [index, pair] of axisPairs.entries()) {
     // Pair `index` is subplot `index + 1`, so its own axis declarations are
@@ -92,10 +107,21 @@ function adapt2D(
     const constraint = frame ? equalScaleConstraint(xLayout, yLayout, measuredRanges) : null;
     const letterboxed = constraint ? constrainGridToAspect(grid, frame as PlotFrameSize, constraint) : null;
     grids.push({ ...(letterboxed ?? grid), containLabel: index === 0 && letterboxed === null });
+    if (index === 0 && letterboxed) {
+      const xRange = explicitAxisRange(xLayout) ?? measuredRanges.x;
+      if (xRange && measuredRanges.x && xRange[1] > xRange[0]) {
+        mainContentRight = Math.min(1, Math.max(0, (measuredRanges.x[1] - xRange[0]) / (xRange[1] - xRange[0])));
+      }
+    }
     xAxes.push(convertAxis(xLayout, index, 'x'));
     yAxes.push(convertAxis(yLayout, index, 'y'));
     pairIndex.set(`${pair.x}|${pair.y}`, index);
   }
+
+  // Pin colour bars next to the plot box rather than the container edge.  A
+  // wide chart letterboxes the plot in the middle, and hanging the bar off the
+  // container's right edge left it floating far away from the diagram.
+  const colorBarPlacement = mainGridColorBarPlacement(grids[0], frame, mainContentRight);
 
   const series: Dict[] = [];
   const visualMaps: Dict[] = [];
@@ -106,8 +132,8 @@ function adapt2D(
     const xName = axisName(trace.xaxis, 'x');
     const yName = axisName(trace.yaxis, 'y');
     const axesIndex = pairIndex.get(`${xName}|${yName}`) ?? 0;
-    const converted = convert2DTrace(trace, series.length, axesIndex, visualMaps, colorBarOffset);
-    if (converted.length > 0 && hasNumericColors(trace)) colorBarOffset += 48;
+    const converted = convert2DTrace(trace, series.length, axesIndex, visualMaps, colorBarOffset, colorBarPlacement);
+    if (converted.length > 0 && hasNumericColors(trace)) colorBarOffset += COLOR_BAR_STACK_STEP;
     series.push(...converted);
   });
 
@@ -308,6 +334,39 @@ function adapt3D(data: PlotData, layout: PlotLayout, config: Dict): EChartsAdapt
   return { option, axisRanges: { x: null, y: null }, is3D: true };
 }
 
+/**
+ * Where a colour bar goes: just right of the main subplot, vertically centred on
+ * it, and never further right than the container edge (which is where it used to
+ * sit, however far away the plot was).
+ */
+function mainGridColorBarPlacement(
+  main: Dict | undefined,
+  frame: PlotFrameSize | null,
+  contentRight: number | null = null,
+): ColorBarPlacement | null {
+  if (!main) return null;
+
+  const width = frame && frame.width > 0 ? frame.width : 1000;
+  const height = frame && frame.height > 0 ? frame.height : 700;
+  const left = Number(main.left);
+  const top = Number(main.top);
+  if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
+
+  const gridWidth = Math.max(1, width - left - Number(main.right));
+  const gridHeight = Math.max(1, height - top - Number(main.bottom));
+  // `contentRight` is the fraction of the box the data occupies; on a letterboxed
+  // ternary that is the right corner of the triangle, not the padded box edge.
+  const contentWidth = contentRight === null ? gridWidth : gridWidth * contentRight;
+
+  return {
+    left: Math.min(
+      left + contentWidth + COLOR_BAR_GAP,
+      Math.max(0, width - COLOR_BAR_WIDTH - 4),
+    ),
+    top: Math.max(4, top + (gridHeight - COLOR_BAR_HEIGHT) / 2),
+  };
+}
+
 function collectAxisPairs(data: PlotData): { x: string; y: string }[] {
   // Pie (and 3D) series do not live on a cartesian grid.  A chart made only of
   // those must not emit axes: otherwise an empty pair of axis lines is painted
@@ -333,6 +392,7 @@ function convert2DTrace(
   axesIndex: number,
   visualMaps: Dict[],
   visualMapRight: number,
+  colorBarPlacement: ColorBarPlacement | null = null,
 ): Dict[] {
   const type = asString(trace.type) || 'scatter';
   if (type === 'pie') return [pieSeries(trace)];
@@ -369,10 +429,14 @@ function convert2DTrace(
       max: asNumber(marker.cmax, finite.length ? Math.max(...finite) : 1),
       calculable: true,
       orient: 'vertical',
-      right: visualMapRight,
-      top: 'middle',
-      itemWidth: 12,
-      itemHeight: 120,
+      ...(colorBarPlacement
+        ? {
+            left: Math.max(0, colorBarPlacement.left - (visualMapRight - 10)),
+            top: colorBarPlacement.top,
+          }
+        : { right: visualMapRight, top: 'middle' }),
+      itemWidth: COLOR_BAR_WIDTH,
+      itemHeight: COLOR_BAR_HEIGHT,
       precision: 3,
       formatter: (value: number) => formatAxisValue(value),
       text: [plainText(asString(asDict(marker.colorbar).title)), ''],
