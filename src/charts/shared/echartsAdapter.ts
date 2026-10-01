@@ -1,9 +1,20 @@
 import type { EChartsOption } from 'echarts';
+import { CHART_FONT } from '@/lib/constants';
 import type { PlotData, PlotLayout, PlotTrace } from './plotTypes';
 
 type Dict = Record<string, unknown>;
 
 const VIRIDIS = ['#440154', '#3b528b', '#21918c', '#5ec962', '#fde725'];
+
+/**
+ * Family every chart text element falls back to.
+ *
+ * Plotly drew all chart text with `layout.font.family` (the app's system-first
+ * sans-serif stack).  A hardcoded serif here left titles, legends and axis
+ * names in a different family from the axis labels, which inherit ECharts' own
+ * default.
+ */
+const CHART_FONT_FAMILY = CHART_FONT.family;
 
 export interface EChartsAdaptedOption {
   option: EChartsOption;
@@ -119,6 +130,9 @@ function adapt2D(
   const option: EChartsOption = {
     animation: false,
     backgroundColor: asString(layout.paper_bgcolor) || 'transparent',
+    // Axis labels and tooltips carry no family of their own, so the layout font
+    // has to reach them through the global text style (Plotly's `layout.font`).
+    textStyle: chartTextStyle(layout),
     // Omit `color` entirely when no palette is supplied.  An explicit
     // `color: undefined` key wipes the palette, and every element that relies on
     // it (pie slices, legend swatches, uncoloured series) is then drawn with
@@ -245,12 +259,21 @@ function adapt3D(data: PlotData, layout: PlotLayout, config: Dict): EChartsAdapt
   const option = {
     animation: false,
     backgroundColor: asString(layout.paper_bgcolor) || 'transparent',
+    textStyle: chartTextStyle(layout),
     title: titleText
       ? { text: titleText, left: 'center', top: 6, textStyle: fontStyle(asDict(title.font), 15) }
       : undefined,
     legend: layout.showlegend === false
       ? { show: false }
-      : { show: true, type: 'scroll', left: 'center', top: titleText ? 32 : 8, textStyle: { color: '#64748b', fontSize: 11 } },
+      : {
+          show: true,
+          type: 'scroll',
+          left: 'center',
+          top: titleText ? 32 : 8,
+          // Plotly used the theme legend colour here; a fixed slate value is
+          // the tick colour and drifted from it.
+          textStyle: fontStyle(asDict(asDict(layout.legend).font), 11),
+        },
     tooltip: { trigger: 'item', confine: true, formatter: tooltipFormatter },
     toolbox: displayModeBar
       ? { show: true, right: 8, top: 6, feature: { restore: {}, saveAsImage: { pixelRatio: 2 } } }
@@ -1065,12 +1088,21 @@ function normalizeColor(value: string): string {
   return `rgba(${parts.slice(0, 3).join(',')},${parts[3] ?? 1})`;
 }
 
-function fontStyle(font: Dict, fallbackSize: number): Dict {
+/** Base text style taken from Plotly's `layout.font`. */
+function chartTextStyle(layout: PlotLayout): Dict {
+  const font = asDict(layout.font);
+  return {
+    fontFamily: asString(font.family) || CHART_FONT_FAMILY,
+    fontSize: asNumber(font.size, 13),
+  };
+}
+
+function fontStyle(font: Dict, fallbackSize: number, family: string = CHART_FONT_FAMILY): Dict {
   return {
     color: asString(font.color) || undefined,
     fontSize: asNumber(font.size, fallbackSize),
-    fontFamily: 'Times New Roman, Times, serif',
-    fontWeight: asString(font.family).includes('bold') ? 'bold' : undefined,
+    fontFamily: asString(font.family) || family,
+    fontWeight: asString(font.weight).includes('bold') || asString(font.family).includes('bold') ? 'bold' : undefined,
   };
 }
 

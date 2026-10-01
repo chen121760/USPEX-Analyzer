@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import * as echarts from 'echarts';
 import 'echarts-gl';
 import { adaptToECharts } from './echartsAdapter';
-import { CARTESIAN_AUTORANGE_PATCH, dataZoomRelayoutPatch } from './echartsInteraction';
+import { CARTESIAN_AUTORANGE_PATCH, dataZoomRelayoutPatch, toolboxIconName } from './echartsInteraction';
 import type { PlotFrameProps } from './plotTypes';
 
 const DEFAULT_PLOT_STYLE: CSSProperties = { width: '100%', height: '100%' };
@@ -22,6 +22,7 @@ export function PlotFrame({
   onClick,
   onInitialized,
   onRelayout,
+  onUndo,
   onAxisTitleDoubleClick,
   onStructureClick,
   onUpdate,
@@ -31,8 +32,8 @@ export function PlotFrame({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
   const hoverLockRef = useRef<HTMLDivElement | null>(null);
-  const callbacksRef = useRef({ onClick, onInitialized, onRelayout, onStructureClick, onUpdate });
-  callbacksRef.current = { onClick, onInitialized, onRelayout, onStructureClick, onUpdate };
+  const callbacksRef = useRef({ onClick, onInitialized, onRelayout, onUndo, onStructureClick, onUpdate });
+  callbacksRef.current = { onClick, onInitialized, onRelayout, onUndo, onStructureClick, onUpdate };
 
   // Chart layouts are expressed in Plotly domains (fractions of the plot area),
   // so the adapter needs the measured container for two things: letterboxing a
@@ -100,6 +101,14 @@ export function PlotFrame({
 
     const handleRestore = () => callbacksRef.current.onRelayout?.({ ...CARTESIAN_AUTORANGE_PATCH });
 
+    const handleToolboxClick = (event: unknown) => {
+      // ECharts' own toolbox "back" button replays a dataZoom snapshot that is
+      // always empty once the app rewrites the axis extents, so the app undoes
+      // its own viewport history instead.
+      if (toolboxIconName(event) !== 'back') return;
+      callbacksRef.current.onUndo?.();
+    };
+
     const handleBlankDoubleClick = (event: unknown) => {
       // ECharts emits series dblclick events through `chart.on`, but blank plot
       // space belongs to ZRender.  Plotly reset the viewport from precisely this
@@ -164,6 +173,7 @@ export function PlotFrame({
     chart.on('mouseout', hideHoverLock);
     chart.on('globalout', hideHoverLock);
     chart.getZr().on('dblclick', handleBlankDoubleClick);
+    chart.getZr().on('click', handleToolboxClick);
 
     const resizeObserver = typeof ResizeObserver === 'undefined'
       ? null

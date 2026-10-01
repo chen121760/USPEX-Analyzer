@@ -56,6 +56,30 @@ export const CARTESIAN_AUTORANGE_PATCH: Readonly<Dict> = Object.freeze({
   'yaxis.autorange': true,
 });
 
+/**
+ * Name of the toolbox button a zrender click landed on (`zoom`, `back`,
+ * `restore`, `saveAsImage`), or null for anything else.
+ *
+ * Toolbox icons are anonymous zrender paths; the only handle on them is the
+ * component info ECharts stores under its `__ec_innerN` keys, plus the tooltip
+ * name it registers for the button.
+ */
+export function toolboxIconName(event: unknown): string | null {
+  const target = isRecord(event) ? event.target : null;
+  if (!isRecord(target)) return null;
+
+  for (const key of Object.keys(target)) {
+    if (!key.startsWith('__ec_inner')) continue;
+    const info = target[key];
+    if (!isRecord(info) || info.componentMainType !== 'toolbox') continue;
+    const tooltip = isRecord(info.tooltipConfig) ? info.tooltipConfig : null;
+    const name = tooltip && typeof tooltip.name === 'string' ? tooltip.name : null;
+    if (name) return name;
+  }
+
+  return null;
+}
+
 function zoomEventEntries(event: unknown): Dict[] {
   if (!isRecord(event)) return [];
   const batch = Array.isArray(event.batch) ? event.batch.filter(isRecord) : [];

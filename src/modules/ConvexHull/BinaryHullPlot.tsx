@@ -278,7 +278,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
       marker: { color: getPlotlyTheme(theme).frontColors[0], size: 10, symbol: 'diamond' },
       text: stable.map((s) => formulaToHtml(s.formula)),
       textposition: 'top center' as const,
-      textfont: { size: 10 },
+      textfont: { size: 12 },
       hovertext: stable.map(
         (s) =>
           (s.groupName || groupMap ? `Group: ${s.groupName ?? groupMap?.get(s.id) ?? '—'}<br>` : '') +
@@ -331,7 +331,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
   const titleFont = { size: 13, color: getPlotlyTheme(theme).axisTitleColor };
   const pt = getPlotlyTheme(theme);
 
-  const { viewportLayout, handleRelayout } = usePlotViewport();
+  const { viewportLayout, handleRelayout, undoViewport } = usePlotViewport();
 
   const layout: PlotlyLayout = mergePlotViewport({
     font: CHART_FONT,
@@ -422,6 +422,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
           hoverTooltip={structurePointClick.hoverTooltip}
           {...structurePointClick.plotHandlers}
           onRelayout={handleRelayout}
+          onUndo={undoViewport}
         />
       </div>
 

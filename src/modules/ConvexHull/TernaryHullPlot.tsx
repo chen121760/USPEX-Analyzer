@@ -329,7 +329,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
         return formulaToHtml(p.full?.formula ?? `EA${p.id}`);
       }),
       textposition: 'top center' as const,
-      textfont: { size: 8 },
+      textfont: { size: 12 },
       hovertext: uniqueStableFull.map((p) => {
         const s = p.full;
         return (
@@ -382,7 +382,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
     { x: 0.5, y: Math.sqrt(3) / 2 + 0.06, text: formulaToHtml(labels[1]), showarrow: false, font: { size: 13, color: pt.annotationColor, weight: 'bold' as const } },
     { x: 1.05, y: -0.05, text: formulaToHtml(labels[2]), showarrow: false, font: { size: 13, color: pt.annotationColor, weight: 'bold' as const } },
   ];
-  const { viewportLayout, handleRelayout } = usePlotViewport();
+  const { viewportLayout, handleRelayout, undoViewport } = usePlotViewport();
 
   const layout: PlotlyLayout = mergePlotViewport({
     autosize: true,
@@ -543,6 +543,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
           hoverTooltip={structurePointClick.hoverTooltip}
           {...structurePointClick.plotHandlers}
           onRelayout={handleRelayout}
+          onUndo={undoViewport}
         />
       </div>
 

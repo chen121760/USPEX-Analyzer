@@ -226,7 +226,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
 
   const pt = plotTheme;
 
-  const { viewportLayout, handleRelayout } = usePlotViewport();
+  const { viewportLayout, handleRelayout, undoViewport } = usePlotViewport();
 
   const layout: PlotlyLayout = mergePlotViewport({
     font: CHART_FONT,
@@ -366,6 +366,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
           hoverTooltip={structurePointClick.hoverTooltip}
           {...structurePointClick.plotHandlers}
           onRelayout={handleRelayout}
+          onUndo={undoViewport}
         />
       </div>
 

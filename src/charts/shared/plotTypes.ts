@@ -32,6 +32,8 @@ export interface PlotFrameProps {
   onUpdate?: (figure: unknown, chart: unknown) => void;
   onClick?: (event: PlotClickEventLike) => void;
   onRelayout?: (event: Record<string, unknown>) => void;
+  /** Toolbox "back" button — step the chart's own viewport history backwards. */
+  onUndo?: () => void;
   onStructureClick?: (structureId: number) => void;
   editableAxisTitles?: { x: string; y: string; z?: string };
   axisTitleEditHint?: string;

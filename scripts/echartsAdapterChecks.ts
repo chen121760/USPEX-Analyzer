@@ -1,6 +1,7 @@
 import { adaptToECharts, layoutNeedsEqualScale } from '@/charts/shared/echartsAdapter';
-import { CARTESIAN_AUTORANGE_PATCH, dataZoomRelayoutPatch } from '@/charts/shared/echartsInteraction';
+import { CARTESIAN_AUTORANGE_PATCH, dataZoomRelayoutPatch, toolboxIconName } from '@/charts/shared/echartsInteraction';
 import { mergePlotViewport } from '@/charts/shared/plotRange';
+import { CHART_FONT } from '@/lib/constants';
 
 let passed = 0;
 const failures: string[] = [];
@@ -406,6 +407,40 @@ check('panel styling does not depend on trace order (top panel hides the shared 
   reversedXAxes[2].name === '' && record(reversedXAxes[2].axisLabel).show === false && reversedYAxes[2].name === 'density');
 check('panel geometry does not depend on trace order',
   reversedGrids[1].x0 >= reversedGrids[0].x1 && reversedGrids[2].y1 <= reversedGrids[0].y0);
+
+// ── Chart text font ───────────────────────────────────────────────────────
+// Plotly drew every chart text element with `layout.font.family`.  Titles,
+// legends and axis names used to be forced to a serif family while the axis
+// labels inherited ECharts' default, so one chart showed two typefaces.
+const fontProbe = record(adaptToECharts([{
+  type: 'scatter', mode: 'markers', x: [0, 1], y: [0, 1], name: 'probe',
+}], {
+  font: CHART_FONT,
+  title: { text: 'Probe', font: { size: 15 } },
+  xaxis: { title: { text: 'X', font: { size: 13 } }, tickfont: { size: 11 } },
+  showlegend: true,
+}, { displayModeBar: false }).option);
+check('chart text inherits the app font family',
+  record(fontProbe.textStyle).fontFamily === CHART_FONT.family
+  && record(record(fontProbe.title).textStyle).fontFamily === CHART_FONT.family
+  && record(record(records(fontProbe.xAxis)[0]).nameTextStyle).fontFamily === CHART_FONT.family);
+check('no chart text is forced to a serif family',
+  !JSON.stringify(fontProbe).includes('Times New Roman'));
+check('a Plotly font family on the element still wins',
+  record(record(adaptToECharts([{ type: 'scatter', mode: 'markers', x: [0], y: [0] }], {
+    title: { text: 'T', font: { size: 15, family: 'Georgia, serif' } },
+  }, { displayModeBar: false }).option).title).textStyle?.fontFamily === 'Georgia, serif');
+
+// ── Toolbox "back" button ─────────────────────────────────────────────────
+const backClick = { target: { __ec_inner_4: { componentMainType: 'toolbox', tooltipConfig: { name: 'back' } } } };
+check('the toolbox back button is recognised from a zrender click', toolboxIconName(backClick) === 'back');
+check('other toolbox buttons are named, not treated as back',
+  toolboxIconName({ target: { __ec_inner_9: { componentMainType: 'toolbox', tooltipConfig: { name: 'zoom' } } } }) === 'zoom');
+check('data points, blank space and empty events are not toolbox buttons',
+  toolboxIconName({ target: { __ec_inner_4: { seriesIndex: 0 } } }) === null
+  && toolboxIconName({ target: null }) === null
+  && toolboxIconName(null) === null
+  && toolboxIconName('back') === null);
 
 console.log(`\nECharts adapter checks: ${passed} passed, ${failures.length} failed`);
 if (failures.length) throw new Error(failures.join('; '));
