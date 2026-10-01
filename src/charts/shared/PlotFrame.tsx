@@ -18,6 +18,7 @@ export function PlotFrame({
   config = {},
   data,
   hoverTooltip,
+  overlay,
   layout = {},
   onClick,
   onInitialized,
@@ -253,6 +254,7 @@ export function PlotFrame({
           </>
         )
       )}
+      {overlay}
       {hoverTooltip}
     </div>
   );

@@ -30,7 +30,9 @@ import { CHART_FONT } from '@/lib/constants';
 import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadCsv } from '@/lib/exportCsv';
+import type { ECharts } from 'echarts';
 import { PlotFrame } from '@/charts/shared/PlotFrame';
+import { useTernaryZoom } from '@/charts/ternary/useTernaryZoom';
 import { mergePlotViewport, usePlotViewport } from '@/charts/shared/plotRange';
 import { useStructurePointClick } from '@/charts/shared/useStructurePointClick';
 import { CONVEX_HULL_PLOT_HEIGHT } from './plotSizing';
@@ -383,6 +385,10 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
     { x: 1.05, y: -0.05, text: formulaToHtml(labels[2]), showarrow: false, font: { size: 13, color: pt.annotationColor, weight: 'bold' as const } },
   ];
   const { viewportLayout, handleRelayout, undoViewport } = usePlotViewport();
+  // Triangle zoom: press a point to centre on it, drag out, release.  The chart
+  // instance comes from PlotFrame, which is the only place that owns it.
+  const [chart, setChart] = useState<ECharts | null>(null);
+  const { overlay: zoomOverlay } = useTernaryZoom({ chart, onZoom: handleRelayout });
 
   const layout: PlotlyLayout = mergePlotViewport({
     autosize: true,
@@ -536,6 +542,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
         <PlotFrame
           data={structurePointClick.plotTraces}
           layout={layout}
+          config={{ rectZoom: false }}
           revision={revision}
           style={{ width: '100%', height: CONVEX_HULL_PLOT_HEIGHT }}
           boundaryStyle={{ width: '100%', height: CONVEX_HULL_PLOT_HEIGHT }}
@@ -544,6 +551,8 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
           {...structurePointClick.plotHandlers}
           onRelayout={handleRelayout}
           onUndo={undoViewport}
+          overlay={zoomOverlay}
+          onInitialized={(_figure, instance) => setChart(instance as ECharts)}
         />
       </div>
 

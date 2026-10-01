@@ -27,6 +27,8 @@ export interface PlotFrameProps {
   boundaryStyle?: CSSProperties;
   boundaryHandlers?: PlotFrameBoundaryHandlers;
   hoverTooltip?: ReactNode;
+  /** Absolutely positioned layer drawn over the chart (zoom preview, chips…). */
+  overlay?: ReactNode;
   useResizeHandler?: boolean;
   onInitialized?: (figure: unknown, chart: unknown) => void;
   onUpdate?: (figure: unknown, chart: unknown) => void;

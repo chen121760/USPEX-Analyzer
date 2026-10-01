@@ -121,6 +121,9 @@ function adapt2D(
   const title = asDict(layout.title);
   const titleText = plainText(asString(title.text));
   const displayModeBar = config.displayModeBar !== false;
+  // Charts that own their zoom gesture (the ternary triangle magnifier) opt out
+  // of ECharts' rectangle brush so the two never fight over a drag.
+  const allowRectZoom = config.rectZoom !== false;
   const axisRanges = {
     x: explicitAxisRange(asDict(layout.xaxis)) ?? measuredRanges.x,
     y: explicitAxisRange(asDict(layout.yaxis)) ?? measuredRanges.y,
@@ -177,7 +180,7 @@ function adapt2D(
           right: 8,
           top: 6,
           feature: {
-            dataZoom: { yAxisIndex: 'all' },
+            ...(allowRectZoom ? { dataZoom: { yAxisIndex: 'all' } } : {}),
             restore: {},
             saveAsImage: { pixelRatio: 2, backgroundColor: asString(layout.paper_bgcolor) || '#fff' },
           },
@@ -195,7 +198,7 @@ function adapt2D(
     // x axis.  Zooming stays available through the toolbox rectangle zoom, the
     // Explorer/Beta Explorer axis range inputs, and the `dataZoom` events that
     // feed `onRelayout`.
-    dataZoom: displayModeBar && axisPairs.length > 0
+    dataZoom: displayModeBar && allowRectZoom && axisPairs.length > 0
       ? [
           {
             id: 'zoom-x',
