@@ -318,13 +318,15 @@ function convert2DTrace(
   const marker = asDict(trace.marker);
   const numericColor = numericArray(marker.color);
   const customData = asArray(trace.customdata);
-  const texts = asArray(trace.text).length ? asArray(trace.text) : asArray(trace.hovertext);
   const count = Math.max(x.length, y.length);
   const values = Array.from({ length: count }, (_, index) => {
+    const label = indexedValue(trace.text, index);
+    const hoverText = indexedValue(trace.hovertext, index) ?? label;
     const point: Dict = {
       value: [x[index] ?? index, y[index] ?? null, numericColor?.[index]],
       customdata: customData[index],
-      __text: texts[index],
+      __label: label,
+      __text: hoverText,
     };
     const colors = Array.isArray(marker.color) ? marker.color : null;
     if (colors && typeof colors[index] === 'string') point.itemStyle = { color: colors[index] };
@@ -363,7 +365,17 @@ function convert2DTrace(
     // advertise it with the pointer cursor; the surrounding plot area stays a
     // plain arrow now that dragging no longer pans.
     cursor: customData.length > 0 ? 'pointer' : undefined,
-    emphasis: { focus: 'series', scale: true },
+    tooltip: trace.hoverinfo === 'skip' || trace.hoverinfo === 'none' ? { show: false } : undefined,
+    label: mode.includes('text')
+      ? {
+          show: true,
+          formatter: labelFormatter,
+          position: textPosition(trace.textposition),
+          color: asString(asDict(trace.textfont).color) || undefined,
+          fontSize: asNumber(asDict(trace.textfont).size, 10),
+        }
+      : undefined,
+    emphasis: { focus: 'self', scale: true },
   };
 
   if (trace.fill === 'toself') {
@@ -380,10 +392,10 @@ function convert2DTrace(
     symbol: markerSymbol(marker.symbol),
     symbolSize: asNumber(marker.size, 7),
     itemStyle: {
-      color: typeof marker.color === 'string' ? marker.color : undefined,
+      color: markerFill(marker),
       opacity: asNumber(marker.opacity, 1),
-      borderColor: asString(asDict(marker.line).color),
-      borderWidth: asNumber(asDict(marker.line).width, 0),
+      borderColor: markerBorderColor(marker),
+      borderWidth: markerBorderWidth(marker),
     },
     large: values.length > 3000 && customData.length === 0,
     largeThreshold: 3000,
@@ -523,13 +535,14 @@ function scatter3DSeries(trace: PlotTrace, traceIndex: number, visualMaps: Dict[
   const marker = asDict(trace.marker);
   const colors = numericArray(marker.color);
   const customData = asArray(trace.customdata);
-  const texts = asArray(trace.text);
+  const mode = asString(trace.mode);
   const values = x.map((xValue, index) => ({
     value: [xValue, y[index], z[index], colors?.[index]],
     customdata: customData[index],
-    __text: texts[index],
-    label: asString(trace.mode).includes('text')
-      ? { show: true, formatter: plainText(String(texts[index] ?? '')), position: 'top' }
+    __label: indexedValue(trace.text, index),
+    __text: indexedValue(trace.hovertext, index) ?? indexedValue(trace.text, index),
+    label: mode.includes('text')
+      ? { show: true, formatter: plainText(String(indexedValue(trace.text, index) ?? '')), position: textPosition(trace.textposition) }
       : undefined,
   }));
   if (colors?.length) {
@@ -558,12 +571,13 @@ function scatter3DSeries(trace: PlotTrace, traceIndex: number, visualMaps: Dict[
     symbol: markerSymbol(marker.symbol),
     symbolSize: asNumber(marker.size, 7),
     itemStyle: {
-      color: typeof marker.color === 'string' ? marker.color : undefined,
+      color: markerFill(marker),
       opacity: asNumber(marker.opacity, 1),
-      borderColor: asString(asDict(marker.line).color),
-      borderWidth: asNumber(asDict(marker.line).width, 0),
+      borderColor: markerBorderColor(marker),
+      borderWidth: markerBorderWidth(marker),
     },
-    emphasis: { itemStyle: { opacity: 1 } },
+    tooltip: trace.hoverinfo === 'skip' || trace.hoverinfo === 'none' ? { show: false } : undefined,
+    emphasis: { focus: 'self', scale: true, itemStyle: { opacity: 1 } },
   };
 }
 
@@ -712,9 +726,13 @@ function convertAxis(axis: Dict, gridIndex: number, direction: 'x' | 'y'): Dict 
       fontSize: asNumber(asDict(axis.tickfont).size, 11),
       formatter: (value: number) => formatAxisValue(value),
     },
-    axisLine: { show: true, lineStyle: { color: asString(axis.linecolor) || '#94a3b8' } },
+    axisLine: {
+      show: axis.showline === true || axis.zeroline !== false,
+      onZero: axis.zeroline !== false,
+      lineStyle: { color: asString(axis.zerolinecolor) || asString(axis.linecolor) || '#94a3b8' },
+    },
     axisTick: { show: axis.showticklabels !== false },
-    splitLine: { show: true, lineStyle: { color: asString(axis.gridcolor) || '#e2e8f0' } },
+    splitLine: { show: axis.showgrid !== false, lineStyle: { color: asString(axis.gridcolor) || '#e2e8f0' } },
   };
 }
 
@@ -974,6 +992,43 @@ function tooltipFormatter(params: unknown): string {
   return [seriesName || name, valueText].filter(Boolean).join('<br>');
 }
 
+function labelFormatter(params: unknown): string {
+  const param = isDict(params) ? params : {};
+  return plainText(asString(asDict(param.data).__label));
+}
+
+function indexedValue(value: unknown, index: number): unknown {
+  const values = asArray(value);
+  if (values.length) return values[index];
+  return value;
+}
+
+function textPosition(value: unknown): string {
+  const position = asString(value).toLowerCase();
+  if (position.includes('top')) return 'top';
+  if (position.includes('bottom')) return 'bottom';
+  if (position.includes('left')) return 'left';
+  if (position.includes('right')) return 'right';
+  if (position.includes('middle') || position.includes('center')) return 'inside';
+  return 'top';
+}
+
+function markerFill(marker: Dict): string | undefined {
+  if (asString(marker.symbol).includes('open')) return 'rgba(0,0,0,0)';
+  return typeof marker.color === 'string' ? marker.color : undefined;
+}
+
+function markerBorderColor(marker: Dict): string | undefined {
+  const lineColor = asString(asDict(marker.line).color);
+  if (lineColor) return lineColor;
+  return asString(marker.symbol).includes('open') && typeof marker.color === 'string' ? marker.color : undefined;
+}
+
+function markerBorderWidth(marker: Dict): number {
+  const width = asNumber(asDict(marker.line).width, 0);
+  return asString(marker.symbol).includes('open') ? Math.max(1.5, width) : width;
+}
+
 function markerSymbol(value: unknown): string {
   const symbol = asString(value);
   if (symbol.includes('star')) return 'path://M512 64L627 397L979 404L698 617L800 954L512 754L224 954L326 617L45 404L397 397Z';
@@ -1079,11 +1134,36 @@ function formatAxisValue(value: number): string {
 
 function plainText(value: string): string {
   return value
-    .replace(/<sub>(.*?)<\/sub>/gi, '$1')
+    // Canvas text cannot render HTML <sub> tags.  Preserve chemical notation
+    // with Unicode subscript glyphs instead of flattening Ti<sub>4</sub>H<sub>10</sub>
+    // to the ambiguous Ti4H10.
+    .replace(/<sub>(.*?)<\/sub>/gi, (_match, content: string) => unicodeSubscript(content))
     .replace(/<sup>(.*?)<\/sup>/gi, '^$1')
     .replace(/<br\s*\/?>/gi, ' ')
     .replace(/<[^>]+>/g, '')
     .replace(/&Delta;/g, 'Δ')
     .replace(/&minus;/g, '−')
     .replace(/&nbsp;/g, ' ');
+}
+
+const SUBSCRIPT_GLYPHS: Record<string, string> = {
+  '0': '₀',
+  '1': '₁',
+  '2': '₂',
+  '3': '₃',
+  '4': '₄',
+  '5': '₅',
+  '6': '₆',
+  '7': '₇',
+  '8': '₈',
+  '9': '₉',
+  '+': '₊',
+  '-': '₋',
+  '=': '₌',
+  '(': '₍',
+  ')': '₎',
+};
+
+function unicodeSubscript(value: string): string {
+  return [...value].map((character) => SUBSCRIPT_GLYPHS[character] ?? character).join('');
 }

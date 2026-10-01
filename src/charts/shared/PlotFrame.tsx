@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import * as echarts from 'echarts';
 import 'echarts-gl';
 import { adaptToECharts } from './echartsAdapter';
+import { CARTESIAN_AUTORANGE_PATCH, dataZoomRelayoutPatch } from './echartsInteraction';
 import type { PlotFrameProps } from './plotTypes';
 
 const DEFAULT_PLOT_STYLE: CSSProperties = { width: '100%', height: '100%' };
@@ -29,6 +30,7 @@ export function PlotFrame({
 }: PlotFrameProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
+  const hoverLockRef = useRef<HTMLDivElement | null>(null);
   const callbacksRef = useRef({ onClick, onInitialized, onRelayout, onStructureClick, onUpdate });
   callbacksRef.current = { onClick, onInitialized, onRelayout, onStructureClick, onUpdate };
 
@@ -92,24 +94,46 @@ export function PlotFrame({
     const handleDataZoom = (event: unknown) => {
       const callback = callbacksRef.current.onRelayout;
       if (!callback) return;
-      const zoom = readZoomEvent(event);
-      const patch: Record<string, unknown> = {};
-      const ranges = adaptedRef.current.axisRanges;
-      if (ranges.x && zoom.axis !== 'y') {
-        patch['xaxis.range[0]'] = interpolate(ranges.x[0], ranges.x[1], zoom.start);
-        patch['xaxis.range[1]'] = interpolate(ranges.x[0], ranges.x[1], zoom.end);
-      }
-      if (ranges.y && zoom.axis !== 'x') {
-        patch['yaxis.range[0]'] = interpolate(ranges.y[0], ranges.y[1], zoom.start);
-        patch['yaxis.range[1]'] = interpolate(ranges.y[0], ranges.y[1], zoom.end);
-      }
-      callback(patch);
+      const patch = dataZoomRelayoutPatch(event, adaptedRef.current.axisRanges);
+      if (Object.keys(patch).length) callback(patch);
     };
 
-    const handleRestore = () => callbacksRef.current.onRelayout?.({
-      'xaxis.autorange': true,
-      'yaxis.autorange': true,
-    });
+    const handleRestore = () => callbacksRef.current.onRelayout?.({ ...CARTESIAN_AUTORANGE_PATCH });
+
+    const handleBlankDoubleClick = (event: unknown) => {
+      // ECharts emits series dblclick events through `chart.on`, but blank plot
+      // space belongs to ZRender.  Plotly reset the viewport from precisely this
+      // gesture, so listen at the canvas layer and ignore actual painted targets.
+      if (isRecord(event) && event.target) return;
+      chart.dispatchAction({ type: 'restore' });
+    };
+
+    const hideHoverLock = () => {
+      if (hoverLockRef.current) hoverLockRef.current.style.display = 'none';
+    };
+
+    const handlePointMouseOver = (params: unknown) => {
+      const record = isRecord(params) ? params : {};
+      const datum = isRecord(record.data) ? record.data : {};
+      if (coerceStructureId(datum.customdata) === null) {
+        hideHoverLock();
+        return;
+      }
+
+      const pixel = structurePointPixel(chart, record, datum);
+      const left = pixel?.[0];
+      const top = pixel?.[1];
+      const lock = hoverLockRef.current;
+      if (!lock || left === undefined || top === undefined) return;
+
+      const hostBounds = hostRef.current?.getBoundingClientRect();
+      const boundaryBounds = lock.parentElement?.getBoundingClientRect();
+      const hostOffsetX = hostBounds && boundaryBounds ? hostBounds.left - boundaryBounds.left : 0;
+      const hostOffsetY = hostBounds && boundaryBounds ? hostBounds.top - boundaryBounds.top : 0;
+      lock.style.display = 'block';
+      lock.style.left = `${hostOffsetX + left}px`;
+      lock.style.top = `${hostOffsetY + top}px`;
+    };
 
     const handleCamera = (event: unknown) => {
       const callback = callbacksRef.current.onRelayout;
@@ -136,6 +160,10 @@ export function PlotFrame({
     chart.on('datazoom', handleDataZoom);
     chart.on('restore', handleRestore);
     chart.on('grid3dcamerachanged', handleCamera);
+    chart.on('mouseover', handlePointMouseOver);
+    chart.on('mouseout', hideHoverLock);
+    chart.on('globalout', hideHoverLock);
+    chart.getZr().on('dblclick', handleBlankDoubleClick);
 
     const resizeObserver = typeof ResizeObserver === 'undefined'
       ? null
@@ -148,6 +176,7 @@ export function PlotFrame({
 
     return () => {
       resizeObserver?.disconnect();
+      hideHoverLock();
       chart.dispose();
       chartRef.current = null;
     };
@@ -168,6 +197,13 @@ export function PlotFrame({
       {...boundaryHandlers}
     >
       <div ref={hostRef} className={className} style={plotStyle} data-chart-engine="echarts" />
+      <div
+        ref={hoverLockRef}
+        aria-hidden="true"
+        className="chart-structure-hover-lock notranslate"
+        translate="no"
+        style={hoverLockStyle}
+      />
       {editableAxisTitles && onAxisTitleDoubleClick && (
         adapted.is3D ? (
           <div style={{ position: 'absolute', left: 10, bottom: 8, display: 'flex', gap: 6, zIndex: 4 }}>
@@ -235,6 +271,22 @@ const axisChipStyle: CSSProperties = {
   cursor: 'text',
 };
 
+const hoverLockStyle: CSSProperties = {
+  position: 'absolute',
+  display: 'none',
+  left: 0,
+  top: 0,
+  zIndex: 29,
+  width: 18,
+  height: 18,
+  border: '2px solid var(--color-primary)',
+  borderRadius: '999px',
+  background: 'rgba(37, 99, 235, 0.10)',
+  boxShadow: '0 0 0 4px rgba(37, 99, 235, 0.14)',
+  pointerEvents: 'none',
+  transform: 'translate(-50%, -50%)',
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -252,15 +304,6 @@ function coerceStructureId(value: unknown): number | null {
   return null;
 }
 
-function readZoomEvent(event: unknown): { start: number; end: number; axis: 'x' | 'y' | null } {
-  if (!isRecord(event)) return { start: 0, end: 100, axis: null };
-  const source = Array.isArray(event.batch) && isRecord(event.batch[0]) ? event.batch[0] : event;
-  const id = typeof source.dataZoomId === 'string' ? source.dataZoomId : '';
-  const index = typeof source.dataZoomIndex === 'number' ? source.dataZoomIndex : null;
-  const axis = id === 'zoom-x' || index === 0 ? 'x' : id === 'zoom-y' || index === 1 ? 'y' : null;
-  return { start: finite(source.start, 0), end: finite(source.end, 100), axis };
-}
-
 function finite(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
@@ -269,6 +312,38 @@ function optionalFinite(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
-function interpolate(min: number, max: number, percent: number): number {
-  return min + (max - min) * Math.min(100, Math.max(0, percent)) / 100;
+function structurePointPixel(
+  chart: echarts.ECharts,
+  params: Record<string, unknown>,
+  datum: Record<string, unknown>,
+): [number, number] | null {
+  const seriesIndex = optionalFinite(params.seriesIndex);
+  const value = Array.isArray(datum.value) ? datum.value : [];
+  const x = optionalFinite(value[0]);
+  const y = optionalFinite(value[1]);
+
+  if (seriesIndex !== undefined && x !== undefined && y !== undefined) {
+    try {
+      const converted = chart.convertToPixel(
+        { seriesIndex },
+        [x, y],
+      );
+      if (
+        Array.isArray(converted)
+        && optionalFinite(converted[0]) !== undefined
+        && optionalFinite(converted[1]) !== undefined
+      ) {
+        return [Number(converted[0]), Number(converted[1])];
+      }
+    } catch {
+      // ECharts GL does not expose convertToPixel for every 3D series.  Its
+      // native event coordinate remains the best available fallback.
+    }
+  }
+
+  const nativeEvent = isRecord(params.event) ? params.event : {};
+  const zrenderEvent = isRecord(nativeEvent.event) ? nativeEvent.event : nativeEvent;
+  const left = optionalFinite(zrenderEvent.offsetX);
+  const top = optionalFinite(zrenderEvent.offsetY);
+  return left === undefined || top === undefined ? null : [left, top];
 }

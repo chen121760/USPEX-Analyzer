@@ -1,4 +1,6 @@
 import { adaptToECharts, layoutNeedsEqualScale } from '@/charts/shared/echartsAdapter';
+import { CARTESIAN_AUTORANGE_PATCH, dataZoomRelayoutPatch } from '@/charts/shared/echartsInteraction';
+import { mergePlotViewport } from '@/charts/shared/plotRange';
 
 let passed = 0;
 const failures: string[] = [];
@@ -73,6 +75,99 @@ check('plot area no longer shows the grab cursor',
   dataZooms.every((entry) => entry.cursorGrab === 'default' && entry.cursorGrabbing === 'default'));
 check('clickable structure points show a pointer cursor', series2D[1].cursor === 'pointer');
 check('non-clickable guides keep the default cursor', series2D[0].cursor === undefined);
+
+const zoomPatch = dataZoomRelayoutPatch({
+  batch: [
+    { dataZoomId: 'zoom-x', start: 20, end: 70 },
+    { dataZoomId: 'zoom-y', start: 10, end: 60 },
+  ],
+}, { x: [0, 10], y: [-2, 2] });
+check('toolbox rectangle zoom keeps both axes from the ECharts batch',
+  zoomPatch['xaxis.range[0]'] === 2
+  && zoomPatch['xaxis.range[1]'] === 7
+  && zoomPatch['yaxis.range[0]'] === -1.6
+  && Math.abs(Number(zoomPatch['yaxis.range[1]']) - 0.4) < 1e-12);
+check('blank-double-click reset patch restores both cartesian axes',
+  CARTESIAN_AUTORANGE_PATCH['xaxis.autorange'] === true && CARTESIAN_AUTORANGE_PATCH['yaxis.autorange'] === true);
+
+// The toolbox rectangle zoom is what the toolbar icon runs, and it is the only
+// zoom gesture the convex-hull page offers.  ECharts reports it through its
+// internal `toolbox-dataZoom_*` components with axis data values instead of
+// percentages; reading those as percentages reset the view to the full extent.
+const toolboxZoomPatch = dataZoomRelayoutPatch({
+  batch: [
+    { dataZoomId: '\u0000_ec_\u0000toolbox-dataZoom_xAxis0', startValue: 0.404, endValue: 0.806 },
+    { dataZoomId: '\u0000_ec_\u0000toolbox-dataZoom_yAxis0', startValue: 0.509, endValue: 0.125 },
+  ],
+}, { x: [-0.12, 1.12], y: [-0.12, Math.sqrt(3) / 2 + 0.12] });
+check('toolbox rectangle zoom keeps the brushed data range on both axes',
+  toolboxZoomPatch['xaxis.range[0]'] === 0.404
+  && toolboxZoomPatch['xaxis.range[1]'] === 0.806
+  && toolboxZoomPatch['yaxis.range[0]'] === 0.125
+  && toolboxZoomPatch['yaxis.range[1]'] === 0.509);
+check('toolbox rectangle zoom does not fall back to the full extent',
+  toolboxZoomPatch['xaxis.range[0]'] !== -0.12 && toolboxZoomPatch['yaxis.range[1]'] !== Math.sqrt(3) / 2 + 0.12);
+check('an unnamed entry inside a batch never overwrites both axes',
+  Object.keys(dataZoomRelayoutPatch({
+    batch: [{ dataZoomId: 'something-else', start: 0, end: 100 }],
+  }, { x: [0, 10], y: [0, 10] })).length === 0);
+
+const zoomedTernaryLayout = mergePlotViewport({
+  xaxis: { range: [-0.12, 1.12], showgrid: false, showticklabels: false },
+  yaxis: {
+    range: [-0.12, 0.986],
+    showgrid: false,
+    showticklabels: false,
+    scaleanchor: 'x',
+    scaleratio: 1,
+  },
+}, {
+  xaxis: { range: [0.1, 0.9] },
+  yaxis: { range: [0.05, 0.75] },
+});
+const zoomedTernaryX = record(zoomedTernaryLayout.xaxis);
+const zoomedTernaryY = record(zoomedTernaryLayout.yaxis);
+check('viewport ranges preserve the ternary equal-scale constraint',
+  zoomedTernaryY.scaleanchor === 'x' && zoomedTernaryY.scaleratio === 1);
+check('viewport ranges preserve hidden ternary axes and grid lines',
+  zoomedTernaryX.showgrid === false
+  && zoomedTernaryY.showgrid === false
+  && zoomedTernaryX.showticklabels === false
+  && zoomedTernaryY.showticklabels === false);
+check('viewport ranges replace only the displayed ranges',
+  records([zoomedTernaryX.range, zoomedTernaryY.range]).length === 2
+  && Array.isArray(zoomedTernaryX.range)
+  && zoomedTernaryX.range[0] === 0.1
+  && Array.isArray(zoomedTernaryY.range)
+  && zoomedTernaryY.range[1] === 0.75);
+
+const labelled = adaptToECharts([{
+  type: 'scatter',
+  mode: 'markers+text',
+  x: [0.5],
+  y: [0.25],
+  text: ['AB<sub>2</sub>'],
+  hovertext: ['EA42: AB<sub>2</sub><br>E_form: -0.5'],
+  textposition: 'top center',
+  marker: { symbol: 'circle-open', color: '#ef4444', line: { width: 2 } },
+}], {}, { displayModeBar: false });
+const labelledSeries = records(record(labelled.option).series)[0];
+const labelledPoint = records(labelledSeries.data)[0];
+check('markers+text keeps the visible point label', labelledPoint.__label === 'AB<sub>2</sub>' && record(labelledSeries.label).show === true);
+const labelFormatter = record(labelledSeries.label).formatter;
+check('chemical-formula labels render stoichiometric numbers as subscripts',
+  typeof labelFormatter === 'function'
+  && labelFormatter({ data: labelledPoint }) === 'AB₂');
+check('hovertext wins over the short visible label in the tooltip payload',
+  labelledPoint.__text === 'EA42: AB<sub>2</sub><br>E_form: -0.5');
+check('open Plotly markers remain hollow after conversion',
+  record(labelledSeries.itemStyle).color === 'rgba(0,0,0,0)'
+  && record(labelledSeries.itemStyle).borderColor === '#ef4444');
+
+const noHover = records(record(adaptToECharts([{
+  type: 'scatter', mode: 'markers', x: [0], y: [0], hoverinfo: 'none',
+}], {}, { displayModeBar: false }).option).series)[0];
+check('hoverinfo none disables the ECharts tooltip for that series', record(noHover.tooltip).show === false);
 
 // Palette plumbing: `layout.colorway` becomes the ECharts palette, and when no
 // palette is supplied the key must be absent entirely.  An explicit
@@ -173,8 +268,8 @@ const ternaryData = [{
   name: 'structures',
 }];
 const ternaryLayout = {
-  xaxis: { range: [-0.12, 1.12], showticklabels: false },
-  yaxis: { range: [-0.12, Math.sqrt(3) / 2 + 0.12], showticklabels: false, scaleanchor: 'x', scaleratio: 1 },
+  xaxis: { range: [-0.12, 1.12], showticklabels: false, showgrid: false, zeroline: false },
+  yaxis: { range: [-0.12, Math.sqrt(3) / 2 + 0.12], showticklabels: false, showgrid: false, zeroline: false, scaleanchor: 'x', scaleratio: 1 },
   showlegend: false,
 };
 
@@ -213,6 +308,12 @@ const sideLengths = [
 const sideSpread = Math.max(...sideLengths) - Math.min(...sideLengths);
 check('ternary triangle renders equilateral', sideSpread < 0.5, `sides ${sideLengths.map((side) => side.toFixed(1)).join('/')}`);
 check('ternary triangle is not flattened by the wide frame', sideLengths[0] > 200);
+const constrainedXAxes = records(record(constrained.option).xAxis);
+const constrainedYAxes = records(record(constrained.option).yAxis);
+check('ternary plot hides the cartesian grid requested by showgrid=false',
+  record(constrainedXAxes[0].splitLine).show === false && record(constrainedYAxes[0].splitLine).show === false);
+check('ternary plot hides the zero axes requested by zeroline=false',
+  record(constrainedXAxes[0].axisLine).show === false && record(constrainedYAxes[0].axisLine).show === false);
 
 // Without a measured frame the adapter must fall back to the full plot area.
 const unmeasured = adaptToECharts(ternaryData, ternaryLayout, {});

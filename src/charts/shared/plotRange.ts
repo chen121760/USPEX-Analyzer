@@ -10,6 +10,32 @@ interface AxisRangeUpdate {
   clearedAxes: string[];
 }
 
+/**
+ * Apply viewport-only axis ranges without replacing the axis declarations.
+ *
+ * A shallow `{ ...layout, ...viewportLayout }` drops everything else on the
+ * affected axes.  That is especially visible on ternary charts: the first
+ * zoom used to remove `scaleanchor`, grid visibility and tick visibility, so
+ * the triangle stretched into the full rectangular canvas.
+ */
+export function mergePlotViewport(
+  layout: PlotLayout,
+  viewportLayout: Partial<PlotLayout>,
+): PlotLayout {
+  const merged: PlotLayout = { ...layout, ...viewportLayout };
+
+  for (const [key, value] of Object.entries(viewportLayout)) {
+    if (!/^[xyz]axis\d*$/.test(key) || !isObject(value)) continue;
+    const baseValue = layout[key];
+    merged[key] = {
+      ...(isObject(baseValue) ? baseValue : {}),
+      ...value,
+    };
+  }
+
+  return merged;
+}
+
 export function parseCartesianAxisRangeUpdate(
   event: object,
   axisNames: readonly string[] = DEFAULT_CARTESIAN_AXES,
@@ -77,4 +103,8 @@ export function usePlotViewport(axisNames: readonly string[] = DEFAULT_CARTESIAN
     handleRelayout,
     resetViewport,
   };
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

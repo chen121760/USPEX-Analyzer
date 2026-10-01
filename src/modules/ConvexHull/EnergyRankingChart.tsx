@@ -23,7 +23,7 @@ import { CHART_FONT } from '@/lib/constants';
 import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { PlotFrame } from '@/charts/shared/PlotFrame';
-import { usePlotViewport } from '@/charts/shared/plotRange';
+import { mergePlotViewport, usePlotViewport } from '@/charts/shared/plotRange';
 import { useStructurePointClick } from '@/charts/shared/useStructurePointClick';
 import { buildCsvText, type CsvRow } from '@/export/csvExport';
 import { downloadBlob } from '@/export/exportFileNames';
@@ -228,7 +228,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
 
   const { viewportLayout, handleRelayout } = usePlotViewport();
 
-  const layout: PlotlyLayout = {
+  const layout: PlotlyLayout = mergePlotViewport({
     font: CHART_FONT,
     title: {
       text: `${systemInfo.elements.join('-')} ${t('hull.energyRanking', 'Energy Ranking')}`,
@@ -251,8 +251,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
     plot_bgcolor: pt.plotBg,
     paper_bgcolor: pt.paperBg,
     showlegend: false,
-    ...viewportLayout,
-  };
+  }, viewportLayout);
 
 
   function handleExport() {

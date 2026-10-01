@@ -31,7 +31,7 @@ import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
 import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadCsv } from '@/lib/exportCsv';
 import { PlotFrame } from '@/charts/shared/PlotFrame';
-import { usePlotViewport } from '@/charts/shared/plotRange';
+import { mergePlotViewport, usePlotViewport } from '@/charts/shared/plotRange';
 import { useStructurePointClick } from '@/charts/shared/useStructurePointClick';
 import { CONVEX_HULL_PLOT_HEIGHT } from './plotSizing';
 
@@ -384,7 +384,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
   ];
   const { viewportLayout, handleRelayout } = usePlotViewport();
 
-  const layout: PlotlyLayout = {
+  const layout: PlotlyLayout = mergePlotViewport({
     autosize: true,
     font: CHART_FONT,
     title: { text: `${components.map(formulaToHtml).join('-')} ${t('hull.ternaryTitle', 'Ternary Phase Diagram')}`, font: { size: 15, color: pt.titleColor } },
@@ -422,8 +422,7 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
     margin: { t: 50, r: 64, l: 64, b: 64 },
     plot_bgcolor: pt.plotBg,
     paper_bgcolor: pt.paperBg,
-    ...viewportLayout,
-  };
+  }, viewportLayout);
 
   const handleStructurePointClick = (structureId: number) => {
     if (onStructureClick) {
