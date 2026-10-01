@@ -11,10 +11,26 @@ const COLOR_BAR_WIDTH = 12;
 const COLOR_BAR_HEIGHT = 120;
 const COLOR_BAR_GAP = 8;
 const COLOR_BAR_STACK_STEP = 48;
+/** Space between the top of a bar and the unit title above it. */
+const COLOR_BAR_TITLE_GAP = 10;
+/** Font size shared by a colour bar's title and its end values. */
+const COLOR_BAR_FONT_SIZE = 10;
 
 interface ColorBarPlacement {
   left: number;
   top: number;
+}
+
+/**
+ * Everything a 2D colour bar needs: where it goes, the frame it is measured
+ * against, the layout its text style comes from, and the `graphic` list its
+ * title and end values are appended to.
+ */
+interface ColorBarContext {
+  placement: ColorBarPlacement | null;
+  frame: PlotFrameSize | null;
+  layout: PlotLayout;
+  graphics: Dict[];
 }
 
 /**
@@ -46,7 +62,7 @@ export function adaptToECharts(
   frame: PlotFrameSize | null = null,
 ): EChartsAdaptedOption {
   const is3D = data.some((trace) => ['scatter3d', 'mesh3d'].includes(asString(trace.type)));
-  return is3D ? adapt3D(data, layout, config) : adapt2D(data, layout, config, frame);
+  return is3D ? adapt3D(data, layout, config, frame) : adapt2D(data, layout, config, frame);
 }
 
 /**
@@ -121,7 +137,13 @@ function adapt2D(
   // Pin colour bars next to the plot box rather than the container edge.  A
   // wide chart letterboxes the plot in the middle, and hanging the bar off the
   // container's right edge left it floating far away from the diagram.
-  const colorBarPlacement = mainGridColorBarPlacement(grids[0], frame, mainContentRight);
+  const measuredFrame = frame && frame.width > 0 && frame.height > 0 ? frame : null;
+  const colorBar: ColorBarContext = {
+    placement: mainGridColorBarPlacement(grids[0], measuredFrame, mainContentRight),
+    frame: measuredFrame,
+    layout,
+    graphics: [],
+  };
 
   const series: Dict[] = [];
   const visualMaps: Dict[] = [];
@@ -132,7 +154,7 @@ function adapt2D(
     const xName = axisName(trace.xaxis, 'x');
     const yName = axisName(trace.yaxis, 'y');
     const axesIndex = pairIndex.get(`${xName}|${yName}`) ?? 0;
-    const converted = convert2DTrace(trace, series.length, axesIndex, visualMaps, colorBarOffset, colorBarPlacement);
+    const converted = convert2DTrace(trace, series.length, axesIndex, visualMaps, colorBarOffset, colorBar);
     if (converted.length > 0 && hasNumericColors(trace)) colorBarOffset += COLOR_BAR_STACK_STEP;
     series.push(...converted);
   });
@@ -249,19 +271,31 @@ function adapt2D(
         ]
       : undefined,
     visualMap: visualMaps.length ? visualMaps : undefined,
+    graphic: colorBar.graphics.length ? colorBar.graphics : undefined,
     series,
   };
 
   return { option, axisRanges, is3D: false };
 }
 
-function adapt3D(data: PlotData, layout: PlotLayout, config: Dict): EChartsAdaptedOption {
+function adapt3D(
+  data: PlotData,
+  layout: PlotLayout,
+  config: Dict,
+  frame: PlotFrameSize | null = null,
+): EChartsAdaptedOption {
   const scene = asDict(layout.scene);
   const camera = asDict(scene.camera);
   const eye = asDict(camera.eye);
   const view = eyeToViewControl(eye);
   const series: Dict[] = [];
   const visualMaps: Dict[] = [];
+  const colorBar: ColorBarContext = {
+    placement: null,
+    frame: frame && frame.width > 0 && frame.height > 0 ? frame : null,
+    layout,
+    graphics: [],
+  };
   let colorBarOffset = 10;
 
   data.forEach((trace) => {
@@ -276,7 +310,7 @@ function adapt3D(data: PlotData, layout: PlotLayout, config: Dict): EChartsAdapt
     const mode = asString(trace.mode) || 'lines';
     if (mode.includes('lines')) series.push(...line3DSeries(trace));
     if (mode.includes('markers') || mode.includes('text')) {
-      const converted = scatter3DSeries(trace, series.length, visualMaps, colorBarOffset);
+      const converted = scatter3DSeries(trace, series.length, visualMaps, colorBarOffset, colorBar);
       series.push(converted);
       if (hasNumericColors(trace)) colorBarOffset += 48;
     }
@@ -308,6 +342,7 @@ function adapt3D(data: PlotData, layout: PlotLayout, config: Dict): EChartsAdapt
       ? { show: true, right: 8, top: 6, feature: { restore: {}, saveAsImage: { pixelRatio: 2 } } }
       : { show: false },
     visualMap: visualMaps.length ? visualMaps : undefined,
+    graphic: colorBar.graphics.length ? colorBar.graphics : undefined,
     grid3D: {
       show: true,
       boxWidth: 120,
@@ -367,6 +402,99 @@ function mainGridColorBarPlacement(
   };
 }
 
+/**
+ * The bar half of a continuous colour bar.
+ *
+ * A colour bar is a legend, not a control, and ECharts' continuous `visualMap`
+ * is draggable by default: with `calculable` on, grabbing either end handle — or
+ * the 12 px bar itself, which sits right next to the plot and is an easy target
+ * for the triangle magnifier's drag — narrows the selected range.  The bar then
+ * paints only the selected stretch and leaves the rest unpainted, which reads as
+ * a half-loaded image (and the end labels silently switch to the narrowed range).
+ * Nothing in the app ever asks for a narrowed range, so the handles are dropped
+ * and the range is pinned to the full extent, which also covers an ECharts merge
+ * keeping a stale selection around.
+ */
+function colorBarVisualMap(min: number, max: number, colors: string[], textColor: string): Dict {
+  return {
+    type: 'continuous',
+    min,
+    max,
+    calculable: false,
+    range: [min, max],
+    orient: 'vertical',
+    // The bar is the only element in the visualMap, so its box is exactly the
+    // 12 x 120 rectangle the placement maths assumes.
+    padding: 0,
+    itemWidth: COLOR_BAR_WIDTH,
+    itemHeight: COLOR_BAR_HEIGHT,
+    precision: 3,
+    formatter: (value: number) => formatAxisValue(value),
+    // Only reaches the value the bar shows while the pointer is over it.
+    textStyle: { fontSize: COLOR_BAR_FONT_SIZE, color: textColor },
+    inRange: { color: colors },
+  };
+}
+
+/**
+ * A colour bar's unit title and its two end values, drawn as `graphic` elements.
+ *
+ * `colorBarVisualMap` leaves the bar bare, so ECharts no longer supplies these
+ * labels.  Drawing them ourselves keeps the title centred above the bar — where
+ * ECharts puts its own end labels too, and a five-character number centred there
+ * would sit right on top of the colours — and right-aligns the values against
+ * the bar's left edge instead.
+ */
+function colorBarAnnotation(
+  placement: ColorBarPlacement,
+  title: string,
+  min: number,
+  max: number,
+  layout: PlotLayout,
+): Dict[] {
+  const style = {
+    fontFamily: CHART_FONT_FAMILY,
+    fontSize: COLOR_BAR_FONT_SIZE,
+    fill: colorBarTextColor(layout),
+  };
+  const labels = [
+    { y: placement.top, value: max },
+    { y: placement.top + COLOR_BAR_HEIGHT, value: min },
+  ];
+  return [
+    ...(title
+      ? [{
+          type: 'text',
+          x: placement.left + COLOR_BAR_WIDTH / 2,
+          y: placement.top - COLOR_BAR_TITLE_GAP,
+          silent: true,
+          z: 10,
+          style: { text: title, align: 'center', verticalAlign: 'bottom', ...style },
+        }]
+      : []),
+    ...labels.map(({ y, value }) => ({
+      type: 'text',
+      x: placement.left - COLOR_BAR_GAP,
+      y,
+      silent: true,
+      z: 10,
+      style: { text: formatAxisValue(value), align: 'right', verticalAlign: 'middle', ...style },
+    })),
+  ];
+}
+
+/** Chart text colour, preferring Plotly's layout font over an axis' tick colour. */
+function colorBarTextColor(layout: PlotLayout): string {
+  const font = asString(asDict(layout.font).color);
+  if (font) return font;
+  for (const key of ['xaxis', 'yaxis']) {
+    const tick = asString(asDict(asDict(layout[key]).tickfont).color);
+    if (tick) return tick;
+  }
+  // ECharts' own default for these labels, so an unthemed chart looks unchanged.
+  return '#54555a';
+}
+
 function collectAxisPairs(data: PlotData): { x: string; y: string }[] {
   // Pie (and 3D) series do not live on a cartesian grid.  A chart made only of
   // those must not emit axes: otherwise an empty pair of axis lines is painted
@@ -392,8 +520,9 @@ function convert2DTrace(
   axesIndex: number,
   visualMaps: Dict[],
   visualMapRight: number,
-  colorBarPlacement: ColorBarPlacement | null = null,
+  colorBar: ColorBarContext,
 ): Dict[] {
+  const { placement: colorBarPlacement, frame, layout } = colorBar;
   const type = asString(trace.type) || 'scatter';
   if (type === 'pie') return [pieSeries(trace)];
   if (type === 'histogram') return [histogramSeries(trace, axesIndex)];
@@ -421,28 +550,27 @@ function convert2DTrace(
 
   if (numericColor && numericColor.length) {
     const finite = numericColor.filter(Number.isFinite);
+    const min = asNumber(marker.cmin, finite.length ? Math.min(...finite) : 0);
+    const max = asNumber(marker.cmax, finite.length ? Math.max(...finite) : 1);
     visualMaps.push({
-      type: 'continuous',
+      ...colorBarVisualMap(min, max, colorscale(marker.colorscale), colorBarTextColor(layout)),
       seriesIndex: traceIndex,
       dimension: 2,
-      min: asNumber(marker.cmin, finite.length ? Math.min(...finite) : 0),
-      max: asNumber(marker.cmax, finite.length ? Math.max(...finite) : 1),
-      calculable: true,
-      orient: 'vertical',
-      ...(colorBarPlacement
-        ? {
-            left: Math.max(0, colorBarPlacement.left - (visualMapRight - 10)),
-            top: colorBarPlacement.top,
-          }
+      // The bar is the only element left in the visualMap, so `right` places it
+      // exactly: the group box is the bar itself.
+      ...(frame && colorBarPlacement
+        ? { right: frame.width - colorBarPlacement.left - COLOR_BAR_WIDTH, top: colorBarPlacement.top }
         : { right: visualMapRight, top: 'middle' }),
-      itemWidth: COLOR_BAR_WIDTH,
-      itemHeight: COLOR_BAR_HEIGHT,
-      precision: 3,
-      formatter: (value: number) => formatAxisValue(value),
-      text: [plainText(asString(asDict(marker.colorbar).title)), ''],
-      textStyle: { fontSize: 10 },
-      inRange: { color: colorscale(marker.colorscale) },
     });
+    if (frame && colorBarPlacement) {
+      colorBar.graphics.push(...colorBarAnnotation(
+        colorBarPlacement,
+        plainText(asString(asDict(marker.colorbar).title)),
+        min,
+        max,
+        layout,
+      ));
+    }
   }
 
   const common: Dict = {
@@ -618,7 +746,13 @@ function polygonSeries(trace: PlotTrace, axesIndex: number, x: unknown[], y: unk
   };
 }
 
-function scatter3DSeries(trace: PlotTrace, traceIndex: number, visualMaps: Dict[], visualMapRight: number): Dict {
+function scatter3DSeries(
+  trace: PlotTrace,
+  traceIndex: number,
+  visualMaps: Dict[],
+  visualMapRight: number,
+  colorBar: ColorBarContext,
+): Dict {
   const x = asArray(trace.x);
   const y = asArray(trace.y);
   const z = asArray(trace.z);
@@ -637,22 +771,28 @@ function scatter3DSeries(trace: PlotTrace, traceIndex: number, visualMaps: Dict[
   }));
   if (colors?.length) {
     const finite = colors.filter(Number.isFinite);
+    const min = asNumber(marker.cmin, finite.length ? Math.min(...finite) : 0);
+    const max = asNumber(marker.cmax, finite.length ? Math.max(...finite) : 1);
     visualMaps.push({
-      type: 'continuous',
+      ...colorBarVisualMap(min, max, colorscale(marker.colorscale), colorBarTextColor(colorBar.layout)),
       seriesIndex: traceIndex,
       dimension: 3,
-      min: asNumber(marker.cmin, finite.length ? Math.min(...finite) : 0),
-      max: asNumber(marker.cmax, finite.length ? Math.max(...finite) : 1),
-      calculable: true,
       right: visualMapRight,
       top: 'middle',
-      itemWidth: 12,
-      itemHeight: 120,
-      precision: 3,
-      formatter: (value: number) => formatAxisValue(value),
-      text: [plainText(asString(asDict(marker.colorbar).title)), ''],
-      inRange: { color: colorscale(marker.colorscale) },
     });
+    const frame = colorBar.frame;
+    if (frame) {
+      colorBar.graphics.push(...colorBarAnnotation(
+        {
+          left: frame.width - visualMapRight - COLOR_BAR_WIDTH,
+          top: Math.max(4, (frame.height - COLOR_BAR_HEIGHT) / 2),
+        },
+        plainText(asString(asDict(marker.colorbar).title)),
+        min,
+        max,
+        colorBar.layout,
+      ));
+    }
   }
   return {
     type: 'scatter3D',

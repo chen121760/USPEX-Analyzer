@@ -59,6 +59,41 @@ const visualMap2D = records(option2D.visualMap)[0];
 check('uses the ECharts 2D coordinate system', twoDimensional.is3D === false);
 check('keeps structure ids in native ECharts data items', records(series2D[1].data)[0].customdata === 101);
 check('targets visualMap at the converted series index', visualMap2D.seriesIndex === 1);
+// A colour bar is a legend, not a control.  ECharts' continuous visualMap is
+// draggable by default and dragging an end handle narrows the selected range,
+// which leaves part of the bar unpainted — it reads as a half-loaded image.
+check('colour bar drops ECharts drag handles', visualMap2D.calculable === false);
+check('colour bar pins its range to the full extent',
+  Array.isArray(visualMap2D.range) && visualMap2D.range[0] === 0 && visualMap2D.range[1] === 1);
+check('colour bar leaves ECharts no text slots to centre on the colours',
+  visualMap2D.text === undefined && visualMap2D.padding === 0);
+
+// The bar is bare, so its title and end values are `graphic` elements placed
+// from the measured frame.
+const titledBar = adaptToECharts([{
+  type: 'scatter',
+  mode: 'markers',
+  x: [0.25, 0.75],
+  y: [0.5, 0.5],
+  name: 'structures',
+  marker: { color: [0.25, 0.75], cmin: 0, cmax: 0.5, colorbar: { title: 'Fitness\n(eV/block)' } },
+}], { xaxis: {}, yaxis: {} }, {}, { width: 900, height: 640 });
+const titledVisualMap = records(record(titledBar.option).visualMap)[0];
+const barGraphics = records(record(titledBar.option).graphic);
+const barTexts = barGraphics.map((entry) => record(entry.style).text);
+const barLeft = 900 - Number(titledVisualMap.right) - 12;
+check('colour bar keeps its title, drawn above the bar',
+  barTexts.includes('Fitness\n(eV/block)')
+  && Number(record(barGraphics[0]).x) === barLeft + 6
+  && Number(record(barGraphics[0]).y) < Number(titledVisualMap.top ?? 0) + 12);
+check('colour bar labels both ends of the bar with the data range',
+  barTexts.includes('0.5') && barTexts.includes('0'));
+check('colour bar end values sit clear of the colours',
+  barGraphics
+    .filter((entry) => record(entry.style).align === 'right')
+    .every((entry) => Number(entry.x) === barLeft - 8));
+check('colour bar end values are one bar-height apart',
+  Math.abs(Number(barGraphics[1].y) - Number(barGraphics[2].y)) === 120);
 check('renders horizontal histograms as custom rectangles', series2D[2].type === 'custom');
 check('honours showlegend=false', series2D[2].name === '');
 

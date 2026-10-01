@@ -607,7 +607,7 @@ export function TernaryHullPlot3D({
     autosize: true,
     dragmode: 'turntable',
     hovermode: 'closest',
-    font: CHART_FONT,
+    font: { ...CHART_FONT, color: pt.legendColor },
     title: {
       text: `${components.map(formulaToHtml).join('-')} 3D Ternary Phase Diagram`,
       font: { size: 15, color: pt.titleColor },

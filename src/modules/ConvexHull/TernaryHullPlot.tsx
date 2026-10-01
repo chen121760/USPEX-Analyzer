@@ -391,7 +391,10 @@ export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport =
 
   const layout: PlotlyLayout = mergePlotViewport({
     autosize: true,
-    font: CHART_FONT,
+    // `color` is Plotly's global chart text colour; the adapter uses it for the
+    // colour bar's title and end values, which ECharts itself would draw in a
+    // fixed grey that ignores the theme.
+    font: { ...CHART_FONT, color: pt.legendColor },
     title: { text: `${components.map(formulaToHtml).join('-')} ${t('hull.ternaryTitle', 'Ternary Phase Diagram')}`, font: { size: 15, color: pt.titleColor } },
     xaxis: {
       range: [-0.12, 1.12],
