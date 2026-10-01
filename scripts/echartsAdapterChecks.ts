@@ -1,5 +1,5 @@
 import { adaptToECharts, layoutNeedsEqualScale } from '@/charts/shared/echartsAdapter';
-import { CARTESIAN_AUTORANGE_PATCH, dataZoomRelayoutPatch, toolboxIconName } from '@/charts/shared/echartsInteraction';
+import { CARTESIAN_AUTORANGE_PATCH, dataZoomRelayoutPatch, shouldUseDirtyRect, toolboxIconName } from '@/charts/shared/echartsInteraction';
 import { mergePlotViewport } from '@/charts/shared/plotRange';
 import { CHART_FONT } from '@/lib/constants';
 
@@ -63,6 +63,7 @@ check('targets visualMap at the converted series index', visualMap2D.seriesIndex
 // draggable by default and dragging an end handle narrows the selected range,
 // which leaves part of the bar unpainted — it reads as a half-loaded image.
 check('colour bar drops ECharts drag handles', visualMap2D.calculable === false);
+check('colour bar keeps its native hover value indicator', visualMap2D.hoverLink !== false);
 check('colour bar pins its range to the full extent',
   Array.isArray(visualMap2D.range) && visualMap2D.range[0] === 0 && visualMap2D.range[1] === 1);
 check('colour bar leaves ECharts no text slots to centre on the colours',
@@ -111,6 +112,14 @@ check('plot area no longer shows the grab cursor',
   dataZooms.every((entry) => entry.cursorGrab === 'default' && entry.cursorGrabbing === 'default'));
 check('clickable structure points show a pointer cursor', series2D[1].cursor === 'pointer');
 check('non-clickable guides keep the default cursor', series2D[0].cursor === undefined);
+check('hover emphasis keeps the rest of a scientific figure visible',
+  record(series2D[1].emphasis).focus === 'none' && record(series2D[1].emphasis).scale === true);
+check('dynamic visual maps use full canvas repaints during hover',
+  shouldUseDirtyRect(false, true) === false);
+check('ordinary 2D charts keep the dirty-rectangle optimisation',
+  shouldUseDirtyRect(false, false) === true);
+check('3D charts never use the 2D dirty-rectangle painter',
+  shouldUseDirtyRect(true, false) === false);
 
 const zoomPatch = dataZoomRelayoutPatch({
   batch: [

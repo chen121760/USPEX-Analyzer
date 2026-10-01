@@ -57,6 +57,14 @@ export const CARTESIAN_AUTORANGE_PATCH: Readonly<Dict> = Object.freeze({
 });
 
 /**
+ * Dynamic visual maps redraw an indicator during hover.  ZRender's dirty-rect
+ * painter can otherwise leave cleared rectangles in dense chart content.
+ */
+export function shouldUseDirtyRect(is3D: boolean, hasVisualMap: boolean): boolean {
+  return !is3D && !hasVisualMap;
+}
+
+/**
  * Name of the toolbox button a zrender click landed on (`zoom`, `back`,
  * `restore`, `saveAsImage`), or null for anything else.
  *

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import * as echarts from 'echarts';
 import 'echarts-gl';
 import { adaptToECharts } from './echartsAdapter';
-import { CARTESIAN_AUTORANGE_PATCH, dataZoomRelayoutPatch, toolboxIconName } from './echartsInteraction';
+import { CARTESIAN_AUTORANGE_PATCH, dataZoomRelayoutPatch, shouldUseDirtyRect, toolboxIconName } from './echartsInteraction';
 import type { PlotFrameProps } from './plotTypes';
 
 const DEFAULT_PLOT_STYLE: CSSProperties = { width: '100%', height: '100%' };
@@ -68,9 +68,16 @@ export function PlotFrame({
     if (!host) return;
 
     echarts.getInstanceByDom(host)?.dispose();
+    const hasVisualMap = adaptedRef.current.option.visualMap !== undefined;
     const chart = echarts.init(host, undefined, {
       renderer: 'canvas',
-      useDirtyRect: !adaptedRef.current.is3D,
+      // Continuous visualMap updates its indicator on every point hover.  With
+      // dirty rectangles enabled, zrender can clear a repaint rectangle without
+      // repainting every scatter/line element crossing it, leaving gaps in the
+      // colour bar or rectangular holes in a dense hull plot.  Keep the 2D
+      // optimisation for ordinary charts, but use deterministic full repaints
+      // for charts whose visualMap changes during hover.
+      useDirtyRect: shouldUseDirtyRect(adaptedRef.current.is3D, hasVisualMap),
     });
     chartRef.current = chart;
     chart.setOption(adaptedRef.current.option, { notMerge: true, lazyUpdate: false });

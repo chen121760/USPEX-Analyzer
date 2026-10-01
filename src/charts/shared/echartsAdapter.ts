@@ -593,7 +593,11 @@ function convert2DTrace(
           fontSize: asNumber(asDict(trace.textfont).size, 10),
         }
       : undefined,
-    emphasis: { focus: 'self', scale: true },
+    // Plotly kept the full phase diagram visible while a point was inspected.
+    // ECharts' `focus: 'self'` instead calls blurSeries for the rest of the
+    // coordinate system, making points, tie lines and labels look missing.
+    // Keep the useful emphasis scale; PlotFrame supplies the point ring.
+    emphasis: { focus: 'none', scale: true },
   };
 
   if (trace.fill === 'toself') {
