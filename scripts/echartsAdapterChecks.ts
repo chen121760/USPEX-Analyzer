@@ -442,5 +442,44 @@ check('data points, blank space and empty events are not toolbox buttons',
   && toolboxIconName(null) === null
   && toolboxIconName('back') === null);
 
+// ── 3D scene axes ─────────────────────────────────────────────────────────
+// Plotly hides a scene axis with `showgrid` / `zeroline` / `showticklabels`;
+// ignoring them painted a light grid over the dark 3D scene.
+const hiddenSceneOption = record(adaptToECharts([{
+  type: 'scatter3d', mode: 'markers', x: [0], y: [0], z: [0], name: 'p',
+}], {
+  scene: { xaxis: { showgrid: false, zeroline: false, showticklabels: false, title: { text: '' } } },
+}, { displayModeBar: false }).option);
+const hiddenSceneAxis = record(hiddenSceneOption.xAxis3D);
+check('3D scene axes honour showgrid / zeroline / showticklabels',
+  record(hiddenSceneAxis.splitLine).show === false
+  && record(hiddenSceneAxis.axisLabel).show === false
+  && record(hiddenSceneAxis.axisTick).show === false);
+// echarts-gl keeps a null `axisLineCoords` when a scene axis line is switched
+// off and then dereferences it on every camera change, so the hidden line stays
+// "shown" and is made invisible with opacity.
+check('a hidden 3D scene axis line is transparent instead of removed',
+  record(hiddenSceneAxis.axisLine).show === true
+  && record(record(hiddenSceneAxis.axisLine).lineStyle).opacity === 0);
+const visibleSceneOption = record(adaptToECharts([{
+  type: 'scatter3d', mode: 'markers', x: [0], y: [0], z: [0], name: 'p',
+}], {
+  scene: {
+    zaxis: {
+      title: { text: 'E' },
+      tickfont: { size: 10, color: '#a6adc8' },
+      gridcolor: '#313244',
+      linecolor: '#585b70',
+    },
+  },
+}, { displayModeBar: false }).option);
+const visibleSceneAxis = record(visibleSceneOption.zAxis3D);
+check('3D scene axes keep the theme colours they are given',
+  record(visibleSceneAxis.axisLabel).color === '#a6adc8'
+  && record(record(visibleSceneAxis.splitLine).lineStyle).color === '#313244'
+  && record(record(visibleSceneAxis.axisLine).lineStyle).color === '#585b70'
+  && record(record(visibleSceneAxis.axisLine).lineStyle).opacity === 1
+  && record(visibleSceneAxis.splitLine).show !== false);
+
 console.log(`\nECharts adapter checks: ${passed} passed, ${failures.length} failed`);
 if (failures.length) throw new Error(failures.join('; '));

@@ -762,6 +762,12 @@ function convertAxis(axis: Dict, gridIndex: number, direction: 'x' | 'y'): Dict 
 function convertAxis3D(axis: Dict, direction: string): Dict {
   const title = asDict(axis.title);
   const range = asArray(axis.range);
+  // Plotly hides individual scene axes with `showgrid` / `zeroline` /
+  // `showticklabels`; without this the ternary 3D view painted a light grid on
+  // top of its dark scene background that the Plotly version never drew.
+  const showGrid = axis.showgrid !== false;
+  const showZeroLine = axis.zeroline !== false;
+  const showTickLabels = axis.showticklabels !== false;
   return {
     type: 'value',
     name: plainText(asString(title.text) || direction.toUpperCase()),
@@ -770,12 +776,27 @@ function convertAxis3D(axis: Dict, direction: string): Dict {
     scale: true,
     nameTextStyle: fontStyle(asDict(title.font), 12),
     axisLabel: {
+      show: showTickLabels,
       color: asString(asDict(axis.tickfont).color) || '#64748b',
       fontSize: asNumber(asDict(axis.tickfont).size, 10),
       formatter: (value: number) => formatAxisValue(value),
     },
-    axisLine: { lineStyle: { color: asString(axis.linecolor) || '#94a3b8' } },
-    splitLine: { lineStyle: { color: asString(axis.gridcolor) || '#e2e8f0' } },
+    axisLine: {
+      // `show: false` leaves echarts-gl's saved `axisLineCoords` null and its
+      // `_updateAxisLabelAlign` then dereferences `null[0]` on the next camera
+      // change, which throws and leaves the WebGL scene half drawn.  Keep the
+      // line "shown" and hide it with opacity.
+      show: true,
+      lineStyle: {
+        color: asString(axis.linecolor) || '#94a3b8',
+        opacity: showZeroLine ? 1 : 0,
+      },
+    },
+    splitLine: {
+      show: showGrid,
+      lineStyle: { color: asString(axis.gridcolor) || '#e2e8f0' },
+    },
+    axisTick: { show: showTickLabels },
     axisPointer: { show: false },
   };
 }

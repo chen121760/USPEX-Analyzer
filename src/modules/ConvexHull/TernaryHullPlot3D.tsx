@@ -632,6 +632,13 @@ export function TernaryHullPlot3D({
       zaxis: {
         title: { text: `E_form (${systemInfo.compositionBasis?.length ? 'eV/block' : 'eV/atom'})` },
         showspikes: false,
+        // The z axis stays visible, so it carries the theme colours the 2D
+        // charts pass; without them the adapter falls back to the light
+        // palette and the grid glows on the dark scene background.
+        tickfont: { size: 10, color: pt.tickColor },
+        gridcolor: pt.gridColor,
+        zerolinecolor: pt.zerolineColor,
+        linecolor: pt.lineColor,
       },
       ...(cameraRef.current ? { camera: cameraRef.current } : {}),
       bgcolor: pt.plotBg,
