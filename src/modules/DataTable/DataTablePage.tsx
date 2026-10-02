@@ -1,3 +1,4 @@
+import { formationEnergy } from '@/domain/structure/formationEnergy';
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
@@ -366,12 +367,12 @@ export function DataTablePage() {
     if (isVarcomp) {
       cols.push({
         id: 'eForm',
-        accessorKey: 'eForm',
+        accessorFn: s => formationEnergy(s, systemInfo),
         header: () => <span title={t('col.eFormDesc')}>{t('col.eForm')}</span>,
         size: 120,
         cell: ({ getValue }) => {
           const v = getValue<number>();
-          return v === -1 ? '—' : v.toFixed(4);
+          return v == null || !Number.isFinite(v) ? '—' : v.toFixed(4);
         },
       });
       cols.push({

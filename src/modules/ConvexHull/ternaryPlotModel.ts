@@ -1,3 +1,4 @@
+import { formationEnergy } from '@/domain/structure/formationEnergy';
 import type { Structure, SystemInfo, TagDefinition } from '@/types/structure';
 import { componentAmountsFromComposition, ternaryToCartesian } from '@/parsers/compositionUtils';
 import { computeTernaryHullEdges, type TernaryHullInput } from '@/lib/ternaryHull';
@@ -19,14 +20,8 @@ export function clampFitnessLimit(value: number, max: number): number {
   return Number.isFinite(value) ? Math.min(max, Math.max(0, value)) : max;
 }
 
-export function ternaryFormationEnergy(s: Structure, info: SystemInfo, composition: number[]): number | null {
-  if (!Number.isFinite(s.eForm)) return null;
-  const reference = info.referenceInfo;
-  if (reference && !reference.complete && (reference.reason === 'rank-deficient'
-    || reference.labels.some((label, i) => reference.missing.includes(label) && composition[i] > 1e-10))) return null;
-  // -1 is a valid formation energy when the independent hull distance is available.
-  if (s.eForm === -1 && !(Number.isFinite(s.eHullRecons) && s.eHullRecons >= 0)) return null;
-  return s.eForm;
+export function ternaryFormationEnergy(s: Structure, info: SystemInfo, _composition: number[]): number | null {
+  return formationEnergy(s, info);
 }
 
 /** Expensive geometry depends only on the dataset, never on the fitness limit or viewport. */

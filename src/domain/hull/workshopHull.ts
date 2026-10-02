@@ -31,7 +31,7 @@ export function computeWorkshopGeometricHull(
   return {
     ...result,
     structures: result.structures.map((structure) =>
-      normalizeWorkshopStructure(structure as WorkshopStructure),
+      normalizeWorkshopStructure({ ...structure, eHullRecons: structure.fitness } as WorkshopStructure),
     ),
   };
 }

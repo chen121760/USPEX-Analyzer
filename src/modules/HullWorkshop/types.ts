@@ -63,6 +63,8 @@ export interface WorkshopJsonExport {
 
 /** Structure fields included in JSON export */
 export interface WorkshopJsonStructure {
+  isUserAdded?: boolean;
+  symmetry?: Structure['symmetry'];
   id: number;
   formula: string;
   composition: number[];

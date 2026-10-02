@@ -1,3 +1,7 @@
+import { validPlotStructure } from '@/domain/structure/plotData';
+import { formationEnergy } from '@/domain/structure/formationEnergy';
+import type { SystemInfo } from '@/types/structure';
+import { animationFrames } from '@/charts/shared/animationFrames';
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
@@ -35,7 +39,7 @@ interface FieldOption {
   type: 'numeric' | 'categorical';
 }
 
-function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: boolean, extraPropKeys: string[], elements: string[], structureMap: Map<number, Structure>, isVarcomp: boolean, hasVolume: boolean, hasDensity: boolean, secondObjectiveName: string): FieldOption[] {
+function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: boolean, extraPropKeys: string[], elements: string[], structureMap: Map<number, Structure>, isVarcomp: boolean, hasVolume: boolean, hasDensity: boolean, secondObjectiveName: string, systemInfo?: SystemInfo | null): FieldOption[] {
   const opts: FieldOption[] = [
     { key: 'enthalpy', label: t('col.enthalpy'), accessor: (s) => s.enthalpy, type: 'numeric' },
     { key: 'enthalpyTotal', label: t('col.enthalpyTotal'), accessor: (s) => s.enthalpyTotal, type: 'numeric' },
@@ -89,7 +93,7 @@ function getFieldOptions(t: (k: string) => string, hasML: boolean, hasPareto: bo
 
   if (isVarcomp) {
     opts.push(
-      { key: 'eForm', label: t('col.eForm'), accessor: (s) => s.eForm !== -1 ? s.eForm : undefined, type: 'numeric' },
+      { key: 'eForm', label: t('col.eForm'), accessor: (s) => formationEnergy(s, systemInfo) ?? undefined, type: 'numeric' },
       { key: 'eHullRecons', label: t('col.eHullRecons'), accessor: (s) => s.eHullRecons >= 0 ? s.eHullRecons : undefined, type: 'numeric' },
     );
   }
@@ -153,7 +157,7 @@ export function ExplorerPage() {
   }, [structures]);
 
   const fields = useMemo(
-    () => getFieldOptions(t, hasML, hasPareto, extraPropKeys, systemInfo?.elements ?? [], structureMap, isVarcomp, hasVolume, hasDensity, systemInfo?.secondObjectiveName ?? ''),
+    () => getFieldOptions(t, hasML, hasPareto, extraPropKeys, systemInfo?.elements ?? [], structureMap, isVarcomp, hasVolume, hasDensity, systemInfo?.secondObjectiveName ?? '', systemInfo),
     [t, hasML, hasPareto, extraPropKeys, systemInfo, structureMap, isVarcomp, hasVolume, hasDensity],
   );
 
@@ -257,8 +261,9 @@ export function ExplorerPage() {
   const colorDataRange = useMemo(() => {
     if (!colorField || colorField.type !== 'numeric') return null;
     const vals = structures
+      .filter(s => validPlotStructure(s, []))
       .map((s) => colorField.accessor(s) as number)
-      .filter((v) => v != null && isFinite(v) && v < 900);
+      .filter((v) => v != null && isFinite(v));
     if (vals.length === 0) return null;
     return { min: Math.min(...vals), max: Math.max(...vals) };
   }, [structures, colorField]);
@@ -276,27 +281,18 @@ export function ExplorerPage() {
   // If upper limit is already at max, reset it to min first so the animation is visible.
   const handlePlay = useCallback(() => {
     if (!colorDataRange) return;
-    const fixedLow = cMin ?? colorDataRange.min;
-    let curHigh = cMax ?? colorDataRange.max;
-    // If already at max, restart from the bottom so the user sees something happen
-    if (curHigh >= colorDataRange.max) {
-      curHigh = colorDataRange.min;
-      setCMax(curHigh);
-    }
-    const delay = 1000 / playFps;
-    setIsPlaying(true);
+    const frames = animationFrames(colorDataRange, cMin, cMax, playStep);
+    if (!frames.length || !Number.isFinite(playFps) || playFps <= 0) return;
+    if (playTimerRef.current) clearTimeout(playTimerRef.current);
+    setCMin(cMin ?? colorDataRange.min); setCMax(frames[0]);
+    setIsPlaying(frames.length > 1);
+    let index = 1;
     const step = () => {
-      curHigh += playStep;
-      if (curHigh > colorDataRange.max) {
-        setCMax(colorDataRange.max);
-        setIsPlaying(false);
-        return;
-      }
-      setCMin(fixedLow);
-      setCMax(curHigh);
-      playTimerRef.current = setTimeout(step, delay);
+      setCMax(frames[index++]);
+      if (index >= frames.length) { setIsPlaying(false); return; }
+      playTimerRef.current = setTimeout(step, 1000 / playFps);
     };
-    playTimerRef.current = setTimeout(step, delay);
+    if (frames.length > 1) playTimerRef.current = setTimeout(step, 1000 / playFps);
   }, [colorDataRange, cMin, cMax, playStep, playFps]);
 
   const handleStop = useCallback(() => {
@@ -306,123 +302,16 @@ export function ExplorerPage() {
 
   // GIF export: compute each frame directly and render it on an offscreen ECharts host.
   // If upper limit is already at max, start from min so the GIF captures the full animation.
-  const handleExportGif = useCallback(async () => {
-    if (!colorDataRange || !plotRef.current) return;
-    const fixedLow  = cMin ?? colorDataRange.min;
-    const rawHigh   = cMax ?? colorDataRange.max;
-    const startHigh = rawHigh >= colorDataRange.max ? colorDataRange.min : rawHigh;
-    const frameDelay = Math.round(1000 / playFps);
 
-    const frames: number[] = [];
-    for (let h = startHigh; h <= colorDataRange.max + playStep * 0.5; h += playStep) {
-      frames.push(Math.min(h, colorDataRange.max));
-    }
-    if (frames.length === 0) return;
-
-    setIsExporting(true);
-    try {
-      await exportAnimatedEChartsGif({
-        filename: 'explorer.gif',
-        sourceElement: plotRef.current,
-        frames,
-        delayMs: frameDelay,
-        layout: { ...layoutRef.current },
-        buildFrameData: (hi) => {
-          // Compute filtered data for this frame directly (no React state)
-          const frameData = structures.filter((s) => {
-            const xv = xField.accessor(s);
-            const yv = yField.accessor(s);
-            const zv = zField.accessor(s);
-            if (xv == null || yv == null || s.enthalpyTotal > 900) return false;
-            if (dimension === '3d' && (zv == null || !Number.isFinite(Number(zv)))) return false;
-            if (colorField && colorField.type === 'numeric') {
-              const cv = colorField.accessor(s) as number;
-              if (cv == null || !isFinite(cv)) return false;
-              if (cv < fixedLow || cv > hi) return false;
-            }
-            return true;
-          });
-
-          // Build trace for this frame
-          let frameTraces: PlotlyData[];
-          const frameCoordinates = (points: Structure[]) => ({
-            x: points.map((s) => xField.accessor(s) as number),
-            y: points.map((s) => yField.accessor(s) as number),
-            ...(dimension === '3d' ? { z: points.map((s) => zField.accessor(s) as number) } : {}),
-          });
-          const frameType = dimension === '3d' ? 'scatter3d' : 'scatter';
-          if (!colorField || colorField.type === 'numeric') {
-            frameTraces = [{
-              ...frameCoordinates(frameData),
-              mode: 'markers', type: frameType,
-              marker: {
-                color: colorField ? frameData.map((s) => (colorField.accessor(s) as number) ?? 0) : getPlotlyTheme(theme).defaultMarkerColor,
-                colorscale: 'Viridis',
-                cmin: colorDataRange.min,
-                cmax: colorDataRange.max,
-                colorbar: colorField ? { title: colorField.label, thickness: 15 } : undefined,
-                size: 6, opacity: 0.7,
-              },
-              hoverinfo: 'none',
-            }];
-          } else {
-            const groups = new Map<string, typeof frameData>();
-            for (const s of frameData) {
-              const cat = String(colorField.accessor(s) ?? 'Unknown');
-              if (!groups.has(cat)) groups.set(cat, []);
-              groups.get(cat)!.push(s);
-            }
-            const colors = getPlotlyTheme(theme).categoricalColors;
-            frameTraces = Array.from(groups.entries()).map(([cat, pts], i) => ({
-              ...frameCoordinates(pts),
-              mode: 'markers', type: frameType, name: cat,
-              marker: { color: colors[i % colors.length], size: 6, opacity: 0.7 },
-              hoverinfo: 'none',
-            }));
-          }
-
-          // Add marginal traces for this frame
-          if (dimension === '2d' && showXMarginal) {
-            const xRangeMin = xMin !== '' ? parseFloat(xMin) : null;
-            const xRangeMax = xMax !== '' ? parseFloat(xMax) : null;
-            const xVals = frameData.map((s) => xField.accessor(s) as number).filter((v) => {
-              if (v == null || !isFinite(v)) return false;
-              if (xExcludeZero && v === 0) return false;
-              if (xRangeMin !== null && v < xRangeMin) return false;
-              if (xRangeMax !== null && v > xRangeMax) return false;
-              return true;
-            });
-            frameTraces = [...frameTraces, ...buildXMarginalTraces(xVals, marginalBins, xField.label, 0, theme)];
-          }
-          if (dimension === '2d' && showYMarginal) {
-            const yRangeMin = yMin !== '' ? parseFloat(yMin) : null;
-            const yRangeMax = yMax !== '' ? parseFloat(yMax) : null;
-            const yVals = frameData.map((s) => yField.accessor(s) as number).filter((v) => {
-              if (v == null || !isFinite(v)) return false;
-              if (yExcludeZero && v === 0) return false;
-              if (yRangeMin !== null && v < yRangeMin) return false;
-              if (yRangeMax !== null && v > yRangeMax) return false;
-              return true;
-            });
-            frameTraces = [...frameTraces, ...buildYMarginalTraces(yVals, marginalBins, yField.label, 0, theme)];
-          }
-
-          return frameTraces;
-        },
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  }, [colorDataRange, cMin, cMax, playStep, playFps, structures, dimension, xField, yField, zField, colorField, showXMarginal, showYMarginal, marginalBins, xExcludeZero, yExcludeZero, xMin, xMax, yMin, yMax, theme]);
 
   useEffect(() => () => { if (playTimerRef.current) clearTimeout(playTimerRef.current); }, []);
 
+  useEffect(() => { handleStop(); }, [colorKey, structures, handleStop]);
+
   const filteredData = useMemo(() => {
     return structures.filter((s) => {
-      const xv = xField.accessor(s);
-      const yv = yField.accessor(s);
       const zv = zField.accessor(s);
-      if (xv == null || yv == null || !Number.isFinite(Number(xv)) || !Number.isFinite(Number(yv)) || s.enthalpyTotal > 900) return false;
+      if (!validPlotStructure(s, [xField, yField])) return false;
       if (dimension === '3d' && (zv == null || !Number.isFinite(Number(zv)))) return false;
       // color range filter
       if (colorField && colorField.type === 'numeric' && (cMin !== null || cMax !== null)) {
@@ -442,13 +331,13 @@ export function ExplorerPage() {
   const focusMatches = useMemo(() => {
     const ids = new Set<number>();
     if (!filterActive) return ids;
-    for (const structure of filteredData) {
+    for (const structure of structures) {
       if (matchesActiveFilter(structure, systemInfo?.elements ?? [], filterGroups, filterTagStates)) {
         ids.add(structure.id);
       }
     }
     return ids;
-  }, [filteredData, filterActive, filterGroups, filterTagStates, systemInfo]);
+  }, [structures, filterActive, filterGroups, filterTagStates, systemInfo]);
   const effectiveFocusMode = filterActive ? focusMode : 'off';
   const displayedData = useMemo(
     () => effectiveFocusMode === 'hide'
@@ -458,7 +347,7 @@ export function ExplorerPage() {
   );
 
   // Build traces
-  const traces: PlotlyData[] = useMemo(() => {
+  const buildScatterTraces = useCallback((displayedData: Structure[]): PlotlyData[] => {
     const traceType = dimension === '3d' ? 'scatter3d' : 'scatter';
     const coordinates = (points: Structure[]) => ({
       x: points.map((s) => xField.accessor(s) as number),
@@ -543,10 +432,11 @@ export function ExplorerPage() {
       }
     }
     return result;
-  }, [displayedData, dimension, xField, yField, zField, colorField, colorDataRange, theme, effectiveFocusMode, focusMatches, dimOpacity, t]);
+  }, [dimension, xField, yField, zField, colorField, colorDataRange, theme, effectiveFocusMode, focusMatches, dimOpacity, t]);
+  const traces = useMemo(() => buildScatterTraces(displayedData), [displayedData, buildScatterTraces]);
 
   // Mark overlay traces
-  const overlayTraces: PlotlyData[] = useMemo(() => {
+  const buildMarkTraces = useCallback((displayedData: Structure[]): PlotlyData[] => {
     const result: PlotlyData[] = [];
     const traceType = dimension === '3d' ? 'scatter3d' : 'scatter';
     const coordinates = (points: Structure[]) => ({
@@ -595,10 +485,11 @@ export function ExplorerPage() {
       }
     }
     return result;
-  }, [displayedData, dimension, xField, yField, zField, markActiveTags, markEaInput, allTags, t]);
+  }, [dimension, xField, yField, zField, markActiveTags, markEaInput, allTags, t]);
+  const overlayTraces = useMemo(() => buildMarkTraces(displayedData), [displayedData, buildMarkTraces]);
 
   // Marginal distribution traces (histogram + KDE)
-  const marginalTraces: PlotlyData[] = useMemo(() => {
+  const buildMarginalTraces = useCallback((displayedData: Structure[]): PlotlyData[] => {
     if (dimension === '3d') return [];
     const xRangeMin = xMin !== '' ? parseFloat(xMin) : null;
     const xRangeMax = xMax !== '' ? parseFloat(xMax) : null;
@@ -631,7 +522,40 @@ export function ExplorerPage() {
       result.push(...buildYMarginalTraces(yVals, marginalBins, yAxisTitle, 0, theme));
     }
     return result;
-  }, [displayedData, dimension, xField, yField, xAxisTitle, yAxisTitle, showXMarginal, showYMarginal, marginalBins, xExcludeZero, yExcludeZero, xMin, xMax, yMin, yMax, theme]);
+  }, [dimension, xField, yField, xAxisTitle, yAxisTitle, showXMarginal, showYMarginal, marginalBins, xExcludeZero, yExcludeZero, xMin, xMax, yMin, yMax, theme]);
+  const marginalTraces = useMemo(() => buildMarginalTraces(displayedData), [displayedData, buildMarginalTraces]);
+
+  const handleExportGif = useCallback(async () => {
+    if (!colorDataRange || !plotRef.current) return;
+    const fixedLow = cMin ?? colorDataRange.min;
+    const frames = animationFrames(colorDataRange, cMin, cMax, playStep);
+    if (!frames.length || !Number.isFinite(playFps) || playFps <= 0) return;
+    const frameDelay = Math.round(1000 / playFps);
+    setIsExporting(true);
+    try {
+      await exportAnimatedEChartsGif({
+        filename: 'explorer.gif',
+        sourceElement: plotRef.current,
+        frames,
+        delayMs: frameDelay,
+        layout: { ...layoutRef.current },
+        buildFrameData: (hi) => {
+          const frameData = structures.filter(s => {
+            if (!validPlotStructure(s, [xField, yField, ...(dimension === '3d' ? [zField] : [])])) return false;
+            const color = colorField?.accessor(s);
+            if (typeof color !== 'number' || !Number.isFinite(color) || color < fixedLow || color > hi) return false;
+            if (effectiveFocusMode === 'hide' && !focusMatches.has(s.id)) return false;
+            return true;
+          });
+          return [...buildScatterTraces(frameData), ...buildMarkTraces(frameData), ...buildMarginalTraces(frameData)];
+        },
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  }, [colorDataRange, cMin, cMax, playStep, playFps, structures, xField, yField, colorField,
+    dimension, zField, effectiveFocusMode, focusMatches,
+    buildScatterTraces, buildMarkTraces, buildMarginalTraces]);
 
   const inputStyle: React.CSSProperties = {
     width: 72,
@@ -930,7 +854,7 @@ export function ExplorerPage() {
         )}
       </div>
 
-      <MarkPanel />
+      <MarkPanel visibleStructures={displayedData} />
     </div>
   );
 }

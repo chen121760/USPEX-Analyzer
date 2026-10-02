@@ -1,3 +1,7 @@
+import { validPlotStructure, selectedFrontData } from '@/domain/structure/plotData';
+import { formationEnergy } from '@/domain/structure/formationEnergy';
+import type { SystemInfo } from '@/types/structure';
+import { animationFrames } from '@/charts/shared/animationFrames';
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
@@ -41,6 +45,7 @@ function getFieldOptions(
   isVarcomp: boolean,
   hasVolume: boolean,
   hasDensity: boolean,
+  systemInfo?: SystemInfo | null,
 ): FieldOption[] {
   const opts: FieldOption[] = [
     { key: 'enthalpy', label: t('col.enthalpy'), accessor: (s) => s.enthalpy, type: 'numeric' },
@@ -92,7 +97,7 @@ function getFieldOptions(
 
   if (isVarcomp) {
     opts.push(
-      { key: 'eForm', label: t('col.eForm'), accessor: (s) => s.eForm !== -1 ? s.eForm : undefined, type: 'numeric' },
+      { key: 'eForm', label: t('col.eForm'), accessor: (s) => formationEnergy(s, systemInfo) ?? undefined, type: 'numeric' },
       { key: 'eHullRecons', label: t('col.eHullRecons'), accessor: (s) => s.eHullRecons >= 0 ? s.eHullRecons : undefined, type: 'numeric' },
     );
   }
@@ -124,7 +129,7 @@ export function BetaExplorerPage() {
   const extraPropKeys = useMemo(() => collectDynamicFieldKeys(structures), [structures]);
 
   const fields = useMemo(
-    () => getFieldOptions(t, hasML, hasPareto, extraPropKeys, systemInfo?.elements ?? [], isVarcomp, hasVolume, hasDensity),
+    () => getFieldOptions(t, hasML, hasPareto, extraPropKeys, systemInfo?.elements ?? [], isVarcomp, hasVolume, hasDensity, systemInfo),
     [t, hasML, hasPareto, extraPropKeys, systemInfo, isVarcomp, hasVolume, hasDensity],
   );
 
@@ -178,8 +183,9 @@ export function BetaExplorerPage() {
   const colorDataRange = useMemo(() => {
     if (!colorField || colorField.type !== 'numeric') return null;
     const vals = structures
+      .filter(s => validPlotStructure(s, []))
       .map((s) => colorField.accessor(s) as number)
-      .filter((v) => v != null && isFinite(v) && v < 900);
+      .filter((v) => v != null && isFinite(v));
     if (vals.length === 0) return null;
     return { min: Math.min(...vals), max: Math.max(...vals) };
   }, [structures, colorField]);
@@ -195,17 +201,18 @@ export function BetaExplorerPage() {
 
   const handlePlay = useCallback(() => {
     if (!colorDataRange) return;
-    const fixedLow = cMin ?? colorDataRange.min;
-    let curHigh = cMax ?? colorDataRange.max;
-    const delay = 1000 / playFps;
-    setIsPlaying(true);
+    const frames = animationFrames(colorDataRange, cMin, cMax, playStep);
+    if (!frames.length || !Number.isFinite(playFps) || playFps <= 0) return;
+    if (playTimerRef.current) clearTimeout(playTimerRef.current);
+    setCMin(cMin ?? colorDataRange.min); setCMax(frames[0]);
+    setIsPlaying(frames.length > 1);
+    let index = 1;
     const step = () => {
-      curHigh += playStep;
-      if (curHigh > colorDataRange.max) { setCMax(colorDataRange.max); setIsPlaying(false); return; }
-      setCMin(fixedLow); setCMax(curHigh);
-      playTimerRef.current = setTimeout(step, delay);
+      setCMax(frames[index++]);
+      if (index >= frames.length) { setIsPlaying(false); return; }
+      playTimerRef.current = setTimeout(step, 1000 / playFps);
     };
-    playTimerRef.current = setTimeout(step, delay);
+    if (frames.length > 1) playTimerRef.current = setTimeout(step, 1000 / playFps);
   }, [colorDataRange, cMin, cMax, playStep, playFps]);
 
   const handleStop = useCallback(() => {
@@ -213,66 +220,16 @@ export function BetaExplorerPage() {
     setIsPlaying(false);
   }, []);
 
-  const handleExportGif = useCallback(async () => {
-    if (!colorDataRange || !plotRef.current) return;
-    const fixedLow  = cMin ?? colorDataRange.min;
-    const startHigh = cMax ?? colorDataRange.max;
-    const frameDelay = Math.round(1000 / playFps);
-    const frames: number[] = [];
-    for (let h = startHigh; h <= colorDataRange.max + playStep * 0.5; h += playStep)
-      frames.push(Math.min(h, colorDataRange.max));
-    if (frames.length === 0) return;
-    setIsExporting(true);
-    try {
-      await exportAnimatedEChartsGif({
-        filename: 'beta-explorer.gif',
-        sourceElement: plotRef.current,
-        frames,
-        delayMs: frameDelay,
-        layout: { ...layoutRef.current },
-        buildFrameData: (hi) => {
-          const frameData = structures.filter((s) => {
-            const xv = xField.accessor(s); const yv = yField.accessor(s);
-            if (xv == null || yv == null || s.enthalpyTotal > 900) return false;
-            if (colorField && colorField.type === 'numeric') {
-              const cv = colorField.accessor(s) as number;
-              if (cv == null || !isFinite(cv) || cv < fixedLow || cv > hi) return false;
-            }
-            return true;
-          });
-          let frameTraces: PlotlyData[];
-          if (!colorField || colorField.type === 'numeric') {
-            frameTraces = [{ x: frameData.map((s) => xField.accessor(s)), y: frameData.map((s) => yField.accessor(s)), mode: 'markers', type: 'scatter',
-              marker: { color: colorField ? frameData.map((s) => colorField.accessor(s)) : plotTheme.defaultMarkerColor, colorscale: 'Viridis', cmin: colorDataRange.min, cmax: colorDataRange.max, size: 6, opacity: 0.7 }, hoverinfo: 'none' }];
-          } else {
-            const groups = new Map<string, typeof frameData>();
-            for (const s of frameData) { const cat = String(colorField.accessor(s) ?? 'Unknown'); if (!groups.has(cat)) groups.set(cat, []); groups.get(cat)!.push(s); }
-            frameTraces = Array.from(groups.entries()).map(([cat, pts], i) => ({ x: pts.map((s) => xField.accessor(s)), y: pts.map((s) => yField.accessor(s)), mode: 'markers', type: 'scatter', name: cat, marker: { color: plotTheme.categoricalColors[i % plotTheme.categoricalColors.length], size: 6, opacity: 0.7 }, hoverinfo: 'none' }));
-          }
-          if (showXMarginal) {
-            const xVals = frameData.map((s) => xField.accessor(s) as number).filter((v) => v != null && isFinite(v) && !(xExcludeZero && v === 0));
-            frameTraces = [...frameTraces, ...buildXMarginalTraces(xVals, marginalBins, xField.label, 1e-12, theme)];
-          }
-          if (showYMarginal) {
-            const yVals = frameData.map((s) => yField.accessor(s) as number).filter((v) => v != null && isFinite(v) && !(yExcludeZero && v === 0));
-            frameTraces = [...frameTraces, ...buildYMarginalTraces(yVals, marginalBins, yField.label, 1e-12, theme)];
-          }
 
-          return frameTraces;
-        },
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  }, [colorDataRange, cMin, cMax, playStep, playFps, structures, xField, yField, colorField, showXMarginal, showYMarginal, marginalBins, xExcludeZero, yExcludeZero, plotTheme, theme]);
 
   useEffect(() => () => { if (playTimerRef.current) clearTimeout(playTimerRef.current); }, []);
+
+  useEffect(() => { handleStop(); }, [colorKey, structures, handleStop]);
 
   // --- Valid data for scatter ---
   const filteredData = useMemo(() => {
     return structures.filter((s) => {
-      const xv = xField.accessor(s); const yv = yField.accessor(s);
-      if (xv == null || yv == null || s.enthalpyTotal > 900) return false;
+      if (!validPlotStructure(s, [xField, yField])) return false;
       if (colorField && colorField.type === 'numeric' && (cMin !== null || cMax !== null)) {
         const cv = colorField.accessor(s) as number;
         if (cv == null || !isFinite(cv)) return false;
@@ -286,8 +243,9 @@ export function BetaExplorerPage() {
   // --- Auto reference point from all valid data ---
   const allValidPoints = useMemo(() => {
     return structures
+      .filter(s => validPlotStructure(s, [xField, yField]))
       .map((s) => ({ x: xField.accessor(s) as number, y: yField.accessor(s) as number }))
-      .filter((p) => p.x != null && isFinite(p.x) && p.y != null && isFinite(p.y) && p.x < 900 && p.y < 900);
+      .filter((p) => p.x != null && isFinite(p.x) && p.y != null && isFinite(p.y));
   }, [structures, xField, yField]);
 
   const autoRef = useMemo(
@@ -306,8 +264,11 @@ export function BetaExplorerPage() {
     return layerClassification(pts, xMinimize, yMinimize);
   }, [filteredData, xField, yField, xMinimize, yMinimize]);
 
+  const visibleData = useMemo(() => selectedFrontData(filteredData, frontMap, numFronts, colorByFront),
+    [filteredData, frontMap, numFronts, colorByFront]);
+
   // --- Scatter traces ---
-  const traces: PlotlyData[] = useMemo(() => {
+  const buildScatterTraces = useCallback((filteredData: Structure[]): PlotlyData[] => {
     if (colorByFront) {
       const result: PlotlyData[] = [];
 
@@ -460,10 +421,11 @@ export function BetaExplorerPage() {
       hoverinfo: 'text' as const,
       customdata: pts.map((s) => s.id),
     }));
-  }, [filteredData, xField, yField, colorField, colorDataRange, colorByFront, frontMap, numFronts, refX, refY, xMinimize, yMinimize, allValidPoints, t, plotTheme]);
+  }, [xField, yField, colorField, colorDataRange, colorByFront, frontMap, numFronts, refX, refY, xMinimize, yMinimize, allValidPoints, t, plotTheme]);
+  const traces = useMemo(() => buildScatterTraces(visibleData), [visibleData, buildScatterTraces]);
 
   // --- Mark overlay traces ---
-  const overlayTraces: PlotlyData[] = useMemo(() => {
+  const buildMarkTraces = useCallback((filteredData: Structure[]): PlotlyData[] => {
     const result: PlotlyData[] = [];
     const hoverText = (s: Structure) =>
       `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
@@ -504,10 +466,11 @@ export function BetaExplorerPage() {
       }
     }
     return result;
-  }, [filteredData, xField, yField, frontMap, markActiveTags, markEaInput, allTags, t]);
+  }, [xField, yField, frontMap, markActiveTags, markEaInput, allTags, t]);
+  const overlayTraces = useMemo(() => buildMarkTraces(visibleData), [visibleData, buildMarkTraces]);
 
   // --- Marginal distribution traces ---
-  const marginalTraces: PlotlyData[] = useMemo(() => {
+  const buildMarginalTraces = useCallback((filteredData: Structure[]): PlotlyData[] => {
     const xRangeMin = xMin !== '' ? parseFloat(xMin) : null;
     const xRangeMax = xMax !== '' ? parseFloat(xMax) : null;
     const yRangeMin = yMin !== '' ? parseFloat(yMin) : null;
@@ -534,7 +497,8 @@ export function BetaExplorerPage() {
       result.push(...buildYMarginalTraces(yVals, marginalBins, yField.label, 1e-12, theme));
     }
     return result;
-  }, [filteredData, xField, yField, showXMarginal, showYMarginal, marginalBins, xExcludeZero, yExcludeZero, xMin, xMax, yMin, yMax, theme]);
+  }, [xField, yField, showXMarginal, showYMarginal, marginalBins, xExcludeZero, yExcludeZero, xMin, xMax, yMin, yMax, theme]);
+  const marginalTraces = useMemo(() => buildMarginalTraces(visibleData), [visibleData, buildMarginalTraces]);
 
   // --- Hypervolume vs Generation ---
   const maxGen = useMemo(() => Math.max(0, ...structures.map((s) => s.generation)), [structures]);
@@ -545,9 +509,9 @@ export function BetaExplorerPage() {
 
     for (let g = 1; g <= maxGen; g++) {
       const archivePts = structures
-        .filter((s) => s.generation <= g)
+        .filter((s) => s.generation <= g && validPlotStructure(s, [xField, yField]))
         .map((s) => ({ id: s.id, x: xField.accessor(s) as number, y: yField.accessor(s) as number }))
-        .filter((p) => p.x != null && isFinite(p.x) && p.y != null && isFinite(p.y) && p.x < 900 && p.y < 900);
+        .filter((p) => p.x != null && isFinite(p.x) && p.y != null && isFinite(p.y));
 
       if (archivePts.length === 0) continue;
 
@@ -579,6 +543,38 @@ export function BetaExplorerPage() {
         hoverinfo: 'text' as const,
       }));
   }, [structures, xField, yField, xMinimize, yMinimize, numFronts, refX, refY, maxGen, allValidPoints.length, plotTheme]);
+
+  const handleExportGif = useCallback(async () => {
+    if (!colorDataRange || !plotRef.current) return;
+    const fixedLow = cMin ?? colorDataRange.min;
+    const frames = animationFrames(colorDataRange, cMin, cMax, playStep);
+    if (!frames.length || !Number.isFinite(playFps) || playFps <= 0) return;
+    const frameDelay = Math.round(1000 / playFps);
+    setIsExporting(true);
+    try {
+      await exportAnimatedEChartsGif({
+        filename: 'beta-explorer.gif',
+        sourceElement: plotRef.current,
+        frames,
+        delayMs: frameDelay,
+        layout: { ...layoutRef.current },
+        buildFrameData: (hi) => {
+          const frameData = structures.filter(s => {
+            if (!validPlotStructure(s, [xField, yField])) return false;
+            const color = colorField?.accessor(s);
+            if (typeof color !== 'number' || !Number.isFinite(color) || color < fixedLow || color > hi) return false;
+
+            return true;
+          });
+          return [...buildScatterTraces(frameData), ...buildMarkTraces(frameData), ...buildMarginalTraces(frameData)];
+        },
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  }, [colorDataRange, cMin, cMax, playStep, playFps, structures, xField, yField, colorField,
+
+    buildScatterTraces, buildMarkTraces, buildMarginalTraces]);
 
   const inputStyle: React.CSSProperties = {
     width: 72, padding: '3px 6px', border: '1px solid var(--color-border)',
@@ -642,7 +638,7 @@ export function BetaExplorerPage() {
     const frontGroups = new Map<number, { s: Structure; front: number }[]>();
     for (const s of filteredData) {
       const front = frontMap.get(s.id) ?? 999;
-      if (front > numFronts) continue;
+      if (colorByFront && front > numFronts) continue;
       if (!frontGroups.has(front)) frontGroups.set(front, []);
       frontGroups.get(front)!.push({ s, front });
     }
@@ -717,7 +713,7 @@ export function BetaExplorerPage() {
         xExcludeZero={xExcludeZero}
         yExcludeZero={yExcludeZero}
         marginalBins={marginalBins}
-        filteredCount={filteredData.length}
+        filteredCount={visibleData.length}
         colorByFront={colorByFront}
         numFronts={numFronts}
         refMode={refMode}
@@ -802,7 +798,7 @@ export function BetaExplorerPage() {
         <RangeInputs label={`Y: ${yField.label}`} min={yMin} max={yMax} onMin={setYMin} onMax={setYMax} inputStyle={inputStyle} />
       </div>
 
-      <MarkPanel />
+      <MarkPanel visibleStructures={visibleData} />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import type { SystemInfo } from '@/types/structure';
 /**
  * Workspace sidebar — left panel for the Hull Workshop.
  *
@@ -20,7 +21,8 @@ interface Props {
   /** Workshop-scope elements (for matching saved projects) */
   elements: string[];
   /** Workshop-scope pressure (for matching saved projects) */
-  pressure: number;
+  pressure: number | null;
+  context?: SystemInfo | null;
   /** Current project ID (excluded from saved-project list) */
   currentProjectId: string;
   onImportFromProject: () => void;
@@ -40,6 +42,7 @@ export function WorkspaceSidebar({
   structuresCount,
   elements,
   pressure,
+  context,
   currentProjectId,
   onImportFromProject,
   onImportFromSaved,
@@ -205,6 +208,7 @@ export function WorkspaceSidebar({
 
       {/* ── Import from saved projects modal ── */}
       <ImportProjectModal
+        context={context}
         open={showImportModal}
         elements={elements}
         pressure={pressure}

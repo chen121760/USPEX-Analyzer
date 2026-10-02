@@ -67,6 +67,7 @@ interface ChartSettingsState {
   setBetaYMarginalExcludeZero: (value: boolean) => void;
 
   paretoSelectedFronts: number[];
+  paretoSelectionInitialized: boolean;
   setParetoSelectedFronts: (fronts: number[]) => void;
   paretoShowLines: boolean;
   setParetoShowLines: (show: boolean) => void;
@@ -150,13 +151,15 @@ export const useChartSettingsStore = create<ChartSettingsState>()(
       betaYMarginalExcludeZero: getLegacyUIValue('betaYMarginalExcludeZero', false, isBoolean),
       setBetaYMarginalExcludeZero: (value) => set({ betaYMarginalExcludeZero: value }),
 
+      paretoSelectionInitialized: false,
       paretoSelectedFronts: getLegacyUIValue('paretoSelectedFronts', [], isNumberArray),
-      setParetoSelectedFronts: (fronts) => set({ paretoSelectedFronts: fronts }),
+      setParetoSelectedFronts: (fronts) => set({ paretoSelectedFronts: fronts, paretoSelectionInitialized: true }),
       paretoShowLines: getLegacyUIValue('paretoShowLines', true, isBoolean),
       setParetoShowLines: (show) => set({ paretoShowLines: show }),
 
       resetProjectScopedChartSettings: () => set({
         paretoSelectedFronts: [],
+        paretoSelectionInitialized: false,
         betaRefX: null,
         betaRefY: null,
       }),
@@ -205,6 +208,7 @@ export const useChartSettingsStore = create<ChartSettingsState>()(
         betaXMarginalExcludeZero: state.betaXMarginalExcludeZero,
         betaYMarginalExcludeZero: state.betaYMarginalExcludeZero,
         paretoSelectedFronts: state.paretoSelectedFronts,
+        paretoSelectionInitialized: state.paretoSelectionInitialized,
         paretoShowLines: state.paretoShowLines,
       }),
     },

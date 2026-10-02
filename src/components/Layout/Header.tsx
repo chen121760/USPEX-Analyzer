@@ -10,6 +10,7 @@ import { useThemeStore } from '@/theme/themeStore';
 export function Header() {
   const { t, i18n } = useTranslation();
   const systemInfo = useProjectStore((s) => s.systemInfo);
+  const persistenceError = useProjectStore(s => s.persistenceError);
   const projectName = useProjectStore((s) => s.projectName);
   const symmetryStatus = useProjectStore((s) => s.symmetryStatus);
   const compareIds = useCompareStore((s) => s.compareIds);
@@ -49,6 +50,10 @@ export function Header() {
       )}
 
       <div style={{ flex: 1 }} />
+
+      {persistenceError && <span role="alert" title={persistenceError} style={{ color: 'var(--color-danger)', fontSize: 12 }}>
+        {i18n.language === 'zh' ? '自动保存失败，请导出项目备份' : 'Auto-save failed; export a project backup'}
+      </span>}
 
       {/* Background moyo symmetry analysis progress */}
       {symmetryStatus.running && (

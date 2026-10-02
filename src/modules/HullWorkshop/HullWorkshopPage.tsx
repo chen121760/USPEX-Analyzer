@@ -1,3 +1,4 @@
+import { prepareWorkshopGroups, remapWorkshopStructure } from '@/domain/hull/workshopCompatibility';
 /**
  * Hull Workshop (凸包工作台) — main page.
  *
@@ -21,8 +22,7 @@ import { downloadWorkshopCsv, downloadWorkshopJson, workshopJsonToStructure } fr
 import { WorkspaceSidebar } from './WorkspaceSidebar';
 import type { WorkshopGroup, WorkshopJsonExport } from './types';
 import { GROUP_COLORS, defaultGroupName } from './types';
-import { buildFormula, totalAtoms } from '@/parsers/compositionUtils';
-import { ML_PROPERTY_MISSING } from '@/domain/structure/mlProperties';
+import { manualWorkshopStructure } from '@/domain/hull/manualWorkshopStructure';
 import type { ManualStructureData } from './components/AddStructureModal';
 import { WorkshopContent } from './components/WorkshopContent';
 
@@ -40,6 +40,9 @@ export function HullWorkshopPage() {
   const removeGroup = useWorkshopStore((s) => s.removeGroup);
   const renameGroup = useWorkshopStore((s) => s.renameGroup);
   const toggleGroupVisibility = useWorkshopStore((s) => s.toggleGroupVisibility);
+
+  const projectSystemInfo = useProjectStore(s => s.systemInfo);
+  const workshopContext = groups[0]?.systemInfo ?? projectSystemInfo;
 
   const hasData = groups.some((g) => g.visible && g.structures.length > 0);
 
@@ -69,7 +72,7 @@ export function HullWorkshopPage() {
       }
     }
 
-    return { ...best, compositionMode };
+    return { ...best, compositionMode, referenceInfo: undefined };
   }, [visibleGroups]);
 
   /* ── Derived: merged structures with groupName attached ── */
@@ -78,11 +81,11 @@ export function HullWorkshopPage() {
     let seq = 0;
     for (const g of visibleGroups) {
       for (const s of g.structures) {
-        result.push({ ...s, groupName: g.name, groupColor: g.color, _mergeSeq: seq++ });
+        result.push({ ...remapWorkshopStructure(s, g.systemInfo, mergedSystemInfo!), groupName: g.name, groupColor: g.color, _mergeSeq: seq++ });
       }
     }
     return result;
-  }, [visibleGroups]);
+  }, [visibleGroups, mergedSystemInfo]);
 
   /* ── Derived: geometric hull on merged structures ── */
   const hullResult = useMemo(() => {
@@ -116,8 +119,10 @@ export function HullWorkshopPage() {
       color: GROUP_COLORS[groups.length % GROUP_COLORS.length],
       importSource: 'project',
     };
-    addGroup(group);
-  }, [groups.length, addGroup, t]);
+    try {
+      for (const prepared of prepareWorkshopGroups([group], workshopContext)) addGroup(prepared);
+    } catch (error) { alert(error instanceof Error ? error.message : String(error)); }
+  }, [groups.length, addGroup, t, workshopContext]);
 
   /* ── Action: toggle group visibility ── */
   const handleToggleVisibility = useCallback(
@@ -150,9 +155,9 @@ export function HullWorkshopPage() {
   /* ── Action: import from a saved project ── */
   const handleImportFromSaved = useCallback(
     (newGroups: WorkshopGroup[]) => {
-      for (const g of newGroups) addGroup(g);
+      for (const g of prepareWorkshopGroups(newGroups, workshopContext)) addGroup(g);
     },
-    [addGroup],
+    [addGroup, workshopContext],
   );
 
   /* ── Action: export merged data as workshop CSV (with Group column + metadata) ── */
@@ -175,9 +180,9 @@ export function HullWorkshopPage() {
     async (file: File) => {
       try {
         const text = await file.text();
-        const archive: WorkshopJsonExport = JSON.parse(text);
+        const archive: WorkshopJsonExport = JSON.parse(text.replace(/^\uFEFF/, ''));
 
-        if (archive.type !== 'uspex-workshop') {
+        if (archive.type !== 'uspex-workshop' || archive.version !== 1 || !Array.isArray(archive.groups)) {
           alert(
             t('workshop.invalidJsonFormat', 'Invalid JSON format: {{detail}}', {
               detail: 'Not a valid workshop JSON file (missing or wrong type field)',
@@ -208,7 +213,7 @@ export function HullWorkshopPage() {
           importSource: 'json' as const,
         }));
 
-        for (const g of newGroups) {
+        for (const g of prepareWorkshopGroups(newGroups, workshopContext)) {
           addGroup(g);
         }
       } catch (err: unknown) {
@@ -219,60 +224,17 @@ export function HullWorkshopPage() {
         );
       }
     },
-    [groups.length, addGroup, t],
+    [groups.length, addGroup, t, workshopContext],
   );
 
   /* ── Action: add manual structure ── */
   const handleAddManual = useCallback(
     (data: ManualStructureData) => {
-      const wsElements = mergedSystemInfo?.elements
-        ?? useProjectStore.getState().systemInfo?.elements
-        ?? [];
-      const total = totalAtoms(data.composition) || 1;
-
-      const structure: Structure = {
-        id: Date.now() % 100000,
-        formula: data.composition.length > 0
-          ? buildFormula(data.composition, wsElements)
-          : 'Manual',
-        composition: [...data.composition],
-        enthalpy: data.enthalpy,
-        enthalpyTotal: data.enthalpy,
-        volume: 0,
-        volumeTotal: 0,
-        fitness: 0,
-        spaceGroup: data.spaceGroup,
-        hullX: wsElements.length === 2
-          ? [data.composition[1] / total]
-          : wsElements.length === 3
-            ? [data.composition[0] / total, data.composition[1] / total]
-            : wsElements.length >= 4
-              ? [data.composition[0] / total, data.composition[1] / total, data.composition[2] / total]
-              : [0],
-        hullY: 0,
-        eForm: 0,
-        eHullRecons: 0,
-        generation: 0,
-        origin: 'manual',
-        density: 0,
-        parentIds: [],
-        parentEnthalpy: 0,
-        paretoFront: 0,
-        // Manually added structures have no MLProperties row.
-        bulkModulus: ML_PROPERTY_MISSING,
-        shearModulus: ML_PROPERTY_MISSING,
-        youngModulus: ML_PROPERTY_MISSING,
-        poissonRatio: ML_PROPERTY_MISSING,
-        pughRatio: ML_PROPERTY_MISSING,
-        vickersHardness: ML_PROPERTY_MISSING,
-        fractureToughness: ML_PROPERTY_MISSING,
-        qEntropy: 0,
-        aOrder: 0,
-        sOrder: 0,
-        tags: [],
-        isUserAdded: true,
-        notes: data.notes,
-      };
+      const sysInfo = mergedSystemInfo ?? workshopContext;
+      if (!sysInfo) return;
+      const wsElements = sysInfo.elements;
+      const structure = manualWorkshopStructure(data, sysInfo,
+        Math.max(0, ...groups.flatMap(g => g.structures.map(s => s.id))) + 1);
 
       // Find or create "User Added" group
       const existing = groups.find((g) => g.importSource === 'manual');
@@ -280,14 +242,13 @@ export function HullWorkshopPage() {
         // Add to existing manual group
         const updated: WorkshopGroup = {
           ...existing,
-          structures: [...existing.structures, structure],
+          structures: [...existing.structures, remapWorkshopStructure(structure, sysInfo, existing.systemInfo)],
         };
         useWorkshopStore.setState({
           groups: groups.map((g) => g.id === existing.id ? updated : g),
         });
       } else {
         // Create new manual group
-        const sysInfo = useProjectStore.getState().systemInfo ?? mergedSystemInfo;
         const newGroup: WorkshopGroup = {
           id: crypto.randomUUID(),
           name: 'User Added',
@@ -320,7 +281,7 @@ export function HullWorkshopPage() {
         addGroup(newGroup);
       }
     },
-    [groups, addGroup, mergedSystemInfo],
+    [groups, addGroup, mergedSystemInfo, projectSystemInfo, workshopContext],
   );
 
   /* ── Action: structure click → open JSmol viewer with correct workshop structure ── */
@@ -393,16 +354,17 @@ export function HullWorkshopPage() {
 
   /* ── Workshop scope (for matching saved projects) ── */
   const workshopElements = useMemo(
-    () => mergedSystemInfo?.elements ?? useProjectStore.getState().systemInfo?.elements ?? [],
-    [mergedSystemInfo],
+    () => (mergedSystemInfo ?? workshopContext)?.elements ?? [],
+    [mergedSystemInfo, workshopContext],
   );
-  const workshopPressure = mergedSystemInfo?.externalPressure ?? 0;
+  const workshopPressure = workshopContext?.externalPressure ?? null;
   const currentProjectId = useProjectStore((s) => s.projectId);
 
   return (
     <div className="workshop-layout">
       {/* Left workspace sidebar */}
       <WorkspaceSidebar
+        context={workshopContext}
         groups={groups}
         hasData={hasData}
         structuresCount={hullResult?.structures.length ?? 0}

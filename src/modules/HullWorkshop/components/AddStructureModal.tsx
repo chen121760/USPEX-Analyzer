@@ -87,7 +87,7 @@ export function AddStructureModal({ open, elements, onClose, onAdd }: Props) {
 
   const enthalpyNum = parseFloat(enthalpy);
   const hasComposition = totalAtoms(composition) > 0;
-  const hasEnthalpy = !isNaN(enthalpyNum);
+  const hasEnthalpy = Number.isFinite(enthalpyNum);
   const canSubmit = hasComposition && hasEnthalpy;
 
   const handleSubmit = () => {

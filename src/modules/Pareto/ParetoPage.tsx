@@ -50,6 +50,7 @@ export function ParetoPage() {
   // ChartSettingsStore 里存的是普通数组（因为 Set 无法被 JSON 序列化存到 localStorage）
   // 这里把数组转回 Set，方便后面用 .has() 判断
   const selectedFronts = new Set(selectedFrontsArr);
+  const selectionInitialized = useChartSettingsStore(s => s.paretoSelectionInitialized);
 
   // 把 Set 转回数组再存进 ChartSettingsStore 的辅助函数
   const setSelectedFronts = (next: Set<number>) => {
@@ -58,10 +59,10 @@ export function ParetoPage() {
 
   // 数据加载后，如果还没有选中任何前沿，默认选前 3 个
   useEffect(() => {
-    if (selectedFrontsArr.length === 0 && frontNumbers.length > 0) {
+    if (!selectionInitialized && selectedFrontsArr.length === 0 && frontNumbers.length > 0) {
       setSelectedFrontsArr(frontNumbers.slice(0, 3));
     }
-  }, [frontNumbers]);
+  }, [frontNumbers, selectionInitialized, selectedFrontsArr, setSelectedFrontsArr]);
 
   const toggleFront = (n: number) => {
     const next = new Set(selectedFronts);
@@ -81,13 +82,15 @@ export function ParetoPage() {
     );
   };
 
+  const visibleStructures = structures.filter(s => selectedFronts.has(s.paretoFront)
+    && Number.isFinite(s.fitness) && s.fitness >= 0 && paretoKey != null && Number.isFinite(s.extraProps?.[paretoKey]));
   const traces: PlotlyData[] = [];
 
   if (paretoKey != null) {
     for (const front of frontNumbers) {
       if (!selectedFronts.has(front)) continue;
 
-      const pts = structures
+      const pts = visibleStructures
         .filter((s) => s.paretoFront === front && s.extraProps?.[paretoKey] != null)
         .sort((a, b) => (a.fitness ?? 0) - (b.fitness ?? 0));
 
@@ -110,7 +113,7 @@ export function ParetoPage() {
 
   // --- Mark overlay traces ---
   if (paretoKey != null) {
-    const allParetoVisible = structures.filter(
+    const allParetoVisible = visibleStructures.filter(
       (s) => s.paretoFront >= 0 && s.extraProps?.[paretoKey] != null,
     );
 
@@ -196,7 +199,7 @@ export function ParetoPage() {
     if (paretoKey == null) return;
     const selectedSorted = frontNumbers.filter((n) => selectedFronts.has(n));
     const series = selectedSorted.map((front) => {
-      const pts = structures
+      const pts = visibleStructures
         .filter((s) => s.paretoFront === front && s.extraProps?.[paretoKey] != null)
         .sort((a, b) => (a.fitness ?? 0) - (b.fitness ?? 0))
         .map((s) => ({
@@ -238,7 +241,7 @@ export function ParetoPage() {
         />
       </div>
 
-      <MarkPanel />
+      <MarkPanel visibleStructures={visibleStructures} />
 
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>

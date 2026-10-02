@@ -4,39 +4,14 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { openDB, type IDBPDatabase } from 'idb';
+import { getProjectDB, saveProjectSnapshot } from '@/lib/projectStorage';
+import { createSaveQueue, projectDataChanged } from '@/domain/project/persistence';
 import { useProjectStore } from '@/store/useProjectStore';
 import type { ProjectFile } from '@/types/structure';
 
-const DB_NAME = 'uspex-analyzer';
 const STORE_NAME = 'project-data';
 const KEY = 'current-session';
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-async function getDB(): Promise<IDBPDatabase> {
-  return openDB(DB_NAME, 2, {
-    upgrade(db) {
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
-      }
-      if (!db.objectStoreNames.contains('projects')) {
-        db.createObjectStore('projects', { keyPath: 'id' });
-      }
-    },
-  });
-}
-
-/**
- * Save current project state to IndexedDB.
- */
-async function saveToDB(project: ProjectFile): Promise<void> {
-  try {
-    const db = await getDB();
-    await db.put(STORE_NAME, { project, timestamp: Date.now() }, KEY);
-  } catch (e) {
-    console.warn('[usePersistence] Save failed:', e);
-  }
-}
 
 /**
  * Attempt to restore project from IndexedDB.
@@ -44,7 +19,7 @@ async function saveToDB(project: ProjectFile): Promise<void> {
  */
 async function restoreFromDB(): Promise<ProjectFile | null> {
   try {
-    const db = await getDB();
+    const db = await getProjectDB();
     const record = await db.get(STORE_NAME, KEY);
 
     if (!record || !record.project || !record.timestamp) return null;
@@ -62,7 +37,7 @@ async function restoreFromDB(): Promise<ProjectFile | null> {
  */
 export async function clearSavedSession(): Promise<void> {
   try {
-    const db = await getDB();
+    const db = await getProjectDB();
     await db.delete(STORE_NAME, KEY);
   } catch (e) {
     console.warn('[usePersistence] Clear failed:', e);
@@ -73,37 +48,30 @@ export async function clearSavedSession(): Promise<void> {
  * Hook: auto-save project to IndexedDB on changes (debounced 2s).
  */
 export function useAutoSave(): void {
-  const isDataLoaded = useProjectStore((s) => s.isDataLoaded);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   useEffect(() => {
-    if (!isDataLoaded) return;
-
-    // Debounce saves
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      const project = useProjectStore.getState().exportProjectFile();
-      saveToDB(project);
-    }, 2000);
-
-    return () => {
+    const enqueue = createSaveQueue(saveProjectSnapshot,
+      error => {
+        console.warn('[usePersistence] Save failed:', error);
+        useProjectStore.setState({ persistenceError: error instanceof Error ? error.message : String(error) });
+      }, snapshot => {
+        if (useProjectStore.getState().projectId === snapshot.projectId) useProjectStore.setState({ persistenceError: null });
+      });
+    const schedule = () => {
       if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [isDataLoaded]);
-
-  // Subscribe to structure/tag changes
-  useEffect(() => {
-    const unsub = useProjectStore.subscribe((state) => {
-      if (!state.isDataLoaded) return;
-
-      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = null;
+      const state = useProjectStore.getState();
+      if (!state.isDataLoaded || state.isLoading || !state.systemInfo) return;
       timerRef.current = setTimeout(() => {
-        const project = useProjectStore.getState().exportProjectFile();
-        saveToDB(project);
+        const current = useProjectStore.getState();
+        if (current.isDataLoaded && !current.isLoading && current.systemInfo) void enqueue(current.exportProjectFile());
       }, 2000);
+    };
+    schedule();
+    const unsub = useProjectStore.subscribe((state, previous) => {
+      if (projectDataChanged({ ...state }, { ...previous })) schedule();
     });
-
-    return unsub;
+    return () => { unsub(); if (timerRef.current) clearTimeout(timerRef.current); };
   }, []);
 }
 
@@ -134,6 +102,10 @@ export function useRestoreSession(): { restored: boolean; loading: boolean } {
           // Await: the boot screen stays up until the structures are in place.
           await loadProjectFile(project, { preserveFilters: true });
         }
+      })
+      .catch(error => {
+        console.warn('[usePersistence] Restore failed:', error);
+        useProjectStore.setState({ persistenceError: error instanceof Error ? error.message : String(error) });
       })
       .finally(() => {
         if (!cancelled) {

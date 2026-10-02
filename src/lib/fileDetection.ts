@@ -1,3 +1,4 @@
+import { validateProject } from '@/domain/project/validateProject';
 /**
  * Smart file type detection for USPEX output files.
  * Uses filename matching first, then content heuristics as fallback.
@@ -56,7 +57,8 @@ export function detectFileType(file: File, content: string): DetectedFile {
   // 2. JSON project file
   if (normalizedName.endsWith('.json')) {
     try {
-      const json = JSON.parse(content);
+      const json = JSON.parse(content.replace(/^\uFEFF/, ''));
+      validateProject(json);
       if (json.version && json.systemInfo && json.structures) {
         const info = FILE_INFO.project_json;
         return { ...base, type: 'project_json', confidence: 1.0, displayName: info.displayKey, description: info.descKey };

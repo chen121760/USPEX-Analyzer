@@ -143,7 +143,7 @@ export interface Structure {
   groupColor?: string;
 
   // --- Convex hull reconstruction ---
-  eForm: number;              // Formation enthalpy (eV/atom), -1 = unconverged
+  eForm: number;              // Formation energy; use formationEnergy() to distinguish missing from a physical -1.
   eHullRecons: number; // Distance to reconstructed hull (eV/atom), -1 = unconverged
 }
 

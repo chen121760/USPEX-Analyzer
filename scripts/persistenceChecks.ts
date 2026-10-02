@@ -27,6 +27,7 @@ function check(name: string, condition: boolean): void {
 }
 
 const systemInfo = {
+  systemType: 'ternary',
   compositionMode: 'varcomp',
   elements: ['Li', 'Y', 'Cl'],
   optimizationType: 'single',

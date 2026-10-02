@@ -1,3 +1,4 @@
+import { formationEnergy, formationEnergyUnit } from '@/domain/structure/formationEnergy';
 /**
  * 3D ternary phase diagram convex hull plot.
  *
@@ -74,7 +75,7 @@ export function TernaryHullPlot3D({
 
   const maxFitness = useMemo(() => {
     const vals = structures
-      .filter((s) => Number.isFinite(s.fitness) && s.fitness > 0 && s.enthalpyTotal <= 900)
+      .filter((s) => Number.isFinite(s.fitness) && s.fitness > 0 && s.enthalpyTotal <= 900 && formationEnergy(s, systemInfo) !== null)
       .map((s) => s.fitness);
     return vals.length > 0 ? Math.max(...vals) : 0;
   }, [structures]);
@@ -121,7 +122,7 @@ export function TernaryHullPlot3D({
         : composition;
     const validStructures = structures.filter(
       (s) =>
-        s.enthalpyTotal <= 900 &&
+        s.enthalpyTotal <= 900 && formationEnergy(s, systemInfo) !== null &&
         !isNaN(s.enthalpy) &&
         (compositionBasis.length === 0 || toPlotComposition(s.composition).length === 3),
     );
@@ -146,7 +147,7 @@ export function TernaryHullPlot3D({
         return {
           id: s.id,
           composition: plotComposition,
-          eForm: s.eForm !== undefined && s.eForm !== -1 ? s.eForm : s.enthalpy,
+          eForm: (formationEnergy(s, systemInfo) ?? Number.NaN),
           cartX: cx,
           cartY: cy,
           _mergeSeq: (s as any)._mergeSeq,
@@ -197,7 +198,7 @@ export function TernaryHullPlot3D({
       return {
         id: s.id,
         composition: plotComposition,
-        eForm: s.eForm !== undefined && s.eForm !== -1 ? s.eForm : s.enthalpy,
+        eForm: (formationEnergy(s, systemInfo) ?? Number.NaN),
         cartX: cx,
         cartY: cy,
         _mergeSeq: (s as any)._mergeSeq,
@@ -224,14 +225,14 @@ export function TernaryHullPlot3D({
       s: Structure;
     }[] = userAdded.map((s) => {
       const [cx, cy] = ternaryToCartesian(toPlotComposition(s.composition));
-      const ef = s.eForm !== undefined && s.eForm !== -1 ? s.eForm : s.enthalpy;
+      const ef = (formationEnergy(s, systemInfo) ?? Number.NaN);
       return { id: s.id, cartX: cx, cartY: cy, eForm: ef, s };
     });
 
     // Min eForm for reference plane
     const allEForms = [
       ...uniqueStable.map((p) => p.eForm),
-      ...unstableWithCoords.map((s) => s.eForm !== undefined && s.eForm !== -1 ? s.eForm : s.enthalpy),
+      ...unstableWithCoords.map((s) => (formationEnergy(s, systemInfo) ?? Number.NaN)),
     ].filter((v) => isFinite(v));
     const minEForm = allEForms.length > 0 ? Math.min(...allEForms) : 0;
 
@@ -288,7 +289,7 @@ export function TernaryHullPlot3D({
           ? `Group: ${s?.groupName ?? groupMap?.get(id) ?? '-'}<br>`
           : '') +
         `EA${id}: ${formulaToHtml(s?.formula ?? fallbackFormula)}<br>` +
-        `E_form: ${s?.eForm !== undefined && s?.eForm !== -1 ? s.eForm.toFixed(4) : s?.enthalpy.toFixed(4) ?? '-'} eV/atom<br>` +
+        `E_form: ${formationEnergy(s, systemInfo)?.toFixed(4) ?? '—'} ${formationEnergyUnit(systemInfo)}<br>` +
         `Fitness: ${s?.fitness.toFixed(4) ?? '-'} eV/block<br>` +
         `SG: ${s?.spaceGroup ?? '-'} | Gen: ${s?.generation ?? '-'}<br>` +
         `Origin: ${s?.origin ?? '-'}`
@@ -304,7 +305,7 @@ export function TernaryHullPlot3D({
       map.set(s.id, {
         cartX: s.cartX,
         cartY: s.cartY,
-        eForm: s.eForm !== undefined && s.eForm !== -1 ? s.eForm : s.enthalpy,
+        eForm: (formationEnergy(s, systemInfo) ?? Number.NaN),
       });
     for (const p of uniqueStableFull)
       map.set(p.id, { cartX: p.cartX, cartY: p.cartY, eForm: p.eForm });
@@ -501,7 +502,7 @@ export function TernaryHullPlot3D({
       x: unstableWithCoords.map((s) => s.cartX),
       y: unstableWithCoords.map((s) => s.cartY),
       z: unstableWithCoords.map((s) =>
-        s.eForm !== undefined && s.eForm !== -1 ? s.eForm : s.enthalpy,
+        (formationEnergy(s, systemInfo) ?? Number.NaN),
       ),
       mode: 'markers',
       name: 'Unstable',
@@ -533,7 +534,7 @@ export function TernaryHullPlot3D({
           ? `Group: ${s.groupName ?? groupMap?.get(s.id) ?? '-'}<br>`
           : '') +
         `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
-        `E_form: ${s.eForm !== undefined && s.eForm !== -1 ? s.eForm.toFixed(4) : s.enthalpy.toFixed(4)} eV/atom<br>` +
+        `E_form: ${formationEnergy(s, systemInfo)?.toFixed(4) ?? '—'} ${formationEnergyUnit(systemInfo)}<br>` +
         `Fitness: ${s.fitness.toFixed(4)} eV/block<br>` +
         `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>` +
         `Origin: ${s.origin}`,
@@ -562,7 +563,7 @@ export function TernaryHullPlot3D({
             ? `Group: ${s?.groupName ?? groupMap?.get(p.id) ?? '-'}<br>`
             : '') +
           `EA${p.id}: ${formulaToHtml(s?.formula ?? '')}<br>` +
-          `E_form: ${p.eForm.toFixed(4)} eV/atom<br>` +
+          `E_form: ${p.eForm.toFixed(4)} ${formationEnergyUnit(systemInfo)}<br>` +
           `Fitness: 0.0000 eV/block<br>` +
           `SG: ${s?.spaceGroup ?? '-'} | Gen: ${s?.generation ?? '-'}<br>` +
           `Origin: ${s?.origin ?? '-'}`
@@ -592,7 +593,7 @@ export function TernaryHullPlot3D({
           `[Manual]<br>` +
           (s.groupName ? `Group: ${s.groupName}<br>` : '') +
           `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
-          `E_form: ${u.eForm.toFixed(4)} eV/atom<br>` +
+          `E_form: ${u.eForm.toFixed(4)} ${formationEnergyUnit(systemInfo)}<br>` +
           `Fitness: ${s.fitness.toFixed(4)} eV/block`
         );
       }),
@@ -633,7 +634,7 @@ export function TernaryHullPlot3D({
         range: [-0.2, Math.sqrt(3) / 2 + 0.2],
       },
       zaxis: {
-        title: { text: `E_form (${systemInfo.compositionBasis?.length ? 'eV/block' : 'eV/atom'})` },
+        title: { text: `E_form (${formationEnergyUnit(systemInfo)})` },
         showspikes: false,
         // The z axis stays visible, so it carries the theme colours the 2D
         // charts pass; without them the adapter falls back to the light
@@ -712,7 +713,7 @@ export function TernaryHullPlot3D({
     const elA = components[0] || 'A';
     const elB = components[1] || 'B';
     const elC = components[2] || 'C';
-    const energyUnit = systemInfo.compositionBasis?.length ? 'eV/block' : 'eV/atom';
+    const energyUnit = formationEnergyUnit(systemInfo);
     const hasGroup =
       groupMap != null || structures.some((s) => s.groupName != null);
     const groupCol = hasGroup ? ['Group'] : [];
@@ -756,7 +757,7 @@ export function TernaryHullPlot3D({
         : s.composition;
       const total = exportComposition.reduce((a: number, b: number) => a + b, 0) || 1;
       const ef =
-        s.eForm !== undefined && s.eForm !== -1 ? s.eForm : s.enthalpy;
+        (formationEnergy(s, systemInfo) ?? Number.NaN);
       return {
         ...(hasGroup ? { Group: s.groupName ?? '' } : {}),
         EA_ID: s.id,
@@ -886,7 +887,7 @@ export function TernaryHullPlot3D({
                     padding: '3px 10px',
                   }}
                 >
-                  EA{p.id} · {formula} · {p.eForm.toFixed(4)} eV/atom
+                  EA{p.id} · {formula} · {p.eForm.toFixed(4)} {formationEnergyUnit(systemInfo)}
                 </span>
               );
             })}

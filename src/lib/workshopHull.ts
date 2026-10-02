@@ -79,10 +79,36 @@ export function computeGeometricHull(
     return { structures, hullLine: [], hullEdges: [] };
   }
 
+  // Fixed-composition ranking uses relative per-atom enthalpy; pure references
+  // are unnecessary. Different stoichiometries get independent minima.
+  if (compositionMode === 'fixed') {
+    const minima = new Map<string, number>();
+    const keyOf = (s: Structure) => {
+      const total = totalAtoms(s.composition);
+      return s.composition.map(n => (n / total).toFixed(10)).join(',');
+    };
+    const valid = structures.filter(s => Number.isFinite(s.enthalpyTotal) && s.enthalpyTotal <= 900 && totalAtoms(s.composition) > 0);
+    for (const s of valid) {
+      s.enthalpy = s.enthalpyTotal / totalAtoms(s.composition);
+      if (!s.isUserAdded) minima.set(keyOf(s), Math.min(minima.get(keyOf(s)) ?? Infinity, s.enthalpy));
+    }
+    let expanded = false;
+    for (const s of valid) {
+      const key = keyOf(s);
+      if (s.isUserAdded && s.enthalpy < (minima.get(key) ?? Infinity)) expanded = true;
+      minima.set(key, Math.min(minima.get(key) ?? Infinity, s.enthalpy));
+    }
+    for (const s of structures) s.fitness = s.eHullRecons = -1;
+    for (const s of valid) s.fitness = s.eHullRecons = Math.max(0, s.enthalpy - minima.get(keyOf(s))!);
+    return { structures, hullExpanded: expanded };
+  }
+
   if (declaredBasis && !basisUsable) {
     // Linearly dependent composition blocks: E_form is not defined.
     for (const s of structures) {
       s.eForm = -1;
+      s.eHullRecons = -1;
+      s.hullY = Number.NaN;
       s.fitness = -1;
     }
     return { structures, hullLine: [], hullEdges: [] };
@@ -106,6 +132,8 @@ export function computeGeometricHull(
       : computeFormationEnthalpyWith(s, references, compositionBasis);
     if (formation === null) {
       s.eForm = -1;
+      s.eHullRecons = -1;
+      s.hullY = Number.NaN;
       s.fitness = -1;
       undefinedFormation.add(s);
     } else {
@@ -115,27 +143,6 @@ export function computeGeometricHull(
   }
 
   ensureHullX(structures, elements, plotBasis);
-
-  if (compositionMode === 'fixed') {
-    const valid = structures.filter((s) => !s.isUserAdded && s.enthalpyTotal <= 900);
-    const eForms = valid.map((s) => s.eForm).filter((e) => isFinite(e));
-    const minEForm = eForms.length > 0 ? Math.min(...eForms) : 0;
-    const allValid = structures.filter((s) => s.enthalpyTotal <= 900);
-    for (const s of allValid) {
-      s.fitness = s.eForm - minEForm;
-    }
-    // Recompute if user-added lowered the minimum
-    const user = allValid.filter((s) => s.isUserAdded);
-    const minUA = user.length > 0 ? Math.min(...user.map((s) => s.eForm)) : Infinity;
-    if (minUA < minEForm) {
-      const newMin = Math.min(minEForm, minUA);
-      for (const s of allValid) {
-        s.fitness = s.eForm - newMin;
-      }
-      return { structures, hullExpanded: true };
-    }
-    return { structures };
-  }
 
   if (systemType === 'binary') {
     const valid = structures.filter((s) => !s.isUserAdded && s.enthalpyTotal <= 900 && !undefinedFormation.has(s));

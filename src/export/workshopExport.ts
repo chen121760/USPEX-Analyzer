@@ -1,3 +1,5 @@
+import { remapWorkshopStructure } from '@/domain/hull/workshopCompatibility';
+import { formationEnergy } from '@/domain/structure/formationEnergy';
 import type { Structure, SystemInfo } from '@/types/structure';
 import type { WorkshopGroup, WorkshopJsonExport, WorkshopJsonStructure } from '@/modules/HullWorkshop/types';
 import { buildCsvText, type CsvRow } from './csvExport';
@@ -63,7 +65,7 @@ export function buildWorkshopJsonExport(
     groups: visibleGroups.map((group) => ({
       name: group.name,
       color: group.color,
-      structures: group.structures.map((structure) => structureToWorkshopJson(structure)),
+      structures: group.structures.map((structure) => structureToWorkshopJson(remapWorkshopStructure(structure, group.systemInfo, systemInfo))),
     })),
   };
 }
@@ -78,6 +80,8 @@ export function downloadWorkshopJson(systemInfo: SystemInfo, visibleGroups: Work
 export function structureToWorkshopJson(s: Structure): WorkshopJsonStructure {
   return {
     id: s.id,
+    isUserAdded: s.isUserAdded,
+    symmetry: s.symmetry,
     formula: s.formula,
     composition: s.composition,
     generation: s.generation,
@@ -131,7 +135,7 @@ export function workshopJsonToStructure(js: WorkshopJsonStructure): Structure {
     hullX: js.hullX,
     hullY: js.hullY,
     eForm: js.eForm,
-    eHullRecons: js.eHullRecons ?? 0,
+    eHullRecons: js.eHullRecons ?? -1,
     density: js.density,
     extraProps: js.extraProps,
     parentIds: js.parentIds ?? [],
@@ -152,7 +156,8 @@ export function workshopJsonToStructure(js: WorkshopJsonStructure): Structure {
     poscarData: js.poscarData,
     tags: js.tags ?? [],
     notes: js.notes ?? '',
-    isUserAdded: false,
+    isUserAdded: js.isUserAdded ?? js.origin === 'manual',
+    symmetry: js.symmetry,
   });
 }
 
@@ -191,7 +196,7 @@ function buildWorkshopCsvRows(
         'EA_ID': s.id,
         'Formula': s.formula,
         [`x(${elB})`]: s.hullX?.[0] ?? 0,
-        [`Formation_Energy(${energyUnit})`]: s.hullY,
+        [`Formation_Energy(${energyUnit})`]: formationEnergy(s, systemInfo) ?? '',
         'Enthalpy(eV/atom)': s.enthalpy,
         'Fitness(eV/block)': s.fitness,
       })),
@@ -217,7 +222,7 @@ function buildWorkshopCsvRows(
         [`x_${elA}`]: (exportComposition[0] / total).toFixed(6),
         [`x_${elB}`]: (exportComposition[1] / total).toFixed(6),
         [`x_${elC}`]: (exportComposition[2] / total).toFixed(6),
-        [`E_form(${energyUnit})`]: s.eForm,
+        [`E_form(${energyUnit})`]: formationEnergy(s, systemInfo) ?? '',
         'Fitness(eV/block)': s.fitness ?? 0,
       };
     }),

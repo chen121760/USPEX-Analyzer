@@ -1,3 +1,4 @@
+import { formationEnergy, formationEnergyUnit } from '@/domain/structure/formationEnergy';
 /**
  * 3D tetrahedron phase diagram for quaternary systems.
  *
@@ -82,7 +83,7 @@ function buildTetraWireframe(): { x: (number | null)[]; y: (number | null)[]; z:
 interface ThermoHullInput {
   id: number;
   composition: number[];   // atom counts [nA, nB, nC, nD]
-  enthalpy: number;        // eV/atom
+  enthalpy: number;        // ${formationEnergyUnit(systemInfo)}
   formula: string;
 }
 
@@ -450,7 +451,7 @@ export function QuaternaryHullPlot3D({
   // ── Fitness slider ──
   const maxFitness = useMemo(() => {
     const vals = structures
-      .filter((s) => s.fitness > 0 && s.enthalpyTotal <= 900)
+      .filter((s) => s.fitness > 0 && s.enthalpyTotal <= 900 && formationEnergy(s, systemInfo) !== null)
       .map((s) => s.fitness);
     return vals.length > 0 ? Math.max(...vals) : 1;
   }, [structures]);
@@ -512,7 +513,7 @@ export function QuaternaryHullPlot3D({
     const nonUser = structures.filter(
       (s) =>
         !s.isUserAdded &&
-        s.enthalpyTotal <= 900 &&
+        s.enthalpyTotal <= 900 && formationEnergy(s, systemInfo) !== null &&
         !isNaN(s.enthalpy) &&
         toPlotComposition(s.composition).length === 4,
     );
@@ -522,7 +523,7 @@ export function QuaternaryHullPlot3D({
         id: s.id,
         composition: toPlotComposition(s.composition),
         enthalpy:
-          s.eForm !== undefined && s.eForm !== -1 ? s.eForm : s.enthalpy,
+          (formationEnergy(s, systemInfo) ?? Number.NaN),
         formula: s.formula,
       }));
     // Try 4D thermodynamic lower hull first; fall back to 3D compositon-space hull.
@@ -560,7 +561,7 @@ export function QuaternaryHullPlot3D({
         : composition;
     const validStructures = structures.filter(
       (s) =>
-        s.enthalpyTotal <= 900 &&
+        s.enthalpyTotal <= 900 && formationEnergy(s, systemInfo) !== null &&
         !isNaN(s.enthalpy) &&
         toPlotComposition(s.composition).length === 4,
     );
@@ -568,7 +569,7 @@ export function QuaternaryHullPlot3D({
 
     /** Hull-consistent enthalpy: matches the value used by hullSurface. */
     const hullEnthalpy = (s: Structure): number =>
-      s.eForm !== undefined && s.eForm !== -1 ? s.eForm : s.enthalpy;
+      (formationEnergy(s, systemInfo) ?? Number.NaN);
 
     // Stable/unstable classification from USPEX's fitness, consistent with
     // BinaryHullPlot and TernaryHullPlot3D.
@@ -656,7 +657,7 @@ export function QuaternaryHullPlot3D({
           ? `Group: ${s?.groupName ?? groupMap?.get(id) ?? '-'}<br>`
           : '') +
         `EA${id}: ${formulaToHtml(s?.formula ?? fallbackFormula)}<br>` +
-        `Enthalpy: ${(s?.eForm !== undefined && s?.eForm !== -1 ? s?.eForm : s?.enthalpy)?.toFixed(4) ?? '-'} eV/atom<br>` +
+        `Enthalpy: ${formationEnergy(s, systemInfo)?.toFixed(4) ?? '—'} ${formationEnergyUnit(systemInfo)}<br>` +
         `Fitness: ${s?.fitness.toFixed(4) ?? '-'} eV/block<br>` +
         `SG: ${s?.spaceGroup ?? '-'} | Gen: ${s?.generation ?? '-'}<br>` +
         `Origin: ${s?.origin ?? '-'}`
@@ -965,7 +966,7 @@ export function QuaternaryHullPlot3D({
     const components = systemInfo.componentLabels?.length === 4
       ? systemInfo.componentLabels
       : systemInfo.elements.slice(0, 4);
-    const energyUnit = systemInfo.compositionBasis?.length ? 'eV/block' : 'eV/atom';
+    const energyUnit = formationEnergyUnit(systemInfo);
     const tag = fitnessMax.toFixed(3).replace('.', 'p');
     const headers = ['EA', 'Formula', 'Composition', `E_form(${energyUnit})`, 'Fitness(eV/block)', 'SpaceGroup', 'Generation', 'Origin'];
     const rows = allPts.map((p) => ({

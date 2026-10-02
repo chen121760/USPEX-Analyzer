@@ -1,3 +1,5 @@
+import { workshopCompatibilityError } from '@/domain/hull/workshopCompatibility';
+import type { SystemInfo } from '@/types/structure';
 /**
  * Modal for importing structures from saved projects into the Hull Workshop.
  *
@@ -24,7 +26,8 @@ interface Props {
   /** Elements of the current workshop context (for matching) */
   elements: string[];
   /** External pressure of the current workshop context (for matching) */
-  pressure: number;
+  pressure: number | null;
+  context?: SystemInfo | null;
   /** Current project id (excluded from the list) */
   currentProjectId: string;
   /** Number of existing groups (for color rotation) */
@@ -60,6 +63,7 @@ export function ImportProjectModal({
   open,
   elements,
   pressure,
+  context,
   currentProjectId,
   groupsCount,
   onClose,
@@ -98,13 +102,13 @@ export function ImportProjectModal({
       const sysInfo = p.project.systemInfo;
       if (!sysInfo) return false;
       if (!sameElements(elements, sysInfo.elements ?? [])) return false;
-      const p1 = pressure ?? 0;
-      const p2 = sysInfo.externalPressure ?? 0;
-      if (Math.abs(p1 - p2) > 0.001) return false;
+      if (context && workshopCompatibilityError(sysInfo, context)) return false;
+      const p1 = pressure, p2 = sysInfo.externalPressure;
+      if ((p1 == null) !== (p2 == null) || (p1 != null && p2 != null && Math.abs(p1 - p2) > 0.001)) return false;
       if (currentProjectId && p.id === currentProjectId) return false;
       return true;
     });
-  }, [allProjects, elements, pressure, currentProjectId]);
+  }, [allProjects, elements, pressure, currentProjectId, context]);
 
   // Toggle a project in the selection set
   const toggleProject = (projectId: string) => {

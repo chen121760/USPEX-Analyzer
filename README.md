@@ -1,4 +1,4 @@
-# USPEX Analyzer —— v1.4.3
+# USPEX Analyzer —— v1.5.3
 
 A browser-based analysis tool for USPEX crystal structure prediction outputs. Supports 3D bulk, 2D structure search, and variable/fixed-composition calculations. **Now compatible with both USPEX 10.5/10.6 and USPEX 25** — the tool auto-detects your data format and adapts file requirements accordingly. Upload your USPEX output files and interactively explore, visualize, filter, and export your results — all without installing anything.
 
@@ -9,15 +9,15 @@ A browser-based analysis tool for USPEX crystal structure prediction outputs. Su
 ## Features
 
 - Data Table — Sortable, searchable table with all structure properties merged from multiple files
-- Convex Hull — Interactive 2D convex hull (tie-line projection), **3D ternary phase diagram** (full convex hull with mesh3d surface, wireframe, and rotation), and **3D quaternary tetrahedron phase diagram**, plus a fitness slider and numerical input shared between ternary views. The 2D ternary view provides explicit triangle zoom, pan, zoom in/out, back and reset controls. Local corners show their actual compositions; points and tie lines are clipped to the selected equilateral triangle without masking the color bar. Filtered CSV exports include manual structures; PNG exports match the current view. Mark controls and stable-phase details are expandable.
-- **Hull Workshop** — Merge multi-group data into a unified convex hull; add fixed-composition calculations to refine the hull or compute hull energies for all structures against a combined reference. Supports importing from current project, saved projects (multi-select), and JSON files. **Manually add a structure** (composition + enthalpy) to instantly test whether it expands (lowers) the convex hull — if it does, the chart shows the new hull as a solid line and the previous hull as a dashed line; all internal structures' fitness values are recalculated against the expanded hull. Ideal for exploring "what-if" candidate phases or incorporating known compounds from literature
+- Convex Hull — Explore binary, ternary, and quaternary phase diagrams, switch between 2D and 3D ternary views, and filter structures by fitness. Zoom into a triangular composition region, pan, return to a previous view, or reset. Inspect stable phases, mark candidates, and export charts and data.
+- **Hull Workshop** — Combine calculation results for the same element system, pressure, and composition blocks. Import the current project, select saved projects, or load a workshop JSON file. Add candidate structures by composition and enthalpy to evaluate their stability; compare the original and expanded hulls as dashed and solid lines. Fixed-composition groups provide relative-energy rankings.
 - Pareto Front — Multi-objective Pareto front visualization (auto-detected)
 - Explorer — Universal scatter plot with color mapping, dual-range slider filter, autoplay, and GIF export
 - HV Tracker — On-the-fly Pareto front computation on any two axes with hypervolume-vs-generation convergence tracking
 - Genealogy — View the parent and offspring relationships of any structure
 - Tags — Label structures as Candidate / To Verify / Excluded / custom tags
-- Filter & Export — Query builder with AND/OR conditions, supports system type filtering (unary/binary/ternary/quaternary), element fraction filtering, export as .zip / seeds / .csv
-- **Export Data** — Every chart has a one-click Export Data button that downloads the currently visible data as an Origin-compatible CSV, respecting all active filters
+- Filter & Export — Select structures using AND/OR conditions, tags, component counts, and element fractions, then export the selection as .zip / seeds / .csv / .json.
+- **Export Data** — Download chart datasets as Origin-compatible CSV files using the selected fitness range, color range, or Pareto fronts. Export PNG images of the current chart view.
 - Project Save/Load — Save all data + annotations as .json, reload anytime
 - Times New Roman typography for all Latin text and numbers across the UI and charts
 - **Page Guide** — Right-side guide drawer with feature overview and background knowledge for key pages; guide state is project-wide and remembered across pages

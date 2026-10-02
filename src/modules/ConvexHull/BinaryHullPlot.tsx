@@ -1,3 +1,4 @@
+import { formationEnergy, formationEnergyUnit } from '@/domain/structure/formationEnergy';
 /**
  * Binary 2D convex hull plot — extracted from original ConvexHullPage.
  * Uses hullX[0] as the X coordinate (composition) and the formation energy
@@ -72,7 +73,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
   const allTags         = useProjectStore((s) => s.tags);
 
   const maxFitness = useMemo(() => {
-    const vals = structures.filter((s) => s.fitness > 0 && s.enthalpyTotal <= 900).map((s) => s.fitness);
+    const vals = structures.filter((s) => s.fitness > 0 && s.enthalpyTotal <= 900 && formationEnergy(s, systemInfo) !== null).map((s) => s.fitness);
     return vals.length > 0 ? Math.max(...vals) : 1;
   }, [structures]);
 
@@ -87,25 +88,24 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
    * The legacy `hullY` field must not be plotted: for rows that only exist in
    * Individuals it holds the raw per-atom enthalpy (a different gauge), so the
    * scatter would mix two scales and everything below the axis minimum would be
-   * clipped away. Falls back to the raw enthalpy only when the reference
-   * potential was unavailable (eForm = -1), matching the ternary plots.
+   * clipped away. Structures with unavailable references have no plotted energy.
    */
   const energyOf = (s: Structure) =>
-    s.eForm !== undefined && s.eForm !== -1 ? s.eForm : s.enthalpy;
+    (formationEnergy(s, systemInfo) ?? Number.NaN);
 
   const plotData = useMemo(() => {
-    const userAdded = structures.filter((s) => s.isUserAdded && s.enthalpyTotal <= 900);
-    const stable = structures.filter((s) => !s.isUserAdded && s.fitness === 0 && s.enthalpyTotal <= 900);
-    const unstable = structures.filter((s) => !s.isUserAdded && s.fitness > 0 && s.fitness <= fitnessMax && s.enthalpyTotal <= 900);
+    const userAdded = structures.filter((s) => s.isUserAdded && s.enthalpyTotal <= 900 && formationEnergy(s, systemInfo) !== null);
+    const stable = structures.filter((s) => !s.isUserAdded && s.fitness === 0 && s.enthalpyTotal <= 900 && formationEnergy(s, systemInfo) !== null);
+    const unstable = structures.filter((s) => !s.isUserAdded && s.fitness > 0 && s.fitness <= fitnessMax && s.enthalpyTotal <= 900 && formationEnergy(s, systemInfo) !== null);
     // Hull computation: include ALL fitness=0 structures, including user-added ones
     // that expanded the hull.  Display layers stay separate.
     const hullPoints = structures
-      .filter((s) => s.fitness === 0 && s.enthalpyTotal <= 900)
+      .filter((s) => s.fitness === 0 && s.enthalpyTotal <= 900 && formationEnergy(s, systemInfo) !== null)
       .map((s) => ({ x: s.hullX[0] ?? 0, y: energyOf(s) }))
       .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
     const hullLine = computeLowerHull2D(hullPoints);
     return { stable, unstable, userAdded, hullLine };
-  }, [structures, fitnessMax]);
+  }, [structures, fitnessMax, systemInfo]);
 
   const { stable, unstable, userAdded, hullLine } = plotData;
   const elements = systemInfo.elements;
@@ -114,7 +114,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
     : elements.slice(0, 2);
   const componentA = components[0] || 'A';
   const componentB = components[1] || 'B';
-  const formationUnit = systemInfo.compositionBasis?.length ? 'eV/block' : 'eV/atom';
+  const formationUnit = formationEnergyUnit(systemInfo);
   const getStructureHoverText = (s: Structure) =>
     (s.groupName || groupMap ? `Group: ${s.groupName ?? groupMap?.get(s.id) ?? '—'}<br>` : '') +
     `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +

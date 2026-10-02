@@ -5,7 +5,7 @@ const DB_NAME = 'uspex-analyzer';
 const STORE = 'projects';
 const MAX_RECENT = 10;
 
-function getDB() {
+export function getProjectDB() {
   return openDB(DB_NAME, 2, {
     upgrade(db) {
       if (!db.objectStoreNames.contains('projects')) {
@@ -16,6 +16,18 @@ function getDB() {
       }
     },
   });
+}
+
+/** Session and named-project records share one transaction and one snapshot. */
+export async function saveProjectSnapshot(project: ProjectFile): Promise<void> {
+  const db = await getProjectDB();
+  const tx = db.transaction(['project-data', 'projects'], 'readwrite');
+  const writes = [tx.objectStore('project-data').put({ project, timestamp: Date.now() }, 'current-session')];
+  if (project.projectName) {
+    writes.push(tx.objectStore('projects').put({ id: project.projectId ?? makeProjectId(), name: project.projectName,
+      savedAt: new Date().toISOString(), project }));
+  }
+  await Promise.all([...writes, tx.done]);
 }
 
 export interface StoredProject {
@@ -31,7 +43,7 @@ export function makeProjectId(): string {
 
 /** 保存或覆盖一个项目 */
 export async function saveProject(project: ProjectFile, projectName: string): Promise<void> {
-  const db = await getDB();
+  const db = await getProjectDB();
   // Use the stable projectId embedded in the file; fall back to generating one
   const id = project.projectId ?? makeProjectId();
   const record: StoredProject = {
@@ -45,7 +57,7 @@ export async function saveProject(project: ProjectFile, projectName: string): Pr
 
 /** 读取所有历史项目，按时间倒序 */
 export async function loadRecentProjects(): Promise<StoredProject[]> {
-  const db = await getDB();
+  const db = await getProjectDB();
   const all = await db.getAll(STORE);
   return all
     .sort((a, b) => b.savedAt.localeCompare(a.savedAt))
@@ -54,20 +66,20 @@ export async function loadRecentProjects(): Promise<StoredProject[]> {
 
 /** 删除一个历史项目 */
 export async function deleteProject(id: string): Promise<void> {
-  const db = await getDB();
+  const db = await getProjectDB();
   await db.delete(STORE, id);
 }
 
 /** 列出所有已存项目（不限制数量），按时间倒序 */
 export async function listAllProjects(): Promise<StoredProject[]> {
-  const db = await getDB();
+  const db = await getProjectDB();
   const all = await db.getAll(STORE);
   return all.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
 }
 
 /** 按 projectId 加载单个项目 */
 export async function loadProjectById(id: string): Promise<StoredProject | null> {
-  const db = await getDB();
+  const db = await getProjectDB();
   const record = await db.get(STORE, id);
   return record ?? null;
 }

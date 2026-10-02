@@ -1,3 +1,4 @@
+import { filteredProject } from '@/domain/project/filteredProject';
 import { useMemo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
@@ -153,7 +154,7 @@ export function FilterPage() {
     } else if (exportFormat === 'csv') {
       downloadBlob(new Blob([structuresToCSV(sortedStructures, { hasPareto, hasML, hasFingerprint })], { type: 'text/csv' }), 'structures.csv');
     } else if (exportFormat === 'json') {
-      const project = useProjectStore.getState().exportProjectFile();
+      const project = filteredProject(useProjectStore.getState().exportProjectFile(), sortedStructures);
       downloadBlob(new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' }), `uspex-project-${systemInfo?.elements.join('-') ?? 'data'}.json`);
     }
   }, [sortedStructures, exportFormat, nameParts, customNameParts, secondObjPrefix, hasPareto, hasML, hasFingerprint, systemInfo]);

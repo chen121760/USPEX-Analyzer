@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import type { DetectedFile, USPEXFileType, ProjectFile } from '@/types/structure';
 import { useEffect } from 'react';
-import { loadRecentProjects, deleteProject, saveProject, type StoredProject } from '@/lib/projectStorage';
+import { loadRecentProjects, deleteProject, type StoredProject } from '@/lib/projectStorage';
 import { Clock, Trash2 } from 'lucide-react';
 import { UspexLogo } from '@/components/Logo/UspexLogo';
 import { QuickPackCommand } from '@/components/QuickPackCommand';
@@ -164,11 +164,10 @@ export function UploadPage() {
         // Check for project file
         if (detected.type === 'project_json') {
           try {
-            const project: ProjectFile = JSON.parse(content);
+            const project: ProjectFile = JSON.parse(content.replace(/^\uFEFF/, ''));
             await loadProjectFile(project);
             const name = project.projectName || file.name.replace(/\.json$/i, '') || 'Imported Project';
             setProjectName(name);
-            saveProject(project, name);
             navigate('/dashboard');
             return;
           } catch {
@@ -274,7 +273,6 @@ export function UploadPage() {
       await loadProjectFile(project);
       const name = project.projectName || 'Sample';
       setProjectName(name);
-      saveProject(project, name);
       navigate('/dashboard');
     } catch (e) {
       setErrors([`Failed to load sample: ${e}`]);

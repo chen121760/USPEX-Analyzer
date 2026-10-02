@@ -67,7 +67,7 @@ function cloneSymmetry(value: SymmetryAnalysis | undefined): SymmetryAnalysis | 
  * in-app shape while preserving dynamic scientific fields.
  */
 export function normalizeStructure(structure: StructureLike): Structure {
-  const enthalpy = structure.enthalpy ?? 0;
+  const enthalpy = structure.enthalpy === null ? Number.NaN : structure.enthalpy ?? 0;
   const volume = structure.volume ?? 0;
 
   return {
@@ -77,7 +77,7 @@ export function normalizeStructure(structure: StructureLike): Structure {
     generation: structure.generation ?? 0,
 
     enthalpy,
-    enthalpyTotal: structure.enthalpyTotal ?? enthalpy,
+    enthalpyTotal: structure.enthalpyTotal === null ? Number.NaN : structure.enthalpyTotal ?? enthalpy,
     volume,
     volumeTotal: structure.volumeTotal ?? volume,
     fitness: structure.fitness ?? -1,

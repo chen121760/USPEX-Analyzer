@@ -181,7 +181,7 @@ check('the binary plot does not read the mixed-gauge hullY field',
 check('the binary plot does not clamp the energy axis at zero',
   !plotSource.includes('range: [-0.001'), 'a y-axis floor hides every stable compound');
 check('the binary plot plots the formation energy',
-  plotSource.includes('energyOf(s)') && plotSource.includes('s.eForm'));
+  plotSource.includes('energyOf(s)') && plotSource.includes('formationEnergy(s, systemInfo)'));
 
 console.log(
   `\n${failures.length === 0 ? 'PASS' : 'FAIL'}: ${passed} check(s) passed, ${failures.length} failed`,

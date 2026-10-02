@@ -1,3 +1,4 @@
+import { validateProject } from '@/domain/project/validateProject';
 /**
  * Main project data store (Zustand).
  *
@@ -20,7 +21,7 @@ import type {
   AxisRangeSetting,
 } from '@/types/structure';
 import { parseAllFiles, type ParseResult } from '@/parsers';
-import { saveProject, makeProjectId } from '@/lib/projectStorage';
+import { makeProjectId } from '@/lib/projectStorage';
 import { useUIStore } from '@/store/useUIStore';
 import { resetProjectScopedState } from '@/store/resetProjectScopedState';
 import {
@@ -33,20 +34,6 @@ import { normalizeStructure, normalizeStructures } from '@/domain/structure/norm
 import { ML_PROPERTY_MISSING } from '@/domain/structure/mlProperties';
 import { nextPaint } from '@/lib/nextPaint';
 import i18n from '@/i18n/config';
-
-// 这个函数负责把当前 store 的数据导出并存入 IndexedDB
-// get 是 zustand 提供的，可以拿到 store 当前的所有数据
-// 改成：
-function autoSave(get: () => ProjectState) {
-  const state = get();
-  if (!state.isDataLoaded || !state.systemInfo) return;
-  if (!state.projectName) return;  // 没有项目名就不存
-  try {
-    saveProject(state.exportProjectFile(), state.projectName);
-  } catch (e) {
-    console.warn('Auto-save failed:', e);
-  }
-}
 
 interface ProjectState {
   // ---- Data ----
@@ -77,6 +64,7 @@ interface ProjectState {
    */
   loadingProgress: number | null;
   isDataLoaded: boolean;
+  persistenceError: string | null;
   projectId: string;   // stable unique ID, never changes after creation
 
   // ---- Background symmetry (moyo) analysis ----
@@ -143,6 +131,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   loadingDetail: null,
   loadingProgress: null,
   isDataLoaded: false,
+  persistenceError: null,
   symmetryStatus: { running: false, done: 0, total: 0 },
   explorerAxisLabels: {},
   explorerAxisRanges: {},
@@ -150,7 +139,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   setDetectedFiles: (files) => set({ detectedFiles: files }),
   setProjectName: (name) => {
     set({ projectName: name });
-    autoSave(get);
   },
 
   // Axis titles/ranges are keyed by field key and live with the project, so a
@@ -252,8 +240,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       });
       useUIStore.getState().clearProjectFilters();
       resetProjectScopedState();
-      autoSave(get);
-    } catch (error) {
+      } catch (error) {
       console.error('Parse error:', error);
       set({
         isLoading: false,
@@ -276,48 +263,54 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     });
     await nextPaint();
 
-    const migratedStructures = normalizeStructures(project.structures);
+    try {
+      validateProject(project);
+      const migratedStructures = normalizeStructures(project.structures);
 
-    // Ensure compositionMode exists (backward compat)
-    const sysInfo = { ...project.systemInfo };
-    if (!sysInfo.compositionMode) {
-      sysInfo.compositionMode = 'varcomp';
-    }
+      // Ensure compositionMode exists (backward compat)
+      const sysInfo = { ...project.systemInfo };
+      if (!sysInfo.compositionMode) {
+        sysInfo.compositionMode = 'varcomp';
+      }
 
-    const hullGens = project.hullGenerations ?? [];
-    const parsedFiles: ParsedFileStatus = project.parsedFiles
-      ? { ...EMPTY_PARSED_FILE_STATUS, ...project.parsedFiles }
-      : inferParsedFiles(migratedStructures, sysInfo, hullGens.length);
+      const hullGens = project.hullGenerations ?? [];
+      const parsedFiles: ParsedFileStatus = project.parsedFiles
+        ? { ...EMPTY_PARSED_FILE_STATUS, ...project.parsedFiles }
+        : inferParsedFiles(migratedStructures, sysInfo, hullGens.length);
 
-    // Restoring the project that is already active (e.g. session restore on
-    // page load) keeps the user's comparisons/marks; loading a *different*
-    // project drops selections that referenced the previous project's ids.
-    const activeProjectId = get().projectId;
-    const incomingProjectId = project.projectId ?? '';
-    const switchingProject = activeProjectId !== '' && incomingProjectId !== activeProjectId;
+      // Restoring the project that is already active (e.g. session restore on
+      // page load) keeps the user's comparisons/marks; loading a *different*
+      // project drops selections that referenced the previous project's ids.
+      const activeProjectId = get().projectId;
+      const incomingProjectId = project.projectId ?? '';
+      const switchingProject = activeProjectId !== '' && incomingProjectId !== activeProjectId;
 
-    set({
-      systemInfo: sysInfo,
-      structures: migratedStructures,
-      userStructures: normalizeStructures(project.userAddedStructures ?? []),
-      hullGenerations: hullGens,
-      tags: project.tags?.length ? project.tags : [...DEFAULT_TAGS],
-      filterPresets: project.filterPresets ?? [],
-      parsedFiles,
-      isLoading: false,
-      loadingStage: null,
-      loadingDetail: null,
-      loadingProgress: null,
-      isDataLoaded: true,
-      parseWarnings: [],
-      projectId: incomingProjectId || makeProjectId(),  // reuse existing ID or mint one for old files
+      set({
+        systemInfo: sysInfo,
+        structures: migratedStructures,
+        userStructures: normalizeStructures(project.userAddedStructures ?? []),
+        hullGenerations: hullGens,
+        tags: project.tags?.length ? project.tags : [...DEFAULT_TAGS],
+        filterPresets: project.filterPresets ?? [],
+        parsedFiles,
+        isLoading: false,
+        loadingStage: null,
+        loadingDetail: null,
+        loadingProgress: null,
+        isDataLoaded: true,
+        parseWarnings: [],
+        projectId: incomingProjectId || makeProjectId(),  // reuse existing ID or mint one for old files
+        persistenceError: null,
       projectName: project.projectName || project.systemInfo?.elements?.join('-') || '',
-      // Axis titles/ranges are stored with the project itself.
-      explorerAxisLabels: project.explorerAxisLabels ?? {},
-      explorerAxisRanges: project.explorerAxisRanges ?? {},
-    });
-    if (!options?.preserveFilters) useUIStore.getState().clearProjectFilters();
-    if (switchingProject) resetProjectScopedState();
+        // Axis titles/ranges are stored with the project itself.
+        explorerAxisLabels: project.explorerAxisLabels ?? {},
+        explorerAxisRanges: project.explorerAxisRanges ?? {},
+      });
+      if (!options?.preserveFilters) useUIStore.getState().clearProjectFilters();
+      if (switchingProject) resetProjectScopedState();
+    } finally {
+      set({ isLoading: false, loadingStage: null, loadingDetail: null, loadingProgress: null });
+    }
   },
 
   exportProjectFile: () => {
@@ -405,7 +398,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         s.id === id ? { ...s, tags } : s
       ),
     });
-    autoSave(get);
   },
 
   updateStructureNotes: (id, notes) => {
@@ -419,7 +411,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         s.id === id ? { ...s, notes } : s
       ),
     });
-    autoSave(get);
   },
 
   addTag: (tag) => set({ tags: [...get().tags, tag] }),
@@ -447,6 +438,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       loadingDetail: null,
       loadingProgress: null,
       isDataLoaded: false,
+      persistenceError: null,
       symmetryStatus: { running: false, done: 0, total: 0 },
       explorerAxisLabels: {},
       explorerAxisRanges: {},

@@ -15,7 +15,7 @@ import { build } from 'rolldown';
 
 const root = path.resolve(import.meta.dirname, '..');
 const outDir = path.join(root, 'node_modules', '.cache', 'node-checks');
-const checkFiles = ['hullReferenceChecks.ts', 'quaternaryHullChecks.ts', 'binaryHullChecks.ts', 'fixedCompositionChecks.ts', 'objectivePlaceholderChecks.ts', 'loadingStateChecks.ts', 'parseProgressChecks.ts', 'manifestChecks.ts', 'symmetryChecks.ts', 'echartsAdapterChecks.ts', 'ternaryZoomChecks.ts', 'ternaryPlotChecks.ts', 'chartPaintChecks.ts', 'filterLogicChecks.ts', 'persistenceChecks.ts'];
+const checkFiles = ['hullReferenceChecks.ts', 'quaternaryHullChecks.ts', 'binaryHullChecks.ts', 'fixedCompositionChecks.ts', 'objectivePlaceholderChecks.ts', 'loadingStateChecks.ts', 'parseProgressChecks.ts', 'manifestChecks.ts', 'symmetryChecks.ts', 'echartsAdapterChecks.ts', 'ternaryZoomChecks.ts', 'ternaryPlotChecks.ts', 'chartPaintChecks.ts', 'filterLogicChecks.ts', 'persistenceChecks.ts', 'featureRegressionChecks.ts'];
 
 fs.mkdirSync(outDir, { recursive: true });
 
@@ -27,7 +27,7 @@ for (const checkFile of checkFiles) {
   await build({
     input: path.join(root, 'scripts', checkFile),
     platform: 'node',
-    external: ['@spglib/moyo-wasm'],
+    external: ['@spglib/moyo-wasm', 'typescript'],
     resolve: { alias: { '@': path.join(root, 'src') } },
     output: { file: outFile, format: 'esm' },
   });
