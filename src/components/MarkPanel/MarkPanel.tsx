@@ -2,6 +2,8 @@ import { useTranslation } from 'react-i18next';
 import { useMarkStore } from '@/store/useMarkStore';
 import { useProjectStore } from '@/store/useProjectStore';
 import { parseEaIds } from '@/lib/parseEaIds';
+import type { Structure } from '@/types/structure';
+import { useId } from 'react';
 
 /**
  * MarkPanel — shared overlay-mark control panel for all chart pages.
@@ -10,8 +12,9 @@ import { parseEaIds } from '@/lib/parseEaIds';
  * Renders tag toggle buttons and an EA ID search input.
  * Active tags/IDs cause star markers to be overlaid on chart points.
  */
-export function MarkPanel({ showTags = true }: { showTags?: boolean }) {
+export function MarkPanel({ showTags = true, visibleStructures }: { showTags?: boolean; visibleStructures?: Structure[] }) {
   const { t } = useTranslation();
+  const inputId = useId();
 
   const markActiveTags  = useMarkStore((s) => s.markActiveTags);
   const markEaInput     = useMarkStore((s) => s.markEaInput);
@@ -33,7 +36,7 @@ export function MarkPanel({ showTags = true }: { showTags?: boolean }) {
   // Count how many visible structures match the EA input
   const eaIds = parseEaIds(markEaInput);
   const eaMatchCount = eaIds.size > 0
-    ? structures.filter((s) => eaIds.has(s.id)).length
+    ? (visibleStructures ?? structures).filter((s) => eaIds.has(s.id)).length
     : -1;
 
   const hasAnyMark = markActiveTags.length > 0 || markEaInput.trim() !== '';
@@ -67,6 +70,8 @@ export function MarkPanel({ showTags = true }: { showTags?: boolean }) {
             return (
               <button
                 key={tag.id}
+                type="button"
+                aria-pressed={active}
                 onClick={() => toggleTag(tag.id)}
                 style={{
                   fontSize: 12,
@@ -89,10 +94,11 @@ export function MarkPanel({ showTags = true }: { showTags?: boolean }) {
 
       {/* EA ID section */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+        <label htmlFor={inputId} style={{ fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
           {t('mark.byEaId')}:
-        </span>
+        </label>
         <input
+          id={inputId}
           type="text"
           value={markEaInput}
           onChange={(e) => setMarkEaInput(e.target.value)}
@@ -105,7 +111,6 @@ export function MarkPanel({ showTags = true }: { showTags?: boolean }) {
             background: 'var(--color-bg)',
             color: 'var(--color-text)',
             width: 240,
-            outline: 'none',
           }}
         />
         {eaIds.size > 0 && (

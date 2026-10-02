@@ -37,6 +37,7 @@ export interface PlotFrameProps {
   /** Toolbox "back" button — step the chart's own viewport history backwards. */
   onUndo?: () => void;
   onStructureClick?: (structureId: number) => void;
+  onLegendSelectionChange?: (selected: Record<string, boolean>) => void;
   editableAxisTitles?: { x: string; y: string; z?: string };
   axisTitleEditHint?: string;
   onAxisTitleDoubleClick?: (axis: 'x' | 'y' | 'z') => void;

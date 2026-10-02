@@ -35,13 +35,14 @@ import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadCsv } from '@/lib/exportCsv';
 import { PlotFrame } from '@/charts/shared/PlotFrame';
 import { CONVEX_HULL_PLOT_HEIGHT } from './plotSizing';
+import { useFitnessLimit, type FitnessLimitProps } from './useFitnessLimit';
 
 interface StructureWithCoords extends Structure {
   cartX: number;
   cartY: number;
 }
 
-interface Props {
+interface Props extends FitnessLimitProps {
   structures: Structure[];
   systemInfo: SystemInfo;
   groupMap?: Map<number, string>;
@@ -61,6 +62,8 @@ export function TernaryHullPlot3D({
   showTags = true,
   showFooter = true,
   onStructureClick,
+  fitnessLimit,
+  onFitnessLimitChange,
 }: Props) {
   const { t } = useTranslation();
   const openViewer = useUIStore((s) => s.openViewer);
@@ -71,12 +74,12 @@ export function TernaryHullPlot3D({
 
   const maxFitness = useMemo(() => {
     const vals = structures
-      .filter((s) => s.fitness > 0 && s.enthalpyTotal <= 900)
+      .filter((s) => Number.isFinite(s.fitness) && s.fitness > 0 && s.enthalpyTotal <= 900)
       .map((s) => s.fitness);
-    return vals.length > 0 ? Math.max(...vals) : 1;
+    return vals.length > 0 ? Math.max(...vals) : 0;
   }, [structures]);
 
-  const [fitnessMax, setFitnessMax] = useState(() => maxFitness);
+  const { fitnessMax, handleFitnessChange: changeFitnessLimit } = useFitnessLimit(maxFitness, { fitnessLimit, onFitnessLimitChange });
   const [revision, setRevision] = useState(0);
 
   // Camera persistence: save across slider changes, reset on project switch
@@ -101,7 +104,7 @@ export function TernaryHullPlot3D({
   }, []);
 
   function handleFitnessChange(val: number) {
-    setFitnessMax(val);
+    changeFitnessLimit(val);
     setRevision((r) => r + 1);
   }
 
@@ -796,23 +799,26 @@ export function TernaryHullPlot3D({
             whiteSpace: 'nowrap',
           }}
         >
-          Fitness max
+          {t('hull.fitnessMax')}
         </span>
         <input
           type="range"
+          aria-label={t('hull.fitnessMax')}
           min={0}
           max={maxFitness}
-          step={maxFitness / 200}
+          step="any"
+          disabled={maxFitness === 0}
           value={fitnessMax}
           onChange={(e) => handleFitnessChange(Number(e.target.value))}
           style={{ flex: 1, maxWidth: 300 }}
         />
         <input
           type="number"
+          aria-label={t('hull.fitnessMax')}
           min={0}
           max={maxFitness}
-          step={0.001}
-          value={Math.round(fitnessMax * 1000) / 1000}
+          step="any"
+          value={fitnessMax}
           onChange={(e) => {
             const v = parseFloat(e.target.value);
             if (!isNaN(v)) handleFitnessChange(v);
@@ -830,7 +836,7 @@ export function TernaryHullPlot3D({
           }}
         />
         <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-          eV
+          eV/block
         </span>
         {showExport && (
           <ExportDataButton

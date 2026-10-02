@@ -1,601 +1,205 @@
-/**
- * Ternary phase diagram convex hull plot.
- *
- * Uses 3D convex hull (cartX, cartY, formationEnergy) to compute lower-hull tie-lines,
- * then projects to a 2D equilateral triangle for display.
- *
- * Algorithm ported from Plot_ternary_hull_corrected_2.py.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type PlotlyData = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type PlotlyLayout = any;
-
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useId } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { ECharts } from 'echarts';
 import type { Structure, SystemInfo } from '@/types/structure';
-import {
-  componentAmountsFromComposition,
-  ternaryToCartesian,
-  formulaToHtml,
-} from '@/parsers/compositionUtils';
+import { formulaToHtml } from '@/parsers/compositionUtils';
 import { useUIStore } from '@/store/useUIStore';
 import { useThemeStore } from '@/theme/themeStore';
 import { useMarkStore } from '@/store/useMarkStore';
 import { useProjectStore } from '@/store/useProjectStore';
-import { computeTernaryHullEdges, uniqueHullPoints, type TernaryHullInput } from '@/lib/ternaryHull';
-import { parseEaIds } from '@/lib/parseEaIds';
 import { MarkPanel } from '@/components/MarkPanel/MarkPanel';
 import { CHART_FONT } from '@/lib/constants';
 import { getPlotlyTheme } from '@/theme/plotThemeAdapter';
-import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadCsv } from '@/lib/exportCsv';
-import type { ECharts } from 'echarts';
+import { parseEaIds } from '@/lib/parseEaIds';
 import { PlotFrame } from '@/charts/shared/PlotFrame';
-import { useTernaryZoom } from '@/charts/ternary/useTernaryZoom';
+import type { PlotData, PlotLayout } from '@/charts/shared/plotTypes';
 import { mergePlotViewport, usePlotViewport } from '@/charts/shared/plotRange';
-import { useStructurePointClick } from '@/charts/shared/useStructurePointClick';
+import { useTernaryZoom, type TernaryInteractionMode } from '@/charts/ternary/useTernaryZoom';
+import { BASE_TERNARY_RANGES, MIN_TERNARY_SCALE, isInTernaryViewport, clipTernaryEdges, compositionAtTernaryPoint, ternaryViewportCentre, ternaryViewportVertices,
+  panTernaryViewport, ternaryRangePatch, ternaryViewportScale, zoomTernaryViewport, type TernaryRanges } from '@/charts/ternary/ternaryZoom';
+import { buildTernaryPlotModel, ternaryExportData, ternaryMarkGroups, type TernaryPlotEntry } from './ternaryPlotModel';
+import { useFitnessLimit, type FitnessLimitProps } from './useFitnessLimit';
 import { CONVEX_HULL_PLOT_HEIGHT } from './plotSizing';
 
-/** Structure with computed cartesian coordinates */
-interface StructureWithCoords extends Structure {
-  cartX: number;
-  cartY: number;
-}
-
-interface Props {
+interface Props extends FitnessLimitProps {
   structures: Structure[];
   systemInfo: SystemInfo;
-  /** Structure ID → group name (for workshop multi-group display) */
   groupMap?: Map<number, string>;
-  /** Show the export button (default true, set false in HullWorkshop) */
   showExport?: boolean;
-  /** Show tag buttons in MarkPanel (default true) */
   showTags?: boolean;
-  /** Show stable-phases footer (default true) */
   showFooter?: boolean;
-  /** Old tie-line edges (dashed) — shown when user-added expanded the hull */
   oldHullEdges?: { p1: [number, number]; p2: [number, number] }[];
-  /** Whether user-added structures expanded the hull */
-  hullExpanded?: boolean;
-  /** Called when a structure point is clicked (HullWorkshop: pass full structure, not just ID) */
   onStructureClick?: (structure: Structure) => void;
 }
 
-export function TernaryHullPlot({ structures, systemInfo, groupMap, showExport = true, showTags = true, showFooter = true, oldHullEdges, onStructureClick }: Props) {
+const PLOT_CONFIG = { rectZoom: false, displayModeBar: false };
+const controlStyle = { display: 'flex', alignItems: 'center', flexWrap: 'wrap' as const, gap: 8 };
+const inputStyle = { width: 92, padding: '5px 8px', border: '1px solid var(--color-border)', borderRadius: 6,
+  background: 'var(--color-surface)', color: 'var(--color-text)', fontSize: 13 };
+
+export function TernaryHullPlot(props: Props) {
+  const { structures, systemInfo, groupMap, showExport = true, showTags = true, showFooter = true, oldHullEdges, onStructureClick } = props;
   const { t } = useTranslation();
+  const inputId = useId();
+  const theme = useThemeStore((s) => s.theme);
   const openViewer = useUIStore((s) => s.openViewer);
-  const markActiveTags  = useMarkStore((s) => s.markActiveTags);
-  const markEaInput     = useMarkStore((s) => s.markEaInput);
-  const allTags         = useProjectStore((s) => s.tags);
-  const theme           = useThemeStore((s) => s.theme);
-
-  const maxFitness = useMemo(() => {
-    const vals = structures.filter((s) => s.fitness > 0 && s.enthalpyTotal <= 900).map((s) => s.fitness);
-    return vals.length > 0 ? Math.max(...vals) : 1;
-  }, [structures]);
-
-  const [fitnessMax, setFitnessMax] = useState(() => maxFitness);
-  const [revision, setRevision] = useState(0);
-
-  function handleFitnessChange(val: number) {
-    setFitnessMax(val);
-    setRevision((r) => r + 1);
-  }
-
-  const plotData = useMemo(() => {
-    const elements = systemInfo.elements;
-    const components = systemInfo.componentLabels?.length === 3
-      ? systemInfo.componentLabels
-      : elements.slice(0, 3);
-    const compositionBasis = systemInfo.compositionBasis ?? [];
-    const toPlotComposition = (composition: number[]) =>
-      compositionBasis.length > 0
-        ? componentAmountsFromComposition(composition, compositionBasis) ?? []
-        : composition;
-    const validStructures = structures.filter((s) =>
-      s.enthalpyTotal <= 900 &&
-      !isNaN(s.enthalpy) &&
-      (compositionBasis.length === 0 || toPlotComposition(s.composition).length === 3)
-    );
-    const userAdded = validStructures.filter((s) => s.isUserAdded);
-    const nonUser = validStructures.filter((s) => !s.isUserAdded);
-    const stable = nonUser.filter((s) => s.fitness === 0);
-    const unstable = nonUser.filter((s) => s.fitness > 0 && s.fitness <= fitnessMax);
-
-    // Compute cartesian coords for unstable structures
-    const unstableWithCoords: StructureWithCoords[] = unstable.map((s) => {
-      const [cx, cy] = ternaryToCartesian(toPlotComposition(s.composition));
-      return { ...s, cartX: cx, cartY: cy };
-    });
-
-    // Stable points for hull computation — include ALL fitness=0 structures
-    // (including user-added that expanded the hull) so the tie-lines reflect
-    // the expanded hull geometry.
-    const hullInputs: TernaryHullInput[] = validStructures
-      .filter((s) => s.fitness === 0)
-      .map((s) => {
-        const plotComposition = toPlotComposition(s.composition);
-        const [cx, cy] = ternaryToCartesian(plotComposition);
-        // Use eForm (formation energy) for convex hull z-axis — raw enthalpy
-        // contains elemental reference energies that distort the energy landscape
-        const eForm = s.eForm !== undefined && s.eForm !== -1 ? s.eForm : s.enthalpy;
-        return { id: s.id, composition: plotComposition, eForm, cartX: cx, cartY: cy, _mergeSeq: (s as any)._mergeSeq };
-      });
-
-    // Compute tie-lines from all on-hull structures
-    const edges = computeTernaryHullEdges(hullInputs);
-
-    // Display-only stable points (non-user-added, for diamond markers)
-    const stableInputs: TernaryHullInput[] = stable.map((s) => {
-      const plotComposition = toPlotComposition(s.composition);
-      const [cx, cy] = ternaryToCartesian(plotComposition);
-      const eForm = s.eForm !== undefined && s.eForm !== -1 ? s.eForm : s.enthalpy;
-      return { id: s.id, composition: plotComposition, eForm, cartX: cx, cartY: cy, _mergeSeq: (s as any)._mergeSeq };
-    });
-
-    // Unique stable points for display — join back to full Structure for hover info
-    const uniqueStable = uniqueHullPoints(stableInputs);
-    const structureMap = new Map<number, Structure>();
-    for (const s of structures) {
-      const key = (s as any)._mergeSeq ?? s.id;
-      structureMap.set(key, s);
-    }
-    const uniqueStableFull = uniqueStable.map((p) => ({
-      ...p,
-      full: structureMap.get(p._mergeSeq ?? p.id),
-    }));
-
-    // User-added in cartesian
-    const userAddedWithCoords: { id: number; cartX: number; cartY: number; s: Structure }[] = userAdded.map((s) => {
-      const [cx, cy] = ternaryToCartesian(toPlotComposition(s.composition));
-      return { id: s.id, cartX: cx, cartY: cy, s };
-    });
-
-    return { unstableWithCoords, stableInputs, uniqueStableFull, edges, components, userAddedWithCoords };
-  }, [structures, systemInfo, fitnessMax]);
-
-  const { unstableWithCoords, uniqueStableFull, edges, components, userAddedWithCoords } = plotData;
-  const structureById = useMemo(() => new Map(structures.map((s) => [s.id, s])), [structures]);
-  const getStructureHoverText = (id: number, fallbackFormula = '') => {
-    const s = structureById.get(id);
-
-    return (
-      (s?.groupName || groupMap ? `Group: ${s?.groupName ?? groupMap?.get(id) ?? '—'}<br>` : '') +
-      `EA${id}: ${formulaToHtml(s?.formula ?? fallbackFormula)}<br>` +
-      `ΔH: ${s?.enthalpy.toFixed(4) ?? '—'} eV/atom<br>` +
-      `Fitness: ${s?.fitness.toFixed(4) ?? '—'} eV/block<br>` +
-      `SG: ${s?.spaceGroup ?? '—'} | Gen: ${s?.generation ?? '—'}<br>` +
-      `Origin: ${s?.origin ?? '—'}`
-    );
-  };
-
-  // Build coord lookup map for overlay traces
-  const coordMap = useMemo(() => {
-    const map = new Map<number, { cartX: number; cartY: number }>();
-    for (const s of unstableWithCoords) map.set(s.id, { cartX: s.cartX, cartY: s.cartY });
-    for (const p of uniqueStableFull) map.set(p.id, { cartX: p.cartX, cartY: p.cartY });
-    for (const u of userAddedWithCoords) map.set(u.id, { cartX: u.cartX, cartY: u.cartY });
-    return map;
-  }, [unstableWithCoords, uniqueStableFull, userAddedWithCoords]);
-
-  // --- Mark overlay traces: tag-based (controlled by showTags) ---
-  const tagOverlayTraces = useMemo(() => {
-    const result: PlotlyData[] = [];
-
-    for (const tagId of markActiveTags) {
-      const tagDef = allTags.find((tg) => tg.id === tagId);
-      if (!tagDef) continue;
-      const tagged = structures.filter((s) => s.tags.includes(tagId) && coordMap.has(s.id));
-      if (tagged.length === 0) continue;
-      result.push({
-        x: tagged.map((s) => coordMap.get(s.id)!.cartX),
-        y: tagged.map((s) => coordMap.get(s.id)!.cartY),
-        mode: 'markers', type: 'scatter',
-        name: `★ ${t(tagDef.nameKey)}`,
-        marker: { symbol: 'star', size: 14, color: tagDef.color, line: { width: 1, color: 'white' } },
-        text: tagged.map((s) => getStructureHoverText(s.id, s.formula)),
-        hoverinfo: 'text',
-        customdata: tagged.map((s) => s.id),
-        showlegend: true,
-      });
-    }
-    return result;
-  }, [structures, coordMap, markActiveTags, allTags, structureById, groupMap, t]);
-
-  // --- Mark overlay traces: EA-ID search (always active) ---
-  const eaOverlayTraces = useMemo(() => {
-    const result: PlotlyData[] = [];
-
-    const eaIds = parseEaIds(markEaInput);
-    if (eaIds.size > 0) {
-      const eaMarked = structures.filter((s) => eaIds.has(s.id) && coordMap.has(s.id));
-      if (eaMarked.length > 0) {
-        const byGroup = new Map<string, typeof eaMarked>();
-        for (const s of eaMarked) {
-          const key = s.groupName || '';
-          if (!byGroup.has(key)) byGroup.set(key, []);
-          byGroup.get(key)!.push(s);
-        }
-        for (const [gn, structs] of byGroup) {
-          const color = structs[0].groupColor ?? '#FFD700';
-          const name = gn
-            ? `★ ${t('mark.eaSearchName')} · ${gn}`
-            : `★ ${t('mark.eaSearchName')}`;
-          result.push({
-            x: structs.map((s) => coordMap.get(s.id)!.cartX),
-            y: structs.map((s) => coordMap.get(s.id)!.cartY),
-            mode: 'markers', type: 'scatter',
-            name,
-            marker: { symbol: 'star', size: 14, color, line: { width: 1, color: 'white' } },
-            text: structs.map((s) => getStructureHoverText(s.id, s.formula)),
-            hoverinfo: 'text',
-            customdata: structs.map((s) => s.id),
-            showlegend: true,
-          });
-        }
-      }
-    }
-    return result;
-  }, [structures, coordMap, markEaInput, structureById, groupMap, t]);
-
-  // Triangle vertices
-  const triVerts = [[0, 0], [0.5, Math.sqrt(3) / 2], [1, 0], [0, 0]];
-
-  const traces: PlotlyData[] = [
-    // Triangle outline
-    {
-      x: triVerts.map((v) => v[0]),
-      y: triVerts.map((v) => v[1]),
-      mode: 'lines' as const,
-      type: 'scatter' as const,
-      name: '',
-      line: { color: getPlotlyTheme(theme).structureLineColor, width: 1.5 },
-      hoverinfo: 'skip' as const,
-      showlegend: false,
-    },
-
-    // Unstable points
-    {
-      x: unstableWithCoords.map((s) => s.cartX),
-      y: unstableWithCoords.map((s) => s.cartY),
-      mode: 'markers' as const,
-      type: 'scatter' as const,
-      name: 'Unstable',
-      marker: {
-        color: unstableWithCoords.map((s) => s.fitness),
-        colorscale: [
-          [0, 'rgb(238,63,77)'],
-          [0.25, 'rgb(252,183,10)'],
-          [0.5, 'rgb(65,174,60)'],
-          [0.75, 'rgb(81,196,211)'],
-          [1, 'rgb(36,116,181)'],
-        ],
-        cmin: 0,
-        cmax: Math.max(fitnessMax, 0.01),
-        colorbar: {
-          title: 'Fitness\n(eV/block)',
-          thickness: 14,
-          len: 0.46,
-          x: 0.73,
-          xanchor: 'left' as const,
-          y: 0.52,
-          yanchor: 'middle' as const,
-        },
-        size: 5,
-        opacity: 0.6,
-      },
-      text: unstableWithCoords.map(
-        (s) =>
-          (s.groupName || groupMap ? `Group: ${s.groupName ?? groupMap?.get(s.id) ?? '—'}<br>` : '') +
-          `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
-          `ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
-          `Fitness: ${s.fitness.toFixed(4)} eV/block<br>` +
-          `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>` +
-          `Origin: ${s.origin}`,
-      ),
-      hoverinfo: 'text' as const,
-      customdata: unstableWithCoords.map((s: any) => s._mergeSeq ?? s.id),
-    },
-
-    // Tie-lines (concatenated with null separators)
-    {
-      x: edges.flatMap((e) => [e.p1[0], e.p2[0], null]),
-      y: edges.flatMap((e) => [e.p1[1], e.p2[1], null]),
-      mode: 'lines' as const,
-      type: 'scatter' as const,
-      name: t('hull.tieLines', 'Tie Lines'),
-      line: { color: getPlotlyTheme(theme).structureLineColor, width: 0.8 },
-      hoverinfo: 'skip' as const,
-    },
-    // Old tie-lines (dashed) — shown when user-added expanded the hull
-    ...(oldHullEdges && oldHullEdges.length > 0 ? [{
-      x: oldHullEdges.flatMap((e) => [e.p1[0], e.p2[0], null]),
-      y: oldHullEdges.flatMap((e) => [e.p1[1], e.p2[1], null]),
-      mode: 'lines' as const,
-      type: 'scatter' as const,
-      name: 'Previous Tie Lines',
-      line: { color: getPlotlyTheme(theme).structureLineColor, width: 0.8, dash: 'dash' as const },
-      hoverinfo: 'skip' as const,
-    }] : []),
-
-    // Stable points
-    {
-      x: uniqueStableFull.map((p) => p.cartX),
-      y: uniqueStableFull.map((p) => p.cartY),
-      mode: 'markers+text' as const,
-      type: 'scatter' as const,
-      name: 'Stable',
-      marker: { color: getPlotlyTheme(theme).frontColors[0], size: 10, symbol: 'diamond' },
-      text: uniqueStableFull.map((p) => {
-        return formulaToHtml(p.full?.formula ?? `EA${p.id}`);
-      }),
-      textposition: 'top center' as const,
-      textfont: { size: 12 },
-      hovertext: uniqueStableFull.map((p) => {
-        const s = p.full;
-        return (
-          (s?.groupName || groupMap ? `Group: ${s?.groupName ?? groupMap?.get(p.id) ?? '—'}<br>` : '') +
-          `EA${p.id}: ${formulaToHtml(s?.formula ?? '')}<br>` +
-          `E_form: ${p.eForm.toFixed(4)} eV/atom<br>` +
-          `Fitness: 0.0000 eV/block<br>` +
-          `SG: ${s?.spaceGroup ?? '—'} | Gen: ${s?.generation ?? '—'}<br>` +
-          `Origin: ${s?.origin ?? '—'}`
-        );
-      }),
-      hoverinfo: 'text' as const,
-      customdata: uniqueStableFull.map((p: any) => p.full?._mergeSeq ?? p.id),
-    },
-    // User-added structures — white circles with black border
-    {
-      x: userAddedWithCoords.map((u) => u.cartX),
-      y: userAddedWithCoords.map((u) => u.cartY),
-      mode: 'markers' as const,
-      type: 'scatter' as const,
-      name: 'Manual',
-      marker: {
-        color: getPlotlyTheme(theme).selectedMarkerFill,
-        size: 10,
-        symbol: 'circle' as const,
-        line: { width: 1.5, color: getPlotlyTheme(theme).selectedMarkerLine },
-      },
-      text: userAddedWithCoords.map((u) => {
-        const s = u.s;
-        return (
-          `[Manual]<br>` +
-          (s.groupName ? `Group: ${s.groupName}<br>` : '') +
-          `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
-          `ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
-          `Fitness: ${s.fitness.toFixed(4)} eV/block`
-        );
-      }),
-      hoverinfo: 'text' as const,
-      customdata: userAddedWithCoords.map((u: any) => u.s._mergeSeq ?? u.id),
-    },
-    ...(showTags ? tagOverlayTraces : []),
-    ...eaOverlayTraces,
-  ];
-
-  // Element labels at triangle corners
-  const labels = components.length >= 3 ? components : ['A', 'B', 'C'];
-  const pt = getPlotlyTheme(theme);
-  const labelAnnotations = [
-    { x: -0.05, y: -0.05, text: formulaToHtml(labels[0]), showarrow: false, font: { size: 13, color: pt.annotationColor, weight: 'bold' as const } },
-    { x: 0.5, y: Math.sqrt(3) / 2 + 0.06, text: formulaToHtml(labels[1]), showarrow: false, font: { size: 13, color: pt.annotationColor, weight: 'bold' as const } },
-    { x: 1.05, y: -0.05, text: formulaToHtml(labels[2]), showarrow: false, font: { size: 13, color: pt.annotationColor, weight: 'bold' as const } },
-  ];
-  const { viewportLayout, handleRelayout, undoViewport } = usePlotViewport();
-  // Triangle zoom: press a point to centre on it, drag out, release.  The chart
-  // instance comes from PlotFrame, which is the only place that owns it.
+  const activeTags = useMarkStore((s) => s.markActiveTags);
+  const eaInput = useMarkStore((s) => s.markEaInput);
+  const tags = useProjectStore((s) => s.tags);
+  const model = useMemo(() => buildTernaryPlotModel(structures, systemInfo), [structures, systemInfo]);
+  const { fitnessMax, handleFitnessChange } = useFitnessLimit(model.maxFitness, props);
+  const { viewportLayout, handleRelayout, undoViewport, resetViewport, canUndo } = usePlotViewport();
   const [chart, setChart] = useState<ECharts | null>(null);
-
-  const layout: PlotlyLayout = mergePlotViewport({
-    autosize: true,
-    // `color` is Plotly's global chart text colour; the adapter uses it for the
-    // colour bar's title and end values, which ECharts itself would draw in a
-    // fixed grey that ignores the theme.
-    font: { ...CHART_FONT, color: pt.legendColor },
-    title: { text: `${components.map(formulaToHtml).join('-')} ${t('hull.ternaryTitle', 'Ternary Phase Diagram')}`, font: { size: 15, color: pt.titleColor } },
-    xaxis: {
-      range: [-0.12, 1.12],
-      showgrid: false,
-      zeroline: false,
-      showticklabels: false,
-      constrain: 'domain',
-    },
-    // `scaleanchor`/`scaleratio` keep the triangle equilateral whatever the
-    // container shape: the ECharts adapter letterboxes the plot box to match
-    // this data aspect (see charts/shared/echartsAdapter.ts).
-    yaxis: {
-      range: [-0.12, Math.sqrt(3) / 2 + 0.12],
-      showgrid: false,
-      zeroline: false,
-      showticklabels: false,
-      scaleanchor: 'x',
-      scaleratio: 1,
-      constrain: 'domain',
-    },
-    annotations: labelAnnotations,
-    hovermode: 'closest' as const,
-    showlegend: true,
-    legend: {
-      x: 0.19,
-      y: 0.92,
-      xanchor: 'left',
-      yanchor: 'top',
-      bgcolor: theme === 'dark' ? 'rgba(24, 24, 37, 0.86)' : 'rgba(255,255,255,0.4)',
-      bordercolor: theme === 'dark' ? '#313244' : '#e2e8f0',
-      font: { size: 11, color: pt.legendColor },
-    },
-    margin: { t: 50, r: 64, l: 64, b: 64 },
-    plot_bgcolor: pt.plotBg,
-    paper_bgcolor: pt.paperBg,
-  }, viewportLayout);
-
-  // The zoom frame is read back out of the ranges the chart is drawn with, so
-  // the hook has to sit below `layout`.
-  const zoomRange = {
-    x: (layout.xaxis as { range?: [number, number] })?.range ?? null,
-    y: (layout.yaxis as { range?: [number, number] })?.range ?? null,
+  const [mode, setMode] = useState<TernaryInteractionMode>('inspect');
+  const [showLabels, setShowLabels] = useState(true);
+  const [legendSelection, setLegendSelection] = useState<Record<string, boolean>>({});
+  const [panPreview, setPanPreview] = useState<TernaryRanges | null>(null);
+  const pt = getPlotlyTheme(theme);
+  const ranges: TernaryRanges = panPreview ?? {
+    x: (viewportLayout.xaxis as { range?: [number, number] })?.range ?? BASE_TERNARY_RANGES.x,
+    y: (viewportLayout.yaxis as { range?: [number, number] })?.range ?? BASE_TERNARY_RANGES.y,
   };
-  const { overlay: zoomOverlay } = useTernaryZoom({
-    chart,
-    onZoom: handleRelayout,
-    ranges: zoomRange.x && zoomRange.y ? { x: zoomRange.x, y: zoomRange.y } : null,
-    background: pt.paperBg,
-    frameColor: pt.structureLineColor,
-    cornerLabels: [labels[0], labels[1], labels[2]],
-    labelColor: pt.annotationColor,
+  const scale = ternaryViewportScale(ranges);
+  const magnification = 1 / scale;
+  const zoomed = scale < 1 - 1e-8;
+  const centreComposition = compositionAtTernaryPoint(ternaryViewportCentre(ranges));
+  const filtered = useMemo(() => [...model.stable, ...model.unstable.filter((e) => e.structure.fitness <= fitnessMax), ...model.manual], [model, fitnessMax]);
+  const inViewport = filtered.filter((e) => isInTernaryViewport([e.cartX, e.cartY], ranges));
+  const visible = inViewport.filter((e) => legendSelection[t(e.structure.isUserAdded ? 'hull.manual' : e.structure.fitness === 0 ? 'hull.stable' : 'hull.unstable')] !== false);
+  const stable = inViewport.filter((e) => !e.structure.isUserAdded && e.structure.fitness === 0);
+  const unstable = inViewport.filter((e) => !e.structure.isUserAdded && e.structure.fitness > 0);
+  const manual = inViewport.filter((e) => e.structure.isUserAdded);
+  const energyText = (e: TernaryPlotEntry) => e.eForm === null ? t('hull.unavailable') : `${e.eForm.toFixed(4)} ${model.energyUnit}`;
+  const hoverText = (e: TernaryPlotEntry) => {
+    const s = e.structure;
+    const group = s.groupName ?? groupMap?.get(s.id);
+    return `${group ? `${t('hull.group')}: ${group}<br>` : ''}EA${s.id}: ${formulaToHtml(s.formula)}<br>`
+      + model.components.map((label, i) => `${formulaToHtml(label)}: ${(100 * e.composition[i]).toFixed(2)}%`).join(' · ') + '<br>'
+      + `E_form: ${energyText(e)}<br>ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>Fitness: ${s.fitness.toFixed(4)} eV/block<br>`
+      + `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>Origin: ${s.origin}`;
+  };
+  const scatter = (entries: TernaryPlotEntry[], name: string, marker: Record<string, unknown>, labels = false) => ({
+    type: 'scatter', mode: labels ? 'markers+text' : 'markers', name,
+    x: entries.map((e) => e.cartX), y: entries.map((e) => e.cartY), marker,
+    text: entries.map((e) => labels ? formulaToHtml(e.structure.formula) : hoverText(e)),
+    hovertext: entries.map(hoverText), hoverinfo: 'text', customdata: entries.map((e) => e.key),
+    textposition: 'top center', textfont: { size: 12, color: pt.annotationColor },
+    showlegend: entries.length > 0,
   });
-
-  const handleStructurePointClick = (structureId: number) => {
-    if (onStructureClick) {
-      const structure = structures.find((s) => Number((s as Structure & { _mergeSeq?: number })._mergeSeq ?? s.id) === structureId);
-      if (structure) onStructureClick(structure);
-      return;
-    }
-
-    openViewer(structureId);
+  const lineTrace = (source: { p1: [number, number]; p2: [number, number] }[], name: string, dash = 'solid') => {
+    const edges = clipTernaryEdges(source, ranges);
+    return {
+      type: 'scatter', mode: 'lines', name,
+      x: edges.flatMap((e) => [e.p1[0], e.p2[0], null]), y: edges.flatMap((e) => [e.p1[1], e.p2[1], null]),
+      line: { color: pt.structureLineColor, width: 0.8, dash }, hoverinfo: 'skip', showlegend: source.length > 0,
+    };
+  };
+  const marks = ternaryMarkGroups(visible, activeTags, tags, parseEaIds(eaInput), showTags);
+  const corners = ternaryViewportVertices(ranges);
+  const outline = [...corners, corners[0]];
+  const traces: PlotData = [
+    { type: 'scatter', mode: 'lines', x: outline.map((v) => v[0]), y: outline.map((v) => v[1]),
+      line: { color: pt.structureLineColor, width: 1.5 }, showlegend: false, hoverinfo: 'skip' },
+    scatter(unstable, t('hull.unstable'), { size: 5, opacity: 0.6, color: unstable.map((e) => e.structure.fitness),
+      colorscale: [[0, 'rgb(238,63,77)'], [0.25, 'rgb(252,183,10)'], [0.5, 'rgb(65,174,60)'], [0.75, 'rgb(81,196,211)'], [1, 'rgb(36,116,181)']],
+      cmin: 0, cmax: Math.max(fitnessMax, 0.001), colorbar: { title: 'Fitness\n(eV/block)' } }),
+    lineTrace(model.edges, t('hull.tieLines')),
+    ...(oldHullEdges?.length ? [lineTrace(oldHullEdges, t('hull.previousTieLines'), 'dash')] : []),
+    scatter(stable, t('hull.stable'), { symbol: 'diamond', size: 10, color: pt.frontColors[0] }, showLabels),
+    ...(manual.length ? [scatter(manual, t('hull.manual'), { symbol: 'circle', size: 10,
+      color: pt.selectedMarkerFill, line: { width: 1.5, color: pt.selectedMarkerLine } })] : []),
+    ...marks.map((group) => scatter(group.entries,
+      `★ ${[...group.tags.map((tag) => t(tag.nameKey)), ...(group.byEa ? [t('mark.eaSearchName')] : []), group.groupName].filter(Boolean).join(' · ')}`,
+      { symbol: 'star', size: 14, color: group.color, line: { width: 1, color: pt.paperBg } })),
+  ];
+  const cornerAnnotations = corners.map((point, index) => ({
+    x: point[0] + (index === 0 ? -0.035 : index === 2 ? 0.035 : 0) * scale,
+    y: point[1] + (index === 1 ? zoomed ? 0.035 : 0.065 : zoomed ? -0.12 : -0.025) * scale,
+    text: zoomed ? compositionAtTernaryPoint(point).map((n, i) => `${formulaToHtml(model.components[i])} ${(Math.max(0, n) * 100).toFixed(1)}%`).join('\n') : formulaToHtml(model.components[index]),
+    showarrow: false, font: { size: zoomed ? 10 : 13, color: pt.annotationColor, weight: 'bold' },
+  }));
+  const layout: PlotLayout = mergePlotViewport({
+    autosize: true, font: { ...CHART_FONT, color: pt.legendColor },
+    title: { text: `${model.components.map(formulaToHtml).join('-')} ${t('hull.ternaryTitle')}${zoomed ? ` · ${magnification.toFixed(1)}×` : ''}`,
+      font: { size: 15, color: pt.titleColor } },
+    xaxis: { range: BASE_TERNARY_RANGES.x, showgrid: false, zeroline: false, showticklabels: false, constrain: 'domain' },
+    yaxis: { range: BASE_TERNARY_RANGES.y, showgrid: false, zeroline: false, showticklabels: false,
+      scaleanchor: 'x', scaleratio: 1, constrain: 'domain' },
+    annotations: cornerAnnotations, showlegend: true,
+    legend: { x: 0.5, y: 0.92, bgcolor: pt.paperBg, font: { size: 11, color: pt.legendColor } },
+    margin: { t: 64, r: 80, l: 64, b: 64 }, plot_bgcolor: pt.plotBg, paper_bgcolor: pt.paperBg,
+  }, panPreview ? { xaxis: { range: ranges.x }, yaxis: { range: ranges.y } } : viewportLayout);
+  const { overlay } = useTernaryZoom({ chart, ranges, mode, onZoom: handleRelayout,
+    onComplete: () => setMode('inspect'), onPreview: setPanPreview });
+  const handleClick = (key: number) => {
+    const entry = model.entries.find((e) => e.key === key);
+    if (!entry) return;
+    if (onStructureClick) onStructureClick(entry.structure);
+    else openViewer(entry.structure.id);
+  };
+  const reset = () => { resetViewport(); setMode('inspect'); };
+  const zoomBy = (factor: number) => { setMode('inspect'); handleRelayout(ternaryRangePatch(zoomTernaryViewport(ranges, factor))); };
+  const pan = (dx: number, dy: number) => handleRelayout(ternaryRangePatch(panTernaryViewport(ranges,
+    [dx * (ranges.x[1] - ranges.x[0]) * 0.2, dy * (ranges.y[1] - ranges.y[0]) * 0.2])));
+  const filename = `${model.components.join('-')}_ternary_hull_fitness${fitnessMax.toFixed(3).replace('.', 'p')}`;
+  const exportCsv = () => {
+    const { headers, rows } = ternaryExportData(filtered, model.components, model.energyUnit, !!groupMap || structures.some((s) => !!s.groupName));
+    downloadCsv(filename, headers, rows);
+  };
+  const exportImage = () => {
+    if (!chart) return;
+    const link = document.createElement('a');
+    link.href = chart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: pt.paperBg });
+    link.download = `${filename}_zoom${magnification.toFixed(1)}.png`;
+    link.click();
   };
 
-  const structurePointClick = useStructurePointClick({
-    traces,
-    onStructureClick: handleStructurePointClick,
-  });
-
-  function handleExport() {
-    const elA = components[0] || 'A';
-    const elB = components[1] || 'B';
-    const elC = components[2] || 'C';
-    const hasGroup = groupMap != null || structures.some((s) => s.groupName != null);
-    const groupCol = hasGroup ? ['Group'] : [];
-    const energyUnit = systemInfo.compositionBasis?.length ? 'eV/block' : 'eV/atom';
-    const headers = [...groupCol, 'EA_ID', 'Formula', `x_${elA}`, `x_${elB}`, `x_${elC}`, `E_form(${energyUnit})`, 'Fitness(eV/block)', 'SpaceGroup', 'Generation', 'Origin', 'Type'];
-    const stableRows = uniqueStableFull.map((p) => {
-      const total = p.composition.reduce((a: number, b: number) => a + b, 0) || 1;
-      const s = p.full;
-      return {
-        ...(hasGroup ? { 'Group': s?.groupName ?? '' } : {}),
-        'EA_ID': p.id,
-        'Formula': s?.formula ?? '',
-        [`x_${elA}`]: (p.composition[0] / total).toFixed(6),
-        [`x_${elB}`]: (p.composition[1] / total).toFixed(6),
-        [`x_${elC}`]: (p.composition[2] / total).toFixed(6),
-        [`E_form(${energyUnit})`]: p.eForm,
-        'Fitness(eV/block)': 0,
-        'SpaceGroup': s?.spaceGroup ?? '',
-        'Generation': s?.generation ?? '',
-        'Origin': s?.origin ?? '',
-        'Type': 'Stable',
-      };
-    });
-    const unstableRows = unstableWithCoords.map((s) => {
-      const exportComposition = systemInfo.compositionBasis?.length
-        ? componentAmountsFromComposition(s.composition, systemInfo.compositionBasis) ?? []
-        : s.composition;
-      const total = exportComposition.reduce((a: number, b: number) => a + b, 0) || 1;
-      return {
-        ...(hasGroup ? { 'Group': s.groupName ?? '' } : {}),
-        'EA_ID': s.id,
-        'Formula': s.formula,
-        [`x_${elA}`]: (exportComposition[0] / total).toFixed(6),
-        [`x_${elB}`]: (exportComposition[1] / total).toFixed(6),
-        [`x_${elC}`]: (exportComposition[2] / total).toFixed(6),
-        [`E_form(${energyUnit})`]: s.eForm,
-        'Fitness(eV/block)': s.fitness,
-        'SpaceGroup': s.spaceGroup,
-        'Generation': s.generation,
-        'Origin': s.origin,
-        'Type': 'Unstable',
-      };
-    });
-    const tag = fitnessMax.toFixed(3).replace('.', 'p');
-    downloadCsv(`${components.join('-')}_ternary_hull_fitness${tag}`, headers, [...stableRows, ...unstableRows]);
-  }
-
-  return (
-    <>
-      {/* Fitness filter slider */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-        <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
-          Fitness max
-        </span>
-        <input
-          type="range"
-          min={0}
-          max={maxFitness}
-          step={maxFitness / 200}
-          value={fitnessMax}
-          onChange={(e) => handleFitnessChange(Number(e.target.value))}
-          style={{ flex: 1, maxWidth: 300 }}
-        />
-        <input
-          type="number"
-          min={0}
-          max={maxFitness}
-          step={0.001}
-          value={Math.round(fitnessMax * 1000) / 1000}
-          onChange={(e) => {
-            const v = parseFloat(e.target.value);
-            if (!isNaN(v)) handleFitnessChange(v);
-          }}
-          style={{
-            width: 72,
-            fontSize: 13,
-            fontWeight: 600,
-            textAlign: 'right',
-            padding: '2px 4px',
-            border: '1px solid var(--color-border)',
-            borderRadius: 4,
-            background: 'var(--color-surface)',
-            color: 'var(--color-text)',
-          }}
-        />
-        <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-          eV
-        </span>
-        {showExport && <ExportDataButton onClick={handleExport} style={{ marginLeft: 'auto' }} />}
+  return <>
+    <div style={{ ...controlStyle, marginBottom: 12 }}>
+      <label htmlFor={`${inputId}-number`} style={{ fontSize: 13 }}>{t('hull.fitnessMax')}</label>
+      <input type="range" aria-label={t('hull.fitnessMax')} min={0} max={model.maxFitness} step="any"
+        value={fitnessMax} disabled={model.maxFitness === 0} onChange={(e) => handleFitnessChange(Number(e.target.value))}
+        style={{ flex: '1 1 140px', maxWidth: 280 }} />
+      <input id={`${inputId}-number`} type="number" min={0} max={model.maxFitness} step="any" value={fitnessMax}
+        onChange={(e) => { if (e.target.value !== '') handleFitnessChange(Number(e.target.value)); }} style={inputStyle} />
+      <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>eV/block</span>
+      {showExport && <button type="button" className="btn btn-outline btn-sm" onClick={exportCsv} title={t('hull.csvScope')} style={{ marginLeft: 'auto' }}>{t('hull.exportFiltered')}</button>}
+    </div>
+    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      <div role="group" aria-label={t('hull.viewControls')} style={{ ...controlStyle, padding: '10px 14px', borderBottom: '1px solid var(--color-border)' }}>
+        <button type="button" className="btn btn-outline btn-sm" aria-pressed={mode === 'select'} onClick={() => setMode(mode === 'select' ? 'inspect' : 'select')}>{t('hull.boxZoom')}</button>
+        <button type="button" className="btn btn-outline btn-sm" aria-pressed={mode === 'pan'} disabled={!zoomed} onClick={() => setMode(mode === 'pan' ? 'inspect' : 'pan')}>{t('hull.pan')}</button>
+        <button type="button" className="btn btn-outline btn-sm" disabled={scale <= MIN_TERNARY_SCALE + 1e-8} onClick={() => zoomBy(0.5)}>{t('hull.zoomIn')}</button>
+        <button type="button" className="btn btn-outline btn-sm" disabled={!zoomed} onClick={() => zoomBy(2)}>{t('hull.zoomOut')}</button>
+        <button type="button" className="btn btn-outline btn-sm" disabled={!canUndo} onClick={() => { undoViewport(); setMode('inspect'); }}>{t('hull.back')}</button>
+        <button type="button" className="btn btn-outline btn-sm" disabled={!zoomed && !canUndo && mode === 'inspect'} onClick={reset}>{t('btn.reset')}</button>
+        <label style={{ ...controlStyle, fontSize: 12 }}><input type="checkbox" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} />{t('hull.formulaLabels')}</label>
+        <button type="button" className="btn btn-outline btn-sm" disabled={!chart} onClick={exportImage} style={{ marginLeft: 'auto' }}>{t('hull.exportImage')}</button>
       </div>
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <PlotFrame
-          data={structurePointClick.plotTraces}
-          layout={layout}
-          config={{ rectZoom: false }}
-          revision={revision}
-          style={{ width: '100%', height: CONVEX_HULL_PLOT_HEIGHT }}
-          boundaryStyle={{ width: '100%', height: CONVEX_HULL_PLOT_HEIGHT }}
-          boundaryHandlers={structurePointClick.boundaryHandlers}
-          hoverTooltip={structurePointClick.hoverTooltip}
-          {...structurePointClick.plotHandlers}
-          onRelayout={handleRelayout}
-          onUndo={undoViewport}
-          overlay={zoomOverlay}
-          onInitialized={(_figure, instance) => setChart(instance as ECharts)}
-        />
+      <div role="status" style={{ padding: '6px 14px', fontSize: 12, color: 'var(--color-text-secondary)' }}>
+        {magnification.toFixed(1)}× · {t(`hull.${mode}Hint`)} · {t('hull.visibleCount', { count: visible.length })}
+        {zoomed && centreComposition.every((n) => n >= 0) && <> · {t('hull.viewCentre')}: {model.components.map((label, i) => `${label} ${(centreComposition[i] * 100).toFixed(1)}%`).join(' / ')}</>}
       </div>
-
-      <MarkPanel showTags={showTags} />
-
-      {/* Stable phases list */}
-      {showFooter && <div className="card" style={{ marginTop: 16 }}>
-        <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--color-text-secondary)' }}>
-          {t('hull.stablePhases')} ({uniqueStableFull.length})
-        </h3>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {uniqueStableFull.map((p) => {
-            const formula = p.full?.formula ?? `EA${p.id}`;
-            return (
-              <span
-                key={p.id}
-                className="tag-badge"
-                style={{ background: '#dc262620', color: '#dc2626', fontSize: 12, padding: '3px 10px' }}
-              >
-                EA{p.id} · {formula} · {p.eForm.toFixed(4)} eV/atom
-              </span>
-            );
-          })}
-        </div>
+      {zoomed && <div role="group" aria-label={t('hull.panDirections')} style={{ ...controlStyle, padding: '0 14px' }}>
+        {([[-1, 0, '←', 'left'], [1, 0, '→', 'right'], [0, 1, '↑', 'up'], [0, -1, '↓', 'down']] as const).map(([dx, dy, symbol, direction]) =>
+          <button key={direction} type="button" className="btn btn-ghost btn-sm" aria-label={t(`hull.pan${direction}`)} onClick={() => pan(dx, dy)}>{symbol}</button>)}
       </div>}
-    </>
-  );
+      <PlotFrame data={traces} layout={layout} config={PLOT_CONFIG}
+        style={{ width: '100%', height: CONVEX_HULL_PLOT_HEIGHT }} boundaryStyle={{ width: '100%', height: CONVEX_HULL_PLOT_HEIGHT, touchAction: mode === 'inspect' ? 'auto' : 'none' }}
+        onStructureClick={(key) => { if (mode === 'inspect') handleClick(key); }}
+        onRelayout={(event) => { handleRelayout(event); if (event['xaxis.autorange'] === true) setMode('inspect'); }} onLegendSelectionChange={setLegendSelection} overlay={overlay}
+        onInitialized={(_figure, instance) => setChart(instance as ECharts)} />
+    </div>
+    <details className="card" style={{ marginTop: 12, padding: '10px 14px' }}>
+      <summary style={{ cursor: 'pointer', fontSize: 13 }}>{t('mark.title')}{marks.length > 0 ? ` · ${marks.reduce((sum, group) => sum + group.entries.length, 0)}` : ''}</summary>
+      <MarkPanel showTags={showTags} visibleStructures={visible.map((e) => e.structure)} />
+    </details>
+    {showFooter && <details className="card" style={{ marginTop: 12 }}>
+      <summary style={{ cursor: 'pointer', fontSize: 13 }}>{t('hull.stablePhases')} ({model.stable.length})</summary>
+      <div style={{ ...controlStyle, marginTop: 10 }}>{model.stable.map((e) => <button key={e.key} type="button" className="btn btn-outline btn-sm" onClick={() => handleClick(e.key)}>
+        EA{e.structure.id} · {e.structure.formula} · {energyText(e)}
+      </button>)}</div>
+    </details>}
+  </>;
 }

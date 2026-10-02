@@ -169,7 +169,7 @@ function adapt2D(
   const title = asDict(layout.title);
   const titleText = plainText(asString(title.text));
   const displayModeBar = config.displayModeBar !== false;
-  // Charts that own their zoom gesture (the ternary triangle magnifier) opt out
+  // Charts with explicit view controls (the ternary viewport) opt out
   // of ECharts' rectangle brush so the two never fight over a drag.
   const allowRectZoom = config.rectZoom !== false;
   const axisRanges = {

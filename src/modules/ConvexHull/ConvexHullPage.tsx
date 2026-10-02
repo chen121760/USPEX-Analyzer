@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { PageSkeleton } from '@/components/ui/Skeleton';
@@ -13,22 +13,19 @@ export function ConvexHullPage() {
   const { t } = useTranslation();
   const rawStructures = useProjectStore((s) => s.structures);
   const systemInfo = useProjectStore((s) => s.systemInfo);
+  const projectId = useProjectStore((s) => s.projectId);
   const { data: structures, ready } = useProgressiveData(rawStructures);
 
   const compositionMode = systemInfo?.compositionMode ?? 'fixed';
   const systemType = systemInfo?.systemType ?? 'binary';
   const isTernaryVarcomp = compositionMode !== 'fixed' && systemType === 'ternary';
 
-  const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d');
-
-  // Reset to 2D when switching project / system type
-  const prevIsTernaryVarcomp = useRef(isTernaryVarcomp);
-  useEffect(() => {
-    if (prevIsTernaryVarcomp.current !== isTernaryVarcomp) {
-      setViewMode('2d');
-      prevIsTernaryVarcomp.current = isTernaryVarcomp;
-    }
-  }, [isTernaryVarcomp]);
+  const [viewState, setViewState] = useState<{ projectId: string; mode: '2d' | '3d' }>({ projectId, mode: '2d' });
+  const [fitnessState, setFitnessState] = useState<{ projectId: string; value: number | null }>({ projectId, value: null });
+  const viewMode = viewState.projectId === projectId ? viewState.mode : '2d';
+  const setViewMode = (mode: '2d' | '3d') => setViewState({ projectId, mode });
+  const fitnessLimit = fitnessState.projectId === projectId ? fitnessState.value : null;
+  const onFitnessLimitChange = (value: number) => setFitnessState({ projectId, value });
 
   // Every hook above is unconditional; the loading and empty states come after.
   if (!ready) {
@@ -81,6 +78,7 @@ export function ConvexHullPage() {
             </span>
             <button
               onClick={() => setViewMode('2d')}
+              aria-pressed={viewMode === '2d'}
               style={{
                 padding: '4px 14px',
                 fontSize: 12,
@@ -102,6 +100,7 @@ export function ConvexHullPage() {
             </button>
             <button
               onClick={() => setViewMode('3d')}
+              aria-pressed={viewMode === '3d'}
               style={{
                 padding: '4px 14px',
                 fontSize: 12,
@@ -172,9 +171,9 @@ export function ConvexHullPage() {
         <EnergyRankingChart structures={structures} systemInfo={systemInfo} />
       ) : systemType === 'ternary' ? (
         viewMode === '2d' ? (
-          <TernaryHullPlot structures={structures} systemInfo={systemInfo} />
+          <TernaryHullPlot key={projectId} structures={structures} systemInfo={systemInfo} fitnessLimit={fitnessLimit} onFitnessLimitChange={onFitnessLimitChange} />
         ) : (
-          <TernaryHullPlot3D structures={structures} systemInfo={systemInfo} />
+          <TernaryHullPlot3D key={projectId} structures={structures} systemInfo={systemInfo} fitnessLimit={fitnessLimit} onFitnessLimitChange={onFitnessLimitChange} />
         )
       ) : systemType === 'quaternary' ? (
         <QuaternaryHullPlot3D structures={structures} systemInfo={systemInfo} />

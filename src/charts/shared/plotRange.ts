@@ -140,6 +140,7 @@ export function usePlotViewport(axisNames: readonly string[] = DEFAULT_CARTESIAN
     handleRelayout,
     undoViewport,
     resetViewport,
+    canUndo: pastRef.current.length > 0,
   };
 }
 

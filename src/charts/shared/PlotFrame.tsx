@@ -26,6 +26,7 @@ export function PlotFrame({
   onUndo,
   onAxisTitleDoubleClick,
   onStructureClick,
+  onLegendSelectionChange,
   onUpdate,
   revision,
   style,
@@ -33,8 +34,9 @@ export function PlotFrame({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<echarts.ECharts | null>(null);
   const hoverLockRef = useRef<HTMLDivElement | null>(null);
-  const callbacksRef = useRef({ onClick, onInitialized, onRelayout, onUndo, onStructureClick, onUpdate });
-  callbacksRef.current = { onClick, onInitialized, onRelayout, onUndo, onStructureClick, onUpdate };
+  const legendSelectedRef = useRef<Record<string, boolean>>({});
+  const callbacksRef = useRef({ onClick, onInitialized, onRelayout, onUndo, onStructureClick, onLegendSelectionChange, onUpdate });
+  callbacksRef.current = { onClick, onInitialized, onRelayout, onUndo, onStructureClick, onLegendSelectionChange, onUpdate };
 
   // Chart layouts are expressed in Plotly domains (fractions of the plot area),
   // so the adapter needs the measured container for two things: letterboxing a
@@ -108,6 +110,12 @@ export function PlotFrame({
     };
 
     const handleRestore = () => callbacksRef.current.onRelayout?.({ ...CARTESIAN_AUTORANGE_PATCH });
+    const handleLegend = (event: unknown) => {
+      if (!isRecord(event) || !isRecord(event.selected)) return;
+      const selected = Object.fromEntries(Object.entries(event.selected).filter((pair): pair is [string, boolean] => typeof pair[1] === 'boolean'));
+      legendSelectedRef.current = { ...legendSelectedRef.current, ...selected };
+      callbacksRef.current.onLegendSelectionChange?.(selected);
+    };
 
     const handleToolboxClick = (event: unknown) => {
       // ECharts' own toolbox "back" button replays a dataZoom snapshot that is
@@ -176,6 +184,7 @@ export function PlotFrame({
     chart.on('click', handleClick);
     chart.on('datazoom', handleDataZoom);
     chart.on('restore', handleRestore);
+    chart.on('legendselectchanged', handleLegend);
     chart.on('grid3dcamerachanged', handleCamera);
     chart.on('mouseover', handlePointMouseOver);
     chart.on('mouseout', hideHoverLock);
@@ -203,7 +212,9 @@ export function PlotFrame({
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
-    chart.setOption(adapted.option, { notMerge: true, lazyUpdate: false });
+    const option = adapted.option;
+    const legend = isRecord(option.legend) ? { ...option.legend, selected: legendSelectedRef.current } : option.legend;
+    chart.setOption({ ...option, legend }, { notMerge: true, lazyUpdate: false });
     callbacksRef.current.onUpdate?.(adapted.option, chart);
   }, [adapted]);
 

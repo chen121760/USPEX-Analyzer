@@ -1,138 +1,79 @@
-/**
- * Triangle-zoom invariants for the ternary phase diagram.
- *
- * The zoom window is an upright equilateral sub-triangle, so the frame that
- * comes out of a zoom must look like the frame it started from: same margin
- * ratio, same equilateral shape, and never outside the diagram.
- */
-import {
-  MIN_TERNARY_SCALE,
-  TERNARY_CENTROID,
-  TERNARY_PADDING,
-  TERNARY_VERTICES,
-  clampToTriangle,
-  isInsideTernary,
-  ternaryFrameFromRanges,
-  ternaryZoomScale,
-  ternaryZoomWindow,
-} from '@/charts/ternary/ternaryZoom';
+import assert from 'node:assert/strict';
+import { BASE_TERNARY_RANGES as base, MIN_TERNARY_SCALE, ternaryViewport, ternaryViewportScale, zoomTernaryViewport,
+  panTernaryViewport, selectTernaryViewport, isInTernaryViewport, ternaryViewportVertices, compositionAtTernaryPoint, clipTernaryEdges } from '@/charts/ternary/ternaryZoom';
+import type { TernaryRanges } from '@/charts/ternary/ternaryZoom';
 
-let passed = 0;
-const failures: string[] = [];
-
-function check(name: string, condition: boolean, detail = ''): void {
-  if (condition) {
-    passed += 1;
-    console.log(`  ok   ${name}`);
-  } else {
-    failures.push(`${name}${detail ? ` — ${detail}` : ''}`);
-    console.log(`  FAIL ${name}${detail ? ` — ${detail}` : ''}`);
+let count = 0;
+function check(name: string, run: () => void) { run(); count++; console.log(`  ok   ${name}`); }
+function close(a: number, b: number) { assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`); }
+function bounded(ranges: TernaryRanges) {
+  for (const axis of ['x', 'y'] as const) { assert.ok(ranges[axis][0] >= base[axis][0] - 1e-9); assert.ok(ranges[axis][1] <= base[axis][1] + 1e-9); }
+  close((ranges.x[1] - ranges.x[0]) / (ranges.y[1] - ranges.y[0]), (base.x[1] - base.x[0]) / (base.y[1] - base.y[0]));
+  for (const vertex of ternaryViewportVertices(ranges)) {
+    assert.ok(compositionAtTernaryPoint(vertex).every((value) => value >= -1e-9 && value <= 1 + 1e-9));
   }
 }
-
-console.log('\nTernary triangle zoom');
-
-const SQRT3_2 = Math.sqrt(3) / 2;
-const BASE_X: [number, number] = [-TERNARY_PADDING, 1 + TERNARY_PADDING];
-const BASE_Y: [number, number] = [-TERNARY_PADDING, SQRT3_2 + TERNARY_PADDING];
-
-const full = ternaryZoomWindow(TERNARY_CENTROID, 1);
-check('scale 1 centred on the centroid reproduces the base layout ranges',
-  Math.abs(full.ranges.x[0] - BASE_X[0]) < 1e-12 && Math.abs(full.ranges.x[1] - BASE_X[1]) < 1e-12
-  && Math.abs(full.ranges.y[0] - BASE_Y[0]) < 1e-12 && Math.abs(full.ranges.y[1] - BASE_Y[1]) < 1e-12,
-  `${JSON.stringify(full.ranges)}`);
-
-const sideLengths = (scale: number, anchor: readonly [number, number] = TERNARY_CENTROID): number[] => {
-  const [a, b, c] = ternaryZoomWindow(anchor, scale).vertices;
-  return [
-    Math.hypot(a[0] - b[0], a[1] - b[1]),
-    Math.hypot(b[0] - c[0], b[1] - c[1]),
-    Math.hypot(c[0] - a[0], c[1] - a[1]),
-  ];
-};
-
-const deep = ternaryZoomWindow([0.2, 0.15], 0.1);
-const deepSides = sideLengths(0.1, [0.2, 0.15]);
-check('a zoom window stays an equilateral triangle of exactly that scale',
-  Math.max(...deepSides) - Math.min(...deepSides) < 1e-12 && Math.abs(deepSides[0] - 0.1) < 1e-12,
-  deepSides.map((v) => v.toFixed(4)).join('/'));
-
-const aspect = (window: ReturnType<typeof ternaryZoomWindow>): number =>
-  (window.ranges.x[1] - window.ranges.x[0]) / (window.ranges.y[1] - window.ranges.y[0]);
-check('every window keeps the base framing ratio',
-  Math.abs(aspect(deep) - aspect(full)) < 1e-12
-  && Math.abs(aspect(ternaryZoomWindow([0.9, 0.05], 0.4)) - aspect(full)) < 1e-12,
-  `${aspect(deep).toFixed(6)} vs ${aspect(full).toFixed(6)}`);
-
-// Corner anchors are the interesting case: the window has to slide back inside.
-const corner = ternaryZoomWindow([1.4, -0.9], 0.35);
-check('a window anchored outside the diagram is pulled back inside',
-  corner.vertices.every((vertex) => isInsideTernary(vertex, 1e-9)),
-  JSON.stringify(corner.vertices));
-const cornerCentre: [number, number] = [
-  (corner.vertices[0][0] + corner.vertices[1][0] + corner.vertices[2][0]) / 3,
-  (corner.vertices[0][1] + corner.vertices[1][1] + corner.vertices[2][1]) / 3,
-];
-check('a window anchored outside the diagram is clamped rather than stretched',
-  corner.scale === 0.35 && isInsideTernary(cornerCentre, 1e-9),
-  `centre ${cornerCentre.map((v) => v.toFixed(4)).join(',')}`);
-
-const deepCorner = ternaryZoomWindow([1, 0], MIN_TERNARY_SCALE);
-check('an extreme zoom near a corner stays inside the diagram',
-  deepCorner.vertices.every((vertex) => isInsideTernary(vertex, 1e-9))
-  && deepCorner.ranges.x[0] >= BASE_X[0] - 1e-12 && deepCorner.ranges.x[1] <= BASE_X[1] + 1e-12
-  && deepCorner.ranges.y[0] >= BASE_Y[0] - 1e-12 && deepCorner.ranges.y[1] <= BASE_Y[1] + 1e-12,
-  JSON.stringify(corner.ranges));
-
-check('a window is never larger than the diagram',
-  ternaryZoomWindow(TERNARY_CENTROID, 4).scale === 1
-  && ternaryZoomWindow(TERNARY_CENTROID, 0).scale === MIN_TERNARY_SCALE);
-
-const inradius = Math.sqrt(3) / 6;
-check('drag distance maps to window size through the inradius',
-  Math.abs(ternaryZoomScale(inradius) - 1) < 1e-12
-  && Math.abs(ternaryZoomScale(inradius / 4) - 0.25) < 1e-12
-  && ternaryZoomScale(inradius * 10) === 1
-  && ternaryZoomScale(0) === MIN_TERNARY_SCALE
-  && ternaryZoomScale(Number.NaN) === MIN_TERNARY_SCALE);
-
-const centroidOf = (window: ReturnType<typeof ternaryZoomWindow>): [number, number] => [
-  (window.vertices[0][0] + window.vertices[1][0] + window.vertices[2][0]) / 3,
-  (window.vertices[0][1] + window.vertices[1][1] + window.vertices[2][1]) / 3,
-];
-const anchored = centroidOf(ternaryZoomWindow([0.35, 0.2], 0.5));
-check('the pressed point becomes the centre of the zoomed view',
-  Math.abs(anchored[0] - 0.35) < 1e-12 && Math.abs(anchored[1] - 0.2) < 1e-12,
-  anchored.join(','));
-
-check('the zoom triangle keeps the diagram orientation (apex up)',
-  full.vertices[1][1] > full.vertices[0][1] && Math.abs(full.vertices[0][1] - full.vertices[2][1]) < 1e-12
-  && Math.abs(full.vertices[1][0] - 0.5) < 1e-12);
-
-const clamped = clampToTriangle([-5, -5], TERNARY_VERTICES);
-check('clamping a far-away point lands on a vertex of the container',
-  Math.hypot(clamped[0] - 0, clamped[1] - 0) < 1e-9, JSON.stringify(clamped));
-check('clamping leaves interior points untouched',
-  clampToTriangle([0.4, 0.3], TERNARY_VERTICES)[0] === 0.4
-  && clampToTriangle([0.4, 0.3], TERNARY_VERTICES)[1] === 0.3);
-check('inside test rejects the margin and the outside',
-  isInsideTernary([0.5, 0.2]) && !isInsideTernary([-0.05, 0.5]) && !isInsideTernary([0.5, 0.95]));
-
-// The frame overlay reads the window back out of whatever ranges the chart is
-// drawn with, so the two directions have to agree exactly.
-const windowForFrame = ternaryZoomWindow([0.62, 0.21], 0.3);
-const recovered = ternaryFrameFromRanges(windowForFrame.ranges.x, windowForFrame.ranges.y);
-check('ranges round-trip back to the window that produced them',
-  recovered !== null
-  && Math.abs(recovered.scale - 0.3) < 1e-9
-  && Math.abs(recovered.centre[0] - windowForFrame.vertices.reduce((sum, v) => sum + v[0], 0) / 3) < 1e-9
-  && Math.abs(recovered.centre[1] - windowForFrame.vertices.reduce((sum, v) => sum + v[1], 0) / 3) < 1e-9,
-  JSON.stringify(recovered));
-check('the unzoomed base ranges report no zoom frame',
-  ternaryFrameFromRanges(BASE_X, BASE_Y) === null);
-check('ranges that no window produced are rejected',
-  ternaryFrameFromRanges([-0.12, 0.6], [-0.12, 0.986]) === null
-  && ternaryFrameFromRanges([-0.12, 1.12], [-0.12, 0.5]) === null);
-
-console.log(`\nTernary zoom checks: ${passed} passed, ${failures.length} failed`);
-if (failures.length) throw new Error(failures.join('; '));
+console.log('\nTernary triangular viewports');
+check('zoom in then out restores the original coordinate frame', () => {
+  const result = zoomTernaryViewport(zoomTernaryViewport(base, 0.5), 2);
+  for (const axis of ['x', 'y'] as const) for (const i of [0, 1]) close(result[axis][i], base[axis][i]);
+});
+check('all zoom levels preserve equal units and stay in bounds', () => {
+  for (const scale of [1, 0.5, 0.1, MIN_TERNARY_SCALE]) for (const centre of [[-10, -10], [0.4, 0.3], [10, 10]] as const) bounded(ternaryViewport(centre, scale));
+});
+check('zoom clamps at 20x and the full overview', () => {
+  close(ternaryViewportScale(ternaryViewport([0.5, 0.3], 1e-9)), MIN_TERNARY_SCALE);
+  close(ternaryViewportScale(ternaryViewport([0.5, 0.3], 100)), 1);
+});
+check('invalid scales and centres recover a finite overview', () => {
+  const result = ternaryViewport([NaN, Infinity], NaN); bounded(result);
+  for (const axis of ['x', 'y'] as const) for (const i of [0, 1]) close(result[axis][i], base[axis][i]);
+});
+check('brush defines an upright equilateral triangle in original composition coordinates', () => {
+  const start = [0.35, 0.25] as const, end = [0.55, 0.35] as const;
+  const result = selectTernaryViewport(start, end); bounded(result);
+  const [left, top, right] = ternaryViewportVertices(result);
+  close(left[0], start[0]); close(left[1], start[1]); close(right[0], end[0]); close(right[1], start[1]);
+  close(top[0], 0.45); close(top[1], start[1] + 0.2 * Math.sqrt(3) / 2);
+  const lengths = [Math.hypot(top[0] - left[0], top[1] - left[1]), Math.hypot(right[0] - top[0], right[1] - top[1]), right[0] - left[0]];
+  lengths.forEach((length) => close(length, 0.2));
+  assert.ok(!isInTernaryViewport(end, result)); // A rectangle's top corner is outside its triangular selection.
+  for (const vertex of [left, top, right]) {
+    const fractions = compositionAtTernaryPoint(vertex);
+    close(fractions.reduce((a, b) => a + b), 1);
+    close(fractions[2] + fractions[1] / 2, vertex[0]);
+    assert.ok(isInTernaryViewport(vertex, result));
+  }
+});
+check('brush works in both drag directions', () => {
+  assert.deepEqual(selectTernaryViewport([0.3, 0.2], [0.6, 0.5]), selectTernaryViewport([0.6, 0.5], [0.3, 0.2]));
+});
+check('an edge brush never leaves the overview', () => bounded(selectTernaryViewport([0.95, 0], [1.1, 0.2])));
+check('pan preserves magnification and clamps at dataset boundaries', () => {
+  const local = ternaryViewport([0.5, 0.3], 0.25);
+  for (const delta of [[0.1, 0.1], [-100, -100], [100, 100]] as const) {
+    const result = panTernaryViewport(local, delta); bounded(result); close(ternaryViewportScale(result), 0.25);
+  }
+});
+check('local view does not contain the original elemental corners', () => {
+  const local = ternaryViewport([0.5, 0.3], 0.1);
+  assert.ok(!isInTernaryViewport([0, 0], local)); assert.ok(!isInTernaryViewport([1, 0], local));
+  assert.ok(!isInTernaryViewport([0.5, Math.sqrt(3) / 2], local));
+});
+check('tie lines crossing the triangle are clipped even with both endpoints outside', () => {
+  const local = ternaryViewport([0.5, 0.3], 0.2);
+  const clipped = clipTernaryEdges([{ p1: [0, 0.3], p2: [1, 0.3] }], local);
+  assert.equal(clipped.length, 1);
+  close(clipped[0].p1[0], 0.5 - 0.2 / 3); close(clipped[0].p2[0], 0.5 + 0.2 / 3);
+  assert.ok(isInTernaryViewport(clipped[0].p1, local)); assert.ok(isInTernaryViewport(clipped[0].p2, local));
+  assert.deepEqual(clipTernaryEdges([{ p1: [0, 0], p2: [1, 0] }], local), []);
+});
+check('clipping preserves triangle edges and interior segments without altering their coordinates', () => {
+  const local = ternaryViewport([0.5, 0.3], 0.2);
+  const vertices = ternaryViewportVertices(local);
+  const edges = vertices.map((vertex, i) => ({ p1: [...vertex] as [number, number], p2: [...vertices[(i + 1) % 3]] as [number, number] }));
+  const clipped = clipTernaryEdges(edges, local);
+  assert.equal(clipped.length, 3);
+  clipped.forEach((edge, i) => { close(edge.p1[0], edges[i].p1[0]); close(edge.p2[1], edges[i].p2[1]); });
+});
+console.log(`\nTernary zoom checks: ${count} passed`);
