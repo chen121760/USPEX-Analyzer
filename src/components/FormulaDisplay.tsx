@@ -4,8 +4,7 @@ import { formulaToHtml } from '@/parsers/compositionUtils';
  * 把化学式里的数字渲染成下标。
  * 例如 "Fe2O3" 显示为 Fe₂O₃（用 HTML <sub> 标签实现）。
  *
- * formula 字符串由内部 buildFormula() 生成，不含用户输入，
- * 所以用 dangerouslySetInnerHTML 是安全的。
+ * formulaToHtml 会转义导入文本，仅生成受控的下标标签。
  */
 export function FormulaDisplay({
   formula,

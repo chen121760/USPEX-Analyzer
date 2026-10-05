@@ -1,6 +1,7 @@
 import type { EChartsOption } from 'echarts';
 import { CHART_FONT } from '@/lib/constants';
 import type { PlotData, PlotLayout, PlotTrace } from './plotTypes';
+import { escapeHtml, safePlotHtml } from '@/utils/htmlText';
 
 type Dict = Record<string, unknown>;
 
@@ -1239,12 +1240,12 @@ function tooltipFormatter(params: unknown): string {
   const param = isDict(params) ? params : {};
   const data = asDict(param.data);
   const html = asString(data.__text);
-  if (html) return html;
+  if (html) return safePlotHtml(html);
   const seriesName = asString(param.seriesName);
   const name = asString(param.name);
   const value = data.value ?? param.value;
   const valueText = Array.isArray(value) ? value.slice(0, 3).map(formatValue).join(', ') : formatValue(value);
-  return [seriesName || name, valueText].filter(Boolean).join('<br>');
+  return [seriesName || name, valueText].filter(Boolean).map(escapeHtml).join('<br>');
 }
 
 function labelFormatter(params: unknown): string {
@@ -1407,7 +1408,10 @@ function plainText(value: string): string {
     .replace(/<[^>]+>/g, '')
     .replace(/&Delta;/g, 'Δ')
     .replace(/&minus;/g, '−')
-    .replace(/&nbsp;/g, ' ');
+    .replace(/&nbsp;/g, ' ')
+    // Decode only after stripping tags, so external text stays canvas text.
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 }
 
 const SUBSCRIPT_GLYPHS: Record<string, string> = {

@@ -50,6 +50,7 @@ export async function clearSavedSession(): Promise<void> {
 export function useAutoSave(): void {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
+    let pendingSnapshot: ProjectFile | null = null;
     const enqueue = createSaveQueue(saveProjectSnapshot,
       error => {
         console.warn('[usePersistence] Save failed:', error);
@@ -57,21 +58,42 @@ export function useAutoSave(): void {
       }, snapshot => {
         if (useProjectStore.getState().projectId === snapshot.projectId) useProjectStore.setState({ persistenceError: null });
       });
-    const schedule = () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
+    const cancelTimer = () => {
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
       timerRef.current = null;
+    };
+    const flush = () => {
+      cancelTimer();
+      if (!pendingSnapshot) return;
+      const snapshot = pendingSnapshot;
+      pendingSnapshot = null;
+      void enqueue(snapshot);
+    };
+    const schedule = () => {
+      cancelTimer();
       const state = useProjectStore.getState();
-      if (!state.isDataLoaded || state.isLoading || !state.systemInfo) return;
+      if (!state.isDataLoaded || !state.systemInfo) return;
+      // Capture while this project is active: a later switch must not replace
+      // unsaved annotations with the next project's data.
+      pendingSnapshot = state.exportProjectFile();
+      if (state.isLoading) return;
       timerRef.current = setTimeout(() => {
-        const current = useProjectStore.getState();
-        if (current.isDataLoaded && !current.isLoading && current.systemInfo) void enqueue(current.exportProjectFile());
+        timerRef.current = null;
+        if (!useProjectStore.getState().isLoading) flush();
       }, 2000);
     };
     schedule();
     const unsub = useProjectStore.subscribe((state, previous) => {
-      if (projectDataChanged({ ...state }, { ...previous })) schedule();
+      const switched = state.projectId !== previous.projectId;
+      if (switched) flush();
+      if (projectDataChanged({ ...state }, { ...previous }) || (previous.isLoading && !state.isLoading)) {
+        schedule();
+        // The queue saves the outgoing project first, then restores the active
+        // session to the incoming project without another debounce window.
+        if (switched && !state.isLoading) flush();
+      }
     });
-    return () => { unsub(); if (timerRef.current) clearTimeout(timerRef.current); };
+    return () => { unsub(); flush(); };
   }, []);
 }
 

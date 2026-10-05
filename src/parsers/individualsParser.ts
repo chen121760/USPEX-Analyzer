@@ -150,10 +150,10 @@ const USPEX25_CORE_COLUMNS = new Set([
   's_order',
 ]);
 
-function parseNumber(value: string | undefined): number {
-  if (value === undefined) return 0;
+function parseNumber(value: string | undefined, missing = 0): number {
+  if (value === undefined) return missing;
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+  return Number.isFinite(parsed) ? parsed : missing;
 }
 
 function getUspex25Value(
@@ -224,11 +224,11 @@ function parseUspex25Individuals(
       getUspex25Value(rowTokens, columnMap, ['parents', 'Parent-ID']),
     ).filter((parentId) => parentId > 0);
 
-    const enthalpy = parseNumber(getUspex25Value(rowTokens, columnMap, ['energy', 'Enthalpy']));
-    const volume = parseNumber(getUspex25Value(rowTokens, columnMap, ['cell_volume', 'Volume']));
+    const enthalpy = parseNumber(getUspex25Value(rowTokens, columnMap, ['energy', 'Enthalpy']), Number.NaN);
+    const volume = parseNumber(getUspex25Value(rowTokens, columnMap, ['cell_volume', 'Volume']), Number.NaN);
     const density = parseNumber(getUspex25Value(rowTokens, columnMap, ['density']));
     const symm = parseNumber(getUspex25Value(rowTokens, columnMap, ['space_group', 'SYMM']));
-    const indFitness = parseNumber(getUspex25Value(rowTokens, columnMap, ['e_above_hull', 'Fitness']));
+    const indFitness = parseNumber(getUspex25Value(rowTokens, columnMap, ['e_above_hull', 'Fitness']), Number.NaN);
     const qEntropy = parseNumber(getUspex25Value(rowTokens, columnMap, ['quasi_entropy', 'Q_entr']));
     const aOrder = parseNumber(getUspex25Value(rowTokens, columnMap, ['a_order', 'A_order']));
     const sOrder = parseNumber(getUspex25Value(rowTokens, columnMap, ['s_order', 'S_order']));

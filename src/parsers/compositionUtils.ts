@@ -1,6 +1,7 @@
 /**
  * Composition and formula utility functions.
  */
+import { escapeHtml } from '@/utils/htmlText';
 
 /**
  * Build a chemical formula string from composition array and element names.
@@ -301,11 +302,12 @@ export function reducedCompositionKey(composition: number[]): string | null {
  * e.g., "Fe2O3" → "Fe<sub>2</sub>O<sub>3</sub>"
  * e.g., "Ca3Al2Si3O12" → "Ca<sub>3</sub>Al<sub>2</sub>Si<sub>3</sub>O<sub>12</sub>"
  *
- * Safe to use with dangerouslySetInnerHTML because the formula is always
- * generated internally by buildFormula() — never from user input.
+ * Formula strings may come from imported JSON. Only generated subscript tags
+ * are HTML; every other fragment is escaped text.
  */
 export function formulaToHtml(formula: string): string {
   // 用正则把所有"连续数字"替换成 <sub>数字</sub>
   // \d+ 匹配一个或多个连续数字
-  return formula.replace(/(\d+)/g, '<sub>$1</sub>');
+  return formula.split(/(\d+)/).map(part => /^\d+$/.test(part)
+    ? `<sub>${part}</sub>` : escapeHtml(part)).join('');
 }

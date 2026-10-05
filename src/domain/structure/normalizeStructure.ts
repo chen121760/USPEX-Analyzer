@@ -21,11 +21,11 @@ function mlPropertiesFromLegacy(structure: StructureLike): Record<MLFieldKey, nu
 }
 
 function cloneNumberArray(value: unknown): number[] {
-  return Array.isArray(value) ? [...value] : [];
+  return Array.isArray(value) ? value.map(n => n ?? Number.NaN) : [];
 }
 
 function normalizeHullX(value: unknown): number[] {
-  if (Array.isArray(value)) return [...value];
+  if (Array.isArray(value)) return cloneNumberArray(value);
   return typeof value === 'number' ? [value] : [];
 }
 
@@ -43,21 +43,24 @@ function normalizeExtraProps(value: Structure['extraProps']): Structure['extraPr
   const normalized: Record<string, number> = {};
   for (const [key, entry] of Object.entries(value)) {
     const measured = typeof entry === 'number' && Number.isFinite(entry) && entry < USPEX_OBJECTIVE_PLACEHOLDER;
-    normalized[key] = typeof entry === 'number' && !measured ? Number.NaN : entry;
+    normalized[key] = measured ? entry : Number.NaN;
   }
   return normalized;
 }
 
 function cloneLatticeParams(value: LatticeParams | undefined): LatticeParams | undefined {
-  return value ? { ...value } : undefined;
+  return value ? { a: value.a ?? Number.NaN, b: value.b ?? Number.NaN, c: value.c ?? Number.NaN,
+    alpha: value.alpha ?? Number.NaN, beta: value.beta ?? Number.NaN, gamma: value.gamma ?? Number.NaN } : undefined;
 }
 
 function cloneSymmetry(value: SymmetryAnalysis | undefined): SymmetryAnalysis | undefined {
   if (!value || !Array.isArray(value.points)) return undefined;
   return {
     version: value.version,
-    symprecs: Array.isArray(value.symprecs) ? [...value.symprecs] : [],
-    points: value.points.map((point) => ({ ...point })),
+    symprecs: cloneNumberArray(value.symprecs),
+    points: value.points.map((point) => ({ ...point, symprec: point.symprec ?? Number.NaN,
+      number: point.number ?? 0, operations: point.operations ?? 0, hallNumber: point.hallNumber ?? 0,
+      symbol: point.symbol ?? '', pearson: point.pearson ?? '' })),
     error: value.error,
   };
 }
@@ -67,8 +70,12 @@ function cloneSymmetry(value: SymmetryAnalysis | undefined): SymmetryAnalysis | 
  * in-app shape while preserving dynamic scientific fields.
  */
 export function normalizeStructure(structure: StructureLike): Structure {
-  const enthalpy = structure.enthalpy === null ? Number.NaN : structure.enthalpy ?? 0;
-  const volume = structure.volume ?? 0;
+  const atoms = structure.composition?.reduce((sum, count) => sum + count, 0) ?? 0;
+  const enthalpy = structure.enthalpy === null ? Number.NaN : structure.enthalpy
+    ?? (Number.isFinite(structure.enthalpyTotal) && atoms > 0 ? structure.enthalpyTotal! / atoms : Number.NaN);
+  const enthalpyTotal = structure.enthalpyTotal === null ? Number.NaN
+    : structure.enthalpyTotal ?? (atoms > 0 ? enthalpy * atoms : Number.NaN);
+  const volume = structure.volume === null ? Number.NaN : structure.volume ?? 0;
 
   return {
     id: structure.id,
@@ -77,10 +84,10 @@ export function normalizeStructure(structure: StructureLike): Structure {
     generation: structure.generation ?? 0,
 
     enthalpy,
-    enthalpyTotal: structure.enthalpyTotal === null ? Number.NaN : structure.enthalpyTotal ?? enthalpy,
+    enthalpyTotal,
     volume,
-    volumeTotal: structure.volumeTotal ?? volume,
-    fitness: structure.fitness ?? -1,
+    volumeTotal: structure.volumeTotal === null ? Number.NaN : structure.volumeTotal ?? volume,
+    fitness: Number.isFinite(enthalpyTotal) ? structure.fitness ?? -1 : -1,
     spaceGroup: structure.spaceGroup ?? 0,
     hullX: normalizeHullX(structure.hullX),
     hullY: structure.hullY ?? 0,
@@ -98,7 +105,7 @@ export function normalizeStructure(structure: StructureLike): Structure {
     qEntropy: structure.qEntropy ?? 0,
     aOrder: structure.aOrder ?? 0,
     sOrder: structure.sOrder ?? 0,
-    kpoints: structure.kpoints ? [...structure.kpoints] : undefined,
+    kpoints: structure.kpoints ? cloneNumberArray(structure.kpoints) : undefined,
 
     poscarData: structure.poscarData,
     latticeParams: cloneLatticeParams(structure.latticeParams),
@@ -111,7 +118,7 @@ export function normalizeStructure(structure: StructureLike): Structure {
     groupName: structure.groupName,
     groupColor: structure.groupColor,
 
-    eForm: structure.eForm ?? -1,
+    eForm: structure.eForm === null ? Number.NaN : structure.eForm ?? -1,
     eHullRecons: structure.eHullRecons ?? -1,
   };
 }

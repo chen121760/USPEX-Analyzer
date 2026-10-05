@@ -1,8 +1,7 @@
 /**
- * Reproduction probes for the review of b4fcbb6. This is intentionally separate
- * from npm test: it reports observed defects, rather than accepting them as
- * regression expectations. Each probe compares production code with an
- * independently stated invariant; a defect makes the command exit with 1.
+ * Regression probes for the seven defects found in the review of b4fcbb6.
+ * Each probe compares production code with an independently stated invariant;
+ * a defect makes both this standalone command and npm test exit with 1.
  */
 import './persistenceShim';
 import assert from 'node:assert/strict';
@@ -10,6 +9,8 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { normalizeStructure } from '@/domain/structure/normalizeStructure';
 import { computeWorkshopGeometricHull } from '@/domain/hull/workshopHull';
+import { buildTernaryHullGeometry } from '@/domain/hull/ternaryHullGeometry';
+import { buildTernaryPlotModel } from '@/modules/ConvexHull/ternaryPlotModel';
 import { prepareWorkshopGroups } from '@/domain/hull/workshopCompatibility';
 import { validateProject } from '@/domain/project/validateProject';
 import { filteredProject } from '@/domain/project/filteredProject';
@@ -58,19 +59,32 @@ async function probe(name: string, run: () => void | Promise<void>) {
 }
 
 const tick = () => new Promise<void>(resolve => setTimeout(resolve, 0));
-function mountAutoSave() {
+function mountAutoSave(writeDelay: Promise<void> = Promise.resolve()) {
   let nextId = 0, cleanup = () => {};
   const timers = new Map<number, () => void>();
   const writes: ProjectFile[] = [];
+  const records = new Map<string, Map<string, { project: ProjectFile }>>();
+  const saveSnapshot = extract<(snapshot: ProjectFile) => Promise<void>>('src/lib/projectStorage.ts', 'saveProjectSnapshot', {
+    getProjectDB: async () => ({ transaction: (stores: string[], mode: string) => {
+      assert.deepEqual(stores, ['project-data', 'projects']); assert.equal(mode, 'readwrite');
+      return { done: Promise.resolve(), objectStore: (store: string) => ({ put: async (value: { id?: string; project: ProjectFile }, key?: string) => {
+        if (!records.has(store)) records.set(store, new Map());
+        records.get(store)!.set(key ?? value.id!, structuredClone(value));
+      } }) };
+    } }),
+    makeProjectId: () => { throw new Error('Fixture must carry its project id'); },
+  });
   const hook = extract<() => void>('src/hooks/usePersistence.ts', 'useAutoSave', {
     useRef: () => ({ current: null }), useEffect: (setup: () => () => void) => { cleanup = setup(); },
     useProjectStore, createSaveQueue, projectDataChanged,
-    saveProjectSnapshot: async (snapshot: ProjectFile) => { writes.push(structuredClone(snapshot)); },
+    saveProjectSnapshot: async (snapshot: ProjectFile) => {
+      await writeDelay; await saveSnapshot(snapshot); writes.push(structuredClone(snapshot));
+    },
     setTimeout: (fn: () => void) => { timers.set(++nextId, fn); return nextId; },
     clearTimeout: (id: number) => { timers.delete(id); },
   });
   hook();
-  return { writes, cleanup: () => cleanup(), fire: async () => {
+  return { writes, records, cleanup: () => cleanup(), fire: async () => {
     const current = [...timers.values()]; timers.clear(); current.forEach(fn => fn()); await tick();
   } };
 }
@@ -94,6 +108,8 @@ await probe('A1: switching projects within 2 seconds must retain the old project
     await harness.fire();
     console.log('  saved snapshots:', JSON.stringify(harness.writes.map(p => [p.projectId, p.structures[0].notes])));
     assert.equal(harness.writes.filter(p => p.projectId === 'A').at(-1)?.structures[0].notes, 'unsaved A edit');
+    assert.equal(harness.records.get('projects')?.get('A')?.project.structures[0].notes, 'unsaved A edit');
+    assert.equal(harness.records.get('project-data')?.get('current-session')?.project.projectId, 'B');
   } finally { harness.cleanup(); }
 });
 
@@ -130,6 +146,7 @@ await probe('A3: parsing a fresh Si project must clear the Ti-H manual rows and 
   await useProjectStore.getState().loadProjectFile(project());
   useProjectStore.getState().addUserStructure({ composition: [1, 1], enthalpy: -3, enthalpyTotal: -6 });
   useProjectStore.getState().addTag({ id: 'A-only', nameKey: 'A-only', color: '#123456' });
+  useProjectStore.getState().addFilterPreset({ id: 'A-only', name: 'A-only', conditions: [] });
   await useProjectStore.getState().processFiles([], contents('Si', '2', 300));
   const state = useProjectStore.getState();
   assert.deepEqual(state.systemInfo?.elements, ['Si']);
@@ -141,7 +158,11 @@ await probe('A3: parsing a fresh Si project must clear the Ti-H manual rows and 
     'custom tags:', JSON.stringify(state.tags.map(t => t.id)), 'reimport error:', reloadError);
   assert.equal(state.userStructures.length, 0);
   assert.ok(!state.tags.some(tag => tag.id === 'A-only'));
+  assert.deepEqual(state.filterPresets, []);
+  assert.equal(state.projectName, '');
   assert.equal(reloadError, undefined);
+  await useProjectStore.getState().loadProjectFile(JSON.parse(JSON.stringify(exported)));
+  assert.deepEqual(useProjectStore.getState().systemInfo?.elements, ['Si']);
 });
 
 await probe('A4: a ternary dataset restricted to the Ti-H edge must retain both stable endmembers', () => {
@@ -214,5 +235,140 @@ await probe('A7: malformed numeric JSON must be rejected before the table render
   assert.ok(rejected, 'Numeric schema must reject this project');
 });
 
-console.log(`\n${defects} defect(s) reproduced; ${controls} invariant(s) passed. No business code modified.`);
+await probe('save queue retains outgoing annotations and the incoming session during a slow write', async () => {
+  await useProjectStore.getState().loadProjectFile(project());
+  let release!: () => void;
+  const harness = mountAutoSave(new Promise<void>(resolve => { release = resolve; }));
+  try {
+    await harness.fire();
+    useProjectStore.getState().updateStructureNotes(1, 'delayed A');
+    useProjectStore.getState().updateStructureTags(1, ['candidate']);
+    await useProjectStore.getState().loadProjectFile(project('B'));
+    useProjectStore.getState().updateStructureNotes(2, 'new B');
+    await harness.fire();
+    release(); await tick();
+    const a = harness.records.get('projects')?.get('A')?.project;
+    const b = harness.records.get('project-data')?.get('current-session')?.project;
+    assert.equal(a?.structures[0].notes, 'delayed A'); assert.deepEqual(a?.structures[0].tags, ['candidate']);
+    assert.equal(b?.projectId, 'B'); assert.equal(b?.structures[1].notes, 'new B');
+  } finally { release(); harness.cleanup(); }
+});
+
+await probe('unmount flushes pending annotations', async () => {
+  await useProjectStore.getState().loadProjectFile(project());
+  const harness = mountAutoSave();
+  useProjectStore.getState().updateStructureNotes(1, 'last edit');
+  harness.cleanup(); await tick();
+  assert.equal(harness.records.get('projects')?.get('A')?.project.structures[0].notes, 'last edit');
+});
+
+const ternaryInfo = { ...info, elements: ['Ti', 'H', 'Li'], systemType: 'ternary' } as SystemInfo;
+const edgeRows = () => [row(1, [1, 0, 0], -2), row(2, [0, 1, 0], -1), row(3, [1, 1, 0], -2.5)];
+const close = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-9, `${a} != ${b}`);
+
+for (const missing of [0, 1, 2]) await probe(`all ternary edges preserve endmembers and duplicate-composition distances (${missing})`, () => {
+  const comp = (a: number, b: number) => {
+    const result = [a, b]; result.splice(missing, 0, 0); return result;
+  };
+  const result = computeWorkshopGeometricHull([
+    row(1, comp(1, 0), -2), row(2, comp(0, 1), -1), row(3, comp(1, 1), -2.5), row(4, comp(1, 1), -2),
+  ], ternaryInfo);
+  result.structures.forEach((s, i) => close(s.fitness, [0, 0, 0, 0.5][i]));
+  assert.equal(result.hullEdges?.length, 2);
+});
+
+await probe('three ternary endmembers form a coplanar hull with three tie lines', () => {
+  const result = computeWorkshopGeometricHull([row(1, [1, 0, 0], -2), row(2, [0, 1, 0], -1), row(3, [0, 0, 1], -0.5)], ternaryInfo);
+  assert.deepEqual(result.structures.map(s => s.fitness), [0, 0, 0]); assert.equal(result.hullEdges?.length, 3);
+});
+await probe('coplanar hull interpolates a sloped plane rather than subtracting its minimum', () => {
+  const geometry = buildTernaryHullGeometry([{ x: 0, y: 0, z: -2 }, { x: 1, y: 0, z: -1 },
+    { x: 0, y: 1, z: -3 }, { x: 0.3, y: 0.3, z: -2 }]);
+  close(geometry.distance({ x: 0.3, y: 0.3, z: -1.5 }), 0.5); assert.equal(geometry.edges.length, 3);
+});
+await probe('a single projected composition uses its own lowest energy', () => {
+  const geometry = buildTernaryHullGeometry([{ x: 0.3, y: 0.2, z: -1 }, { x: 0.3, y: 0.2, z: -2 }]);
+  close(geometry.distance({ x: 0.3, y: 0.2, z: -1 }), 1); assert.deepEqual(geometry.edges, []);
+});
+await probe('an arbitrary collinear slice uses its local binary lower envelope', () => {
+  const geometry = buildTernaryHullGeometry([{ x: 0.2, y: 0.1, z: 0 }, { x: 0.3, y: 0.3, z: -0.5 }, { x: 0.4, y: 0.5, z: 0 }]);
+  close(geometry.distance({ x: 0.3, y: 0.3, z: 0 }), 0.5); assert.equal(geometry.edges.length, 2);
+});
+await probe('a manual row above a ternary edge does not expand the hull', () => {
+  const manual = { ...row(4, [1, 1, 0], -2.25), isUserAdded: true };
+  const result = computeWorkshopGeometricHull([...edgeRows(), manual], ternaryInfo);
+  close(result.structures[3].fitness, 0.25); assert.ok(!result.hullExpanded); assert.equal(result.hullEdges?.length, 2);
+});
+await probe('a manual row below a ternary edge expands it and retains the old tie lines', () => {
+  const source = [...edgeRows(), { ...row(4, [1, 1, 0], -3), isUserAdded: true }];
+  const before = structuredClone(source);
+  const result = computeWorkshopGeometricHull(source, ternaryInfo);
+  close(result.structures[2].fitness, 0.5); close(result.structures[3].fitness, 0);
+  assert.equal(result.hullExpanded, true); assert.equal(result.oldHullEdges?.length, 2); assert.equal(result.hullEdges?.length, 2);
+  assert.deepEqual(buildTernaryPlotModel(result.structures, ternaryInfo).edges, result.hullEdges);
+  assert.deepEqual(source, before);
+});
+await probe('the production plot model displays coplanar and edge tie lines deterministically', () => {
+  const datasets = [edgeRows(), [row(1, [1, 0, 0], -2), row(2, [0, 1, 0], -1), row(3, [0, 0, 1], -0.5)]];
+  for (const dataset of datasets) {
+    const result = computeWorkshopGeometricHull(dataset, ternaryInfo);
+    const first = buildTernaryPlotModel(result.structures, ternaryInfo);
+    assert.deepEqual(first.edges, result.hullEdges);
+    assert.deepEqual(buildTernaryPlotModel(result.structures, ternaryInfo).edges, first.edges);
+  }
+});
+await probe('a full ternary hull preserves the compound minimum and polymorph distance', () => {
+  const source = [row(1, [1, 0, 0], -2), row(2, [0, 1, 0], -1), row(3, [0, 0, 1], -0.5),
+    row(4, [1, 1, 1], -2.5), row(5, [1, 1, 1], -2)];
+  const result = computeWorkshopGeometricHull(source, ternaryInfo);
+  result.structures.forEach((s, i) => close(s.fitness, i === 4 ? 0.5 : 0)); assert.ok(result.hullEdges!.length >= 6);
+});
+
+await probe('missing total energy derives from atom count, while explicit totals and nulls are preserved', () => {
+  assert.equal(normalizeStructure({ id: 1, composition: [3, 9], enthalpy: -3 }).enthalpyTotal, -36);
+  assert.equal(normalizeStructure({ id: 1, composition: [1, 3], enthalpy: -3, enthalpyTotal: -30 }).enthalpyTotal, -30);
+  const missing = normalizeStructure(JSON.parse('{"id":1,"composition":[1,3],"enthalpy":null,"enthalpyTotal":null}'));
+  assert.ok(Number.isNaN(missing.enthalpy)); assert.ok(Number.isNaN(missing.enthalpyTotal));
+});
+await probe('filtered project statistics follow only selected rows, including manual rows', () => {
+  const manual = { ...row(9, [1, 1], -4), isUserAdded: true, generation: 5, fitness: 0.25 };
+  const exported = filteredProject({ ...project(), systemInfo: { ...info, minEnthalpy: -99, maxFitness: 100 } }, [refs[0], manual]);
+  assert.equal(exported.systemInfo.totalStructures, 2); assert.equal(exported.systemInfo.stableCount, 1);
+  assert.equal(exported.systemInfo.minEnthalpy, -4); assert.equal(exported.systemInfo.maxFitness, 0.25);
+  assert.equal(exported.systemInfo.totalGenerations, 5); assert.equal(exported.systemInfo.totalStructuresSource, 'Filtered selection');
+  const empty = filteredProject(project(), []);
+  assert.equal(empty.systemInfo.minEnthalpy, 0); assert.equal(empty.systemInfo.maxFitness, 0); assert.equal(empty.systemInfo.totalGenerations, 0);
+});
+
+for (const key of ['volume', 'volumeTotal', 'density', 'generation', 'spaceGroup', 'hullY', 'parentEnthalpy', 'paretoFront',
+  'bulkModulus', 'shearModulus', 'youngModulus', 'poissonRatio', 'pughRatio', 'vickersHardness', 'fractureToughness',
+  'qEntropy', 'aOrder', 'sOrder']) await probe(`numeric JSON field ${key} rejects strings`, () => {
+  assert.throws(() => validateProject({ ...project(), structures: [{ ...refs[0], [key]: '30' }] }));
+});
+await probe('numeric arrays and nested scientific data reject malformed values', () => {
+  for (const patch of [{ hullX: ['0.5'] }, { kpoints: ['1'] }, { parentIds: ['1'] }, { extraProps: { custom: '3' } },
+    { latticeParams: { a: '3' } }, { symmetry: { version: 1, symprecs: ['0.1'], points: [] } },
+    { symmetry: { version: 1, points: [{ symprec: '0.1' }] } }, { isUserAdded: 'false' }]) {
+    assert.throws(() => validateProject({ ...project(), structures: [{ ...refs[0], ...patch }] }));
+  }
+  assert.throws(() => validateProject({ ...project(), systemInfo: { ...info, minEnthalpy: '-3' } }));
+  assert.throws(() => validateProject({ ...project(), systemInfo: { ...info, systemType: ['binary'] } }));
+  assert.throws(() => validateProject({ ...project(), systemInfo: { ...info, compositionMode: ['fixed'] } }));
+  assert.throws(() => validateProject({ ...project(), hullGenerations: [{ generation: 1, entries: [{ composition: ['1'], enthalpy: 0 }] }] }));
+});
+await probe('legacy optional fields, scalar hull coordinates and JSON null scientific values remain importable', async () => {
+  const p = project();
+  p.structures = [{ id: 1, composition: [1, 0], enthalpy: null, enthalpyTotal: null, volume: null,
+    hullX: [null], extraProps: { custom: null }, latticeParams: { a: null, b: null, c: null },
+    symmetry: { version: 1, symprecs: [null], points: [{ symprec: null, number: 0 }] } },
+    { id: 2, composition: [0, 1], enthalpy: -1, hullX: 1 }] as unknown as Structure[];
+  validateProject(p); await useProjectStore.getState().loadProjectFile(p);
+  const [missing, legacy] = useProjectStore.getState().structures;
+  assert.ok(Number.isNaN(missing.enthalpyTotal)); assert.ok(Number.isNaN(missing.extraProps!.custom));
+  assert.ok(Number.isNaN(missing.hullX[0])); assert.ok(Number.isNaN(missing.latticeParams!.a));
+  assert.ok(Number.isNaN(missing.symmetry!.points[0].symprec)); assert.deepEqual(legacy.hullX, [1]);
+  validateProject(JSON.parse(JSON.stringify(useProjectStore.getState().exportProjectFile())));
+});
+
+console.log(`\n${defects} defect(s) reproduced; ${controls} invariant(s) passed.`);
 if (defects) process.exitCode = 1;

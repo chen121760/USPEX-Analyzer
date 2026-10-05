@@ -18,18 +18,15 @@
  *   5. Fixed:   eHullRecons = eForm - min(eForm).
  */
 
-import convexHull from 'convex-hull';
+import { buildTernaryHullGeometry } from '@/domain/hull/ternaryHullGeometry';
 import {
   computeFormationEnthalpyWith,
   computeLowerHull2D,
   binaryHullDistance,
-  computeTernaryLowerFaces,
-  ternaryHullDistanceFromFaces,
   resolveReferences,
   usesComponentBasis,
   type Point2D,
   type Point3D,
-  type TernaryLowerFace,
 } from './convexHullReconstruction';
 import {
   componentAmountsFromComposition,
@@ -170,20 +167,9 @@ export function computeGeometricHull(
     const valid = structures.filter((s) => !s.isUserAdded && s.enthalpyTotal <= 900 && !undefinedFormation.has(s));
     const userAdded = structures.filter((s) => s.isUserAdded && s.enthalpyTotal <= 900 && !undefinedFormation.has(s));
     const oldResult = computeTernaryHull(structures, valid, plotBasis);
-    // Pre-compute lower faces from non-user-added hull so we can accurately
-    // measure each user-added structure's vertical distance to the old hull
-    // WITHOUT re-running convexHull() for every structure.
-    const oldHullPoints3D: Point3D[] = valid.map((s) => {
-      const plotComposition = compositionBasis.length > 0
-        ? componentAmountsFromComposition(s.composition, compositionBasis) ?? []
-        : s.composition;
-      const [cx, cy] = ternaryToCartesian(plotComposition);
-      return { x: cx, y: cy, z: s.eForm };
-    });
-    const oldLowerFaces = oldHullPoints3D.length >= 4
-      ? computeTernaryLowerFaces(oldHullPoints3D)
-      : [];
-    computeFitnessForUserAdded(userAdded, undefined, systemType, oldLowerFaces, plotBasis);
+    for (const structure of userAdded) {
+      structure.fitness = oldResult.distance(ternaryPoint(structure, plotBasis));
+    }
 
     const expanded = userAdded.some((s) => s.fitness <= 0);
     if (expanded && userAdded.length > 0) {
@@ -218,21 +204,11 @@ function computeFitnessForUserAdded(
   userAdded: Structure[],
   hullLine?: Point2D[],
   systemType?: string,
-  lowerFaces?: TernaryLowerFace[],
-  compositionBasis: number[][] = [],
 ): void {
   for (const s of userAdded) {
     if (systemType === 'binary' && hullLine) {
       const x = s.hullX[0] ?? 0;
       s.fitness = binaryHullDistance(x, s.eForm, hullLine);
-    } else if (systemType === 'ternary' && lowerFaces) {
-      const plotComposition = compositionBasis.length > 0
-        ? componentAmountsFromComposition(s.composition, compositionBasis) ?? []
-        : s.composition;
-      const [cx, cy] = ternaryToCartesian(plotComposition);
-      s.fitness = lowerFaces.length > 0
-        ? ternaryHullDistanceFromFaces(cx, cy, s.eForm, lowerFaces)
-        : 0;
     } else {
       s.fitness = 0;
     }
@@ -273,42 +249,22 @@ function computeBinaryHull(
 /*  Ternary hull                                                       */
 /* ------------------------------------------------------------------ */
 
+function ternaryPoint(s: Structure, compositionBasis: number[][]): Point3D {
+  const composition = compositionBasis.length
+    ? componentAmountsFromComposition(s.composition, compositionBasis) ?? [] : s.composition;
+  const [x, y] = ternaryToCartesian(composition);
+  return { x, y, z: s.eForm };
+}
+
 function computeTernaryHull(
   structures: Structure[],
   valid: Structure[],
   compositionBasis: number[][] = [],
-): WorkshopHullResult {
-  // Build 3D hull-defining points from all valid structures
-  const hullPoints3D: Point3D[] = valid.map((s) => {
-    const plotComposition = compositionBasis.length > 0
-      ? componentAmountsFromComposition(s.composition, compositionBasis) ?? []
-      : s.composition;
-    const [cx, cy] = ternaryToCartesian(plotComposition);
-    return { x: cx, y: cy, z: s.eForm };
-  });
-
-  // Pre-compute lower faces ONCE — avoids O(N * convex_hull(N))
-  const lowerFaces = hullPoints3D.length >= 4
-    ? computeTernaryLowerFaces(hullPoints3D)
-    : [];
-
-  // Compute fitness for each structure using the pre-computed faces
-  for (const s of valid) {
-    const plotComposition = compositionBasis.length > 0
-      ? componentAmountsFromComposition(s.composition, compositionBasis) ?? []
-      : s.composition;
-    const [cx, cy] = ternaryToCartesian(plotComposition);
-    s.fitness = lowerFaces.length > 0
-      ? ternaryHullDistanceFromFaces(cx, cy, s.eForm, lowerFaces)
-      : hullPoints3D.length > 0
-        ? Math.max(0, s.eForm - Math.min(...hullPoints3D.map(p => p.z)))
-        : 0;
-  }
-
-  // Build tie-line edges from the hull for display
-  const hullEdges = buildTernaryEdges(hullPoints3D);
-
-  return { structures, hullEdges };
+): WorkshopHullResult & { distance: (point: Point3D) => number } {
+  const points = valid.map(s => ternaryPoint(s, compositionBasis));
+  const geometry = buildTernaryHullGeometry(points);
+  valid.forEach((s, i) => { s.fitness = geometry.distance(points[i]); });
+  return { structures, hullEdges: geometry.edges, distance: geometry.distance };
 }
 
 /* ------------------------------------------------------------------ */
@@ -354,80 +310,4 @@ function ensureHullX(
       s.hullX = [s.composition[0] / total, s.composition[1] / total, s.composition[2] / total];
     }
   }
-}
-
-/**
- * Build 2D tie-line edges from 3D convex hull lower faces.
- * Replicates a simplified version of computeTernaryHullEdges for display.
- */
-function buildTernaryEdges(
-  hullPoints3D: Point3D[],
-): { p1: [number, number]; p2: [number, number] }[] {
-  if (hullPoints3D.length < 4) return [];
-
-  // Deduplicate by (cartX, cartY) — keep the lowest z for each position
-  const keyMap = new Map<string, Point3D>();
-  for (const p of hullPoints3D) {
-    const key = `${p.x.toFixed(8)},${p.y.toFixed(8)}`;
-    const existing = keyMap.get(key);
-    if (!existing || p.z < existing.z) {
-      keyMap.set(key, p);
-    }
-  }
-  const unique = Array.from(keyMap.values());
-  if (unique.length < 4) return [];
-
-  // Compute 3D convex hull
-  const coords = unique.map((p) => [p.x, p.y, p.z] as [number, number, number]);
-  let faceList: number[][] = [];
-  try {
-    faceList = convexHull(coords);
-  } catch {
-    return [];
-  }
-  if (!faceList || faceList.length === 0) return [];
-
-  // Helper: cross product → face normal
-  const cross3 = (
-    a: [number, number, number],
-    b: [number, number, number],
-  ): [number, number, number] => [
-    a[1] * b[2] - a[2] * b[1],
-    a[2] * b[0] - a[0] * b[2],
-    a[0] * b[1] - a[1] * b[0],
-  ];
-
-  const faceNormal = (v0: number[], v1: number[], v2: number[]): [number, number, number] =>
-    cross3(
-      [v1[0] - v0[0], v1[1] - v0[1], v1[2] - v0[2]],
-      [v2[0] - v0[0], v2[1] - v0[1], v2[2] - v0[2]],
-    );
-
-  // Collect edges from lower faces
-  const edgeSet = new Set<string>();
-  const edges: { p1: [number, number]; p2: [number, number] }[] = [];
-
-  for (const face of faceList) {
-    if (face.length < 3) continue;
-    const v0 = coords[face[0]];
-    const v1 = coords[face[1]];
-    const v2 = coords[face[2]];
-    const normal = faceNormal(v0, v1, v2);
-    if (normal[2] >= -1e-10) continue; // skip upper / vertical faces, keep only lower hull
-
-    const indices = [face[0], face[1], face[2]];
-    for (let i = 0; i < 3; i++) {
-      const a = indices[i];
-      const b = indices[(i + 1) % 3];
-      const key = `${Math.min(a, b)}-${Math.max(a, b)}`;
-      if (edgeSet.has(key)) continue;
-      edgeSet.add(key);
-      edges.push({
-        p1: [unique[a].x, unique[a].y],
-        p2: [unique[b].x, unique[b].y],
-      });
-    }
-  }
-
-  return edges;
 }

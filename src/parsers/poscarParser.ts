@@ -36,7 +36,7 @@ function isElementSymbol(token: string): boolean {
  */
 function buildFormula(elements: string[], counts: number[]): string {
   return elements
-    .map((el, i) => (counts[i] === 1 ? el : `${el}${counts[i]}`))
+    .map((el, i) => (counts[i] === 0 ? '' : counts[i] === 1 ? el : `${el}${counts[i]}`))
     .join('');
 }
 
@@ -131,7 +131,7 @@ function parseSinglePoscar(
       if (i + 1 < lines.length) {
         const countTokens = lines[i + 1].trim().split(/\s+/);
         const counts = countTokens.map(Number);
-        if (counts.length === elements.length && counts.every((n) => !isNaN(n) && n > 0)) {
+        if (counts.length === elements.length && counts.every((n) => Number.isInteger(n) && n >= 0) && counts.some(n => n > 0)) {
           atomCounts = counts;
         }
       }

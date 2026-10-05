@@ -1,10 +1,21 @@
-# USPEX Analyzer —— v1.5.3
+# USPEX Analyzer —— v1.5.5
 
 A browser-based analysis tool for USPEX crystal structure prediction outputs. Supports 3D bulk, 2D structure search, and variable/fixed-composition calculations. **Now compatible with both USPEX 10.5/10.6 and USPEX 25** — the tool auto-detects your data format and adapts file requirements accordingly. Upload your USPEX output files and interactively explore, visualize, filter, and export your results — all without installing anything.
 
 **Live Demo**: [https://chen121760.github.io/USPEX-Analyzer/](https://chen121760.github.io/USPEX-Analyzer/)
 
 > This tool is listed on the official [USPEX Tools & Utilities](https://uspex-team.org/zh/uspex/tools) page.
+
+## What's New in v1.5.5
+
+- Fixed-composition searches now calculate relative energy per atom without requiring pure-element reference structures. Ternary hull reconstruction and Hull Workshop share geometry that handles single points, binary edges, and planar data.
+- Missing or non-finite scientific values remain unknown during USPEX 25 parsing and project JSON round trips; valid zero values and existing USPEX fitness are preserved.
+- Project imports reject duplicate structure IDs. POSCAR compositions are checked against energy records; conflicting geometry is isolated with a warning while the energy record remains available.
+- Formula labels and chart tooltips escape imported text while preserving supported subscripts, superscripts, and formatting.
+- Project switching and failed imports preserve pending annotations; filtered exports contain statistics for the selected structures.
+- Validation: 501 automated checks pass, including three real USPEX archives; production build and lint pass (25 existing lint warnings).
+
+See [CHANGELOG](CHANGELOG) for version history and the [fix verification report](docs/audits/2026-10-05-first-principles-fixes.md) for regression coverage.
 
 ## Features
 

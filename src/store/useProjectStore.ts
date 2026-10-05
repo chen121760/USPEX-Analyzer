@@ -224,6 +224,11 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       set({
         systemInfo: result.systemInfo,
         structures: result.structures,
+        userStructures: [],
+        tags: [...DEFAULT_TAGS],
+        filterPresets: [],
+        projectName: '',
+        persistenceError: null,
         hullGenerations: result.hullGenerations,
         detectedFiles,
         parsedFiles,

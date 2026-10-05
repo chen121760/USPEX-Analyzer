@@ -513,6 +513,21 @@ export async function parseAllFiles(
     originMap.set(o.id, o);
   }
 
+  // A matching run-local ID does not prove that energy and geometry agree.
+  // Quarantine conflicting geometry while retaining the usable energy record.
+  const compatiblePoscar = (id: number, composition: number[]): ParsedPoscar | undefined => {
+    const poscar = poscarMap.get(id);
+    if (!poscar || !poscar.atomCounts.length || !elements.length) return poscar;
+    const counts = elements.map(element => poscar.elements.reduce((sum, symbol, i) =>
+      sum + (symbol === element ? poscar.atomCounts[i] : 0), 0));
+    if (poscar.elements.some((element, i) => !elements.includes(element) && poscar.atomCounts[i] > 0)
+      || counts.length !== composition.length || counts.some((count, i) => count !== composition[i])) {
+      warnings.push(`EA${id}: composition mismatch between energy data [${composition.join(',')}] and gatheredPOSCARS [${counts.join(',')}] — conflicting geometry excluded`);
+      return undefined;
+    }
+    return poscar;
+  };
+
   // ---- Step 3: Merge into unified Structure records ----
 
   await report({ stage: 'loadStage.merging', progress: MERGE_START });
@@ -522,7 +537,7 @@ export async function parseAllFiles(
     const pareto = paretoMap.get(hull.id);
     const ml = mlMap.get(hull.id);
     const orig = originMap.get(hull.id);
-    const poscar = poscarMap.get(hull.id);
+    const poscar = compatiblePoscar(hull.id, hull.composition);
 
     const nAtoms = totalAtoms(hull.composition);
     const formula =
@@ -636,7 +651,7 @@ export async function parseAllFiles(
       const pareto = paretoMap.get(id);
       const ml = mlMap.get(id);
       const orig = originMap.get(id);
-      const poscar = poscarMap.get(id);
+      const poscar = compatiblePoscar(id, ind.composition);
       const formula =
         poscar?.formula ??
         (elements.length > 0 ? buildFormula(ind.composition, elements) : `ID${id}`);

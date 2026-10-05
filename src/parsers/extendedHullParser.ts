@@ -121,10 +121,10 @@ const USPEX25_HULL_CORE_COLUMNS = new Set([
   'formation_energy',
 ]);
 
-function parseNumber(value: string | undefined): number {
-  if (value === undefined) return 0;
+function parseNumber(value: string | undefined, missing = 0): number {
+  if (value === undefined) return missing;
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+  return Number.isFinite(parsed) ? parsed : missing;
 }
 
 function getUspex25Value(
@@ -190,13 +190,13 @@ function parseUspex25ExtendedConvexHull(
     if (composition.length === 0) continue;
 
     const nAtoms = composition.reduce((sum, count) => sum + count, 0);
-    const energy = parseNumber(getUspex25Value(rowTokens, columnMap, ['energy', 'Enthalpies']));
-    const cellVolume = parseNumber(getUspex25Value(rowTokens, columnMap, ['cell_volume', 'Volumes']));
+    const energy = parseNumber(getUspex25Value(rowTokens, columnMap, ['energy', 'Enthalpies']), Number.NaN);
+    const cellVolume = parseNumber(getUspex25Value(rowTokens, columnMap, ['cell_volume', 'Volumes']), Number.NaN);
     const enthalpy = nAtoms > 0 ? energy / nAtoms : energy;
     const volume = nAtoms > 0 ? cellVolume / nAtoms : cellVolume;
-    const fitness = parseNumber(getUspex25Value(rowTokens, columnMap, ['e_above_hull', 'Fitness']));
+    const fitness = parseNumber(getUspex25Value(rowTokens, columnMap, ['e_above_hull', 'Fitness']), Number.NaN);
     const symm = parseNumber(getUspex25Value(rowTokens, columnMap, ['space_group', 'SYMM']));
-    const y = parseNumber(getUspex25Value(rowTokens, columnMap, ['formation_energy', 'Y']));
+    const y = parseNumber(getUspex25Value(rowTokens, columnMap, ['formation_energy', 'Y']), Number.NaN);
 
     results.push({
       id,
