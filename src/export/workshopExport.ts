@@ -169,7 +169,7 @@ function buildWorkshopCsvRows(
 
   if (compositionMode === 'fixed') {
     return {
-      headers: ['Group', 'EA_ID', 'Formula', 'SpaceGroup', 'Generation', 'Origin', 'Enthalpy(eV/atom)', 'Fitness(eV/atom)'],
+      headers: ['Group', 'EA_ID', 'Formula', 'SpaceGroup', 'Generation', 'Origin', 'Enthalpy(eV/atom)', 'Fitness(eV/block)', 'DeltaH(eV/atom)'],
       rows: structures.map((s) => ({
         'Group': s.groupName ?? '',
         'EA_ID': s.id,
@@ -178,7 +178,8 @@ function buildWorkshopCsvRows(
         'Generation': s.generation,
         'Origin': s.origin,
         'Enthalpy(eV/atom)': s.enthalpy,
-        'Fitness(eV/atom)': s.fitness ?? 0,
+        'DeltaH(eV/atom)': Number.isFinite(s.eHullRecons) && s.eHullRecons >= 0 ? s.eHullRecons : '',
+        'Fitness(eV/block)': Number.isFinite(s.fitness) && s.fitness >= 0 ? s.fitness : '',
       })),
     };
   }
@@ -190,15 +191,16 @@ function buildWorkshopCsvRows(
     const elB = components[1] || 'B';
     const energyUnit = systemInfo.compositionBasis?.length ? 'eV/block' : 'eV/atom';
     return {
-      headers: ['Group', 'EA_ID', 'Formula', `x(${elB})`, `Formation_Energy(${energyUnit})`, 'Enthalpy(eV/atom)', 'Fitness(eV/block)'],
+      headers: ['Group', 'EA_ID', 'Formula', `x(${elB})`, `Formation_Energy(${energyUnit})`, 'Enthalpy(eV/atom)', 'Fitness(eV/block)', `Ed_Recons(${energyUnit})`],
       rows: structures.map((s) => ({
         'Group': s.groupName ?? '',
         'EA_ID': s.id,
         'Formula': s.formula,
         [`x(${elB})`]: s.hullX?.[0] ?? 0,
         [`Formation_Energy(${energyUnit})`]: formationEnergy(s, systemInfo) ?? '',
+        [`Ed_Recons(${energyUnit})`]: Number.isFinite(s.eHullRecons) && s.eHullRecons >= 0 ? s.eHullRecons : '',
         'Enthalpy(eV/atom)': s.enthalpy,
-        'Fitness(eV/block)': s.fitness,
+        'Fitness(eV/block)': Number.isFinite(s.fitness) && s.fitness >= 0 ? s.fitness : '',
       })),
     };
   }
@@ -209,7 +211,7 @@ function buildWorkshopCsvRows(
   const [elA, elB, elC] = components;
   const energyUnit = systemInfo.compositionBasis?.length ? 'eV/block' : 'eV/atom';
   return {
-    headers: ['Group', 'EA_ID', 'Formula', `x_${elA}`, `x_${elB}`, `x_${elC}`, `E_form(${energyUnit})`, 'Fitness(eV/block)'],
+    headers: ['Group', 'EA_ID', 'Formula', `x_${elA}`, `x_${elB}`, `x_${elC}`, `E_form(${energyUnit})`, 'Fitness(eV/block)', `Ed_Recons(${energyUnit})`],
     rows: structures.map((s) => {
       const exportComposition = systemInfo.compositionBasis?.length
         ? componentAmountsFromComposition(s.composition, systemInfo.compositionBasis) ?? []
@@ -223,7 +225,8 @@ function buildWorkshopCsvRows(
         [`x_${elB}`]: (exportComposition[1] / total).toFixed(6),
         [`x_${elC}`]: (exportComposition[2] / total).toFixed(6),
         [`E_form(${energyUnit})`]: formationEnergy(s, systemInfo) ?? '',
-        'Fitness(eV/block)': s.fitness ?? 0,
+        [`Ed_Recons(${energyUnit})`]: Number.isFinite(s.eHullRecons) && s.eHullRecons >= 0 ? s.eHullRecons : '',
+        'Fitness(eV/block)': Number.isFinite(s.fitness) && s.fitness >= 0 ? s.fitness : '',
       };
     }),
   };

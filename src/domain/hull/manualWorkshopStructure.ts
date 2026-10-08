@@ -9,5 +9,5 @@ export function manualWorkshopStructure(data: { composition: number[]; enthalpy:
     || data.composition.some(n => !Number.isFinite(n) || n < 0)) throw new Error('Invalid manual composition or enthalpy');
   return normalizeStructure({ id, formula: buildFormula(data.composition, info.elements), composition: data.composition,
     enthalpy: data.enthalpy, enthalpyTotal: data.enthalpy * atoms, spaceGroup: data.spaceGroup,
-    fitness: 0, eForm: -1, eHullRecons: -1, generation: 0, origin: 'manual', isUserAdded: true, notes: data.notes });
+    fitness: Number.NaN, eForm: -1, eHullRecons: -1, generation: 0, origin: 'manual', isUserAdded: true, notes: data.notes });
 }

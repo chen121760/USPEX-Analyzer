@@ -71,7 +71,7 @@ check('the lock root entry matches as well', lock.packages?.['']?.version === ve
   String(lock.packages?.['']?.version));
 
 const changelog = fs.readFileSync(path.resolve('CHANGELOG'), 'utf8');
-const newest = changelog.match(/^###\s*V([0-9]+\.[0-9]+\.[0-9]+)\s*$/m);
+const newest = changelog.match(/^###\s*V([0-9]+\.[0-9]+\.[0-9]+)(?:\s+—[^\r\n]*)?\s*$/m);
 check('the newest CHANGELOG entry matches the package version', newest?.[1] === version,
   `${newest?.[1]} vs ${version}`);
 

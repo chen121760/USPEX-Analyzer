@@ -1,3 +1,4 @@
+import { normalizeColumnName } from './headerUtils';
 /**
  * Master parser index.
  *
@@ -224,6 +225,10 @@ function pinSecondObjectiveColumn(
   }
 }
 
+function hasIndividualsFitnessColumn(result: IndividualsParseResult): boolean {
+  return result.midColNames.some(name => ['fitness', 'eabovehull'].includes(normalizeColumnName(name)));
+}
+
 function inferCompositionModeFromIndividuals(
   individualsResult: IndividualsParseResult | null,
 ): CompositionMode {
@@ -426,16 +431,15 @@ export async function parseAllFiles(
       warnings.push('extended_convex_hull file not found — rebuilding the hull and Ed from Individuals');
     }
     const hasIndividualsFitness =
-      individualsResult.midColNames.includes('Fitness') ||
-      individualsResult.midColNames.includes('e_above_hull');
+      hasIndividualsFitnessColumn(individualsResult);
     hullData = individualsResult.data.map((ind) => ({
       id: ind.id,
       composition: ind.composition,
       enthalpy: ind.enthalpy / Math.max(1, totalAtoms(ind.composition)),
       volume: ind.volume / Math.max(1, totalAtoms(ind.composition)),
       // No fabricated hull distance: without USPEX's own Ed the value is
-      // unknown (NaN) here and the convex-hull reconstruction in Step 3c fills
-      // in a real one.  "E/atom minus the run's lowest E/atom" is not a hull
+      // unknown (NaN). Step 3c writes computed distances only to eHullRecons.
+      // "E/atom minus the run's lowest E/atom" is not a variable-composition hull
       // distance — for a multi-element system it makes the most cohesive pure
       // element the only stable phase.
       fitness: hasIndividualsFitness ? ind.indFitness : Number.NaN,
@@ -572,7 +576,7 @@ export async function parseAllFiles(
       if (hasIndCol('Thick') && !extraProps['Thick']) extraProps['Thick'] = ind.thickness;
       if (hasIndCol('Surf_area') && !extraProps['Surf_area']) extraProps['Surf_area'] = ind.surfArea;
       if (hasIndCol('Spec_surf_area')) extraProps['Spec_surf_area'] = ind.specSurfArea;
-      if (hasIndCol('Fitness') || hasIndCol('e_above_hull')) extraProps['Fitness-Individuals'] = ind.indFitness;
+      if (individualsResult && hasIndividualsFitnessColumn(individualsResult)) extraProps['Fitness-Individuals'] = ind.indFitness;
       Object.assign(extraProps, ind.extras);
     }
     pinSecondObjectiveColumn(extraProps, secondObjectiveName, ind);
@@ -665,7 +669,9 @@ export async function parseAllFiles(
         enthalpyTotal: ind.enthalpy,
         volume: volumePerAtom,
         volumeTotal: ind.volume,
-        fitness: NaN,
+        // Individuals Fitness is a separate objective column. Do not use it
+        // to fill a missing extended_convex_hull measurement.
+        fitness: Number.NaN,
         spaceGroup: ind.symm,
         hullX,
         hullY: enthalpyPerAtom,
@@ -688,7 +694,7 @@ export async function parseAllFiles(
           if (midCols.includes('Thick')) ep['Thick'] = ind.thickness;
           if (midCols.includes('Surf_area')) ep['Surf_area'] = ind.surfArea;
           if (midCols.includes('Spec_surf_area')) ep['Spec_surf_area'] = ind.specSurfArea;
-          if (midCols.includes('Fitness') || midCols.includes('e_above_hull')) ep['Fitness-Individuals'] = ind.indFitness;
+          if (hasIndividualsFitnessColumn(individualsResult)) ep['Fitness-Individuals'] = ind.indFitness;
           Object.assign(ep, ind.extras);
           pinSecondObjectiveColumn(ep, secondObjectiveName, ind);
           return Object.keys(ep).length > 0 ? ep : undefined;
@@ -802,6 +808,7 @@ export async function parseAllFiles(
     secondObjectiveName,
     totalStructures: structures.length,
     totalStructuresSource: primarySource,
+    fitnessSemantics: 'uspex-original',
     totalGenerations: individualsResult?.maxGeneration ?? hullGenerations.length,
     stableCount: structures.filter((s) => s.fitness === 0).length,
     unconvergedCount,

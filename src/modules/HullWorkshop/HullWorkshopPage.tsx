@@ -1,3 +1,5 @@
+import { canImportWorkshopStructure, hullDisplayStructures } from '@/domain/hull/displayMetric';
+import { HullMetricContext } from '@/modules/ConvexHull/HullMetricContext';
 import { prepareWorkshopGroups, remapWorkshopStructure } from '@/domain/hull/workshopCompatibility';
 /**
  * Hull Workshop (凸包工作台) — main page.
@@ -100,7 +102,7 @@ export function HullWorkshopPage() {
     if (structures.length === 0 || !systemInfo) return;
 
     const chartStructures = structures.filter(
-      (s) => s.enthalpyTotal <= 900 && !isNaN(s.fitness) && s.fitness >= 0,
+      canImportWorkshopStructure,
     );
 
     if (chartStructures.length === 0) {
@@ -289,16 +291,18 @@ export function HullWorkshopPage() {
 
   const handleStructureClick = useCallback(
     (structure: Structure) => {
-      openWorkshopViewer(structure);
+      const key = (structure as Structure & { _mergeSeq?: number })._mergeSeq;
+      const original = hullResult?.structures.find(s => key === undefined ? s.id === structure.id : s._mergeSeq === key);
+      openWorkshopViewer(original ?? structure);
     },
-    [openWorkshopViewer],
+    [openWorkshopViewer, hullResult],
   );
 
   /* ── Chart rendering ── */
   const renderChart = () => {
     if (!hullResult || !mergedSystemInfo) return null;
 
-    const processed = hullResult.structures;
+    const processed = hullDisplayStructures(hullResult.structures, 'reconstructed');
     const { compositionMode, systemType } = mergedSystemInfo;
 
     if (compositionMode === 'fixed') {
@@ -388,7 +392,10 @@ export function HullWorkshopPage() {
         emptyTitle={t('workshop.emptyTitle', 'Hull Workshop')}
         emptyHint={t('workshop.emptyHint', 'Import data from the current project or load external data to get started.')}
       >
-        {renderChart()}
+        <HullMetricContext.Provider value={{ name: 'Ed (Recons)', unit: mergedSystemInfo?.referenceInfo?.unit
+          ?? (mergedSystemInfo?.compositionMode === 'varcomp' && mergedSystemInfo?.compositionBasis?.length ? 'eV/block' : 'eV/atom') }}>
+          {renderChart()}
+        </HullMetricContext.Provider>
       </WorkshopContent>
 
     </div>

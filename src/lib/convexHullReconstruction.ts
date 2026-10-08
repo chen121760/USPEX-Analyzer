@@ -355,7 +355,6 @@ export function reconstructConvexHull(
       if (undefinedFormation.has(s)) s.eForm = Number.NaN;
       const distance = Math.max(0, energyOf(s) - minima.get(keyOf(s))!);
       s.eHullRecons = distance <= HULL_ZERO_TOLERANCE ? 0 : distance;
-      if (!(s.fitness >= 0)) s.fitness = s.eHullRecons;
     }
     return references;
   }
@@ -383,21 +382,12 @@ export function reconstructConvexHull(
   const partialFitness = hasKnownFitness && converged.some((s) => !(s.fitness >= 0));
 
   /**
-   * Snap reconstructed distances to the hull grid and publish the hull distance.
-   *
-   * USPEX's own Ed wins wherever it exists; where it does not, the
-   * reconstruction is the only hull distance available and becomes the fitness —
-   * every hull view classifies structures by `fitness === 0`.
+   * Snap reconstructed distances to the hull grid. Raw USPEX fitness is never
+   * filled from this result: missing measurements must remain missing.
    */
   const finalize = (): ReferenceResolution => {
     for (const s of converged) {
       if (s.eHullRecons >= 0 && s.eHullRecons <= HULL_ZERO_TOLERANCE) s.eHullRecons = 0;
-    }
-    // Fixed composition is handled above. Publish only defined variable hulls.
-    if (systemType !== 'unary') {
-      for (const s of converged) {
-        if (s.eHullRecons >= 0 && !(s.fitness >= 0)) s.fitness = s.eHullRecons;
-      }
     }
     return references;
   };

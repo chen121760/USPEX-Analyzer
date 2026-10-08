@@ -81,7 +81,7 @@ function buildHullMapping(headerLine: string): HullMapping | null {
  * Get a value from the flat numeric array by trying multiple column name aliases.
  * Returns the first non-zero value found, or 0 if none of the names exist.
  */
-function getHull(nums: number[], colMap: Map<string, number>, names: string[]): number {
+function getHull(nums: number[], colMap: Map<string, number>, names: string[], missing = 0): number {
   for (const name of names) {
     const idx = colMap.get(name);
     if (idx !== undefined && idx < nums.length) {
@@ -89,7 +89,7 @@ function getHull(nums: number[], colMap: Map<string, number>, names: string[]): 
       if (!isNaN(v)) return v;
     }
   }
-  return 0;
+  return missing;
 }
 
 /**
@@ -290,7 +290,7 @@ export function parseExtendedConvexHull(content: string): ParsedExtendedHull[] {
     const volume = getHull(nums, colMap, ['Volumes', 'Volume']);
     const thickness = getHull(nums, colMap, ['Thickness']);
     const surfArea = getHull(nums, colMap, ['Surf_Area', 'Surf_area']);
-    const fitness = getHull(nums, colMap, ['Fitness']);
+    const fitness = getHull(nums, colMap, ['Fitness'], Number.NaN);
     const symm = getHull(nums, colMap, ['SYMM']);
 
     // X coordinates: ordered by their column positions

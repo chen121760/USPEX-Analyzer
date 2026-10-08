@@ -18,6 +18,7 @@ export function collectDynamicFieldKeys(
 }
 
 export function getStructureFieldValue(structure: Structure, field: string): unknown {
+  if (field === 'fitness') return Number.isFinite(structure.fitness) && structure.fitness >= 0 ? structure.fitness : undefined;
   if (field === 'eForm') return formationEnergy(structure) ?? undefined;
   if (field === 'eHullRecons') return Number.isFinite(structure.eHullRecons) && structure.eHullRecons >= 0 ? structure.eHullRecons : undefined;
   const direct = (structure as unknown as Record<string, unknown>)[field];

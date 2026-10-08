@@ -87,7 +87,10 @@ export function normalizeStructure(structure: StructureLike): Structure {
     enthalpyTotal,
     volume,
     volumeTotal: structure.volumeTotal === null ? Number.NaN : structure.volumeTotal ?? volume,
-    fitness: Number.isFinite(enthalpyTotal) ? structure.fitness ?? -1 : -1,
+    // JSON turns NaN into null; restore missing fitness without inventing zero
+    // or exposing the old -1 sentinel to filters and exports.
+    fitness: Number.isFinite(enthalpyTotal) && Number.isFinite(structure.fitness) && structure.fitness! >= 0
+      ? structure.fitness! : Number.NaN,
     spaceGroup: structure.spaceGroup ?? 0,
     hullX: normalizeHullX(structure.hullX),
     hullY: structure.hullY ?? 0,

@@ -171,14 +171,14 @@ await probe('A4: a ternary dataset restricted to the Ti-H edge must retain both 
     row(1, [1, 0, 0], -2), row(2, [0, 1, 0], -1), row(3, [1, 1, 0], -2.5),
     row(4, [1, 1, 0], -2),
   ], ternary);
-  const fitness = result.structures.map(s => s.fitness);
+  const fitness = result.structures.map(s => s.eHullRecons);
   console.log('  ternary edge fitness:', JSON.stringify(fitness), '(expected [0, 0, 0, 0.5])');
   assert.deepEqual(fitness, [0, 0, 0, 0.5]);
 });
 
 await probe('control: equivalent binary edge data has the correct hull distances', () => {
   const result = computeWorkshopGeometricHull([...refs, row(3, [1, 1], -2.5), row(4, [1, 1], -2)], info);
-  assert.deepEqual(result.structures.map(s => s.fitness), [0, 0, 0, 0.5]);
+  assert.deepEqual(result.structures.map(s => s.eHullRecons), [0, 0, 0, 0.5]);
 });
 
 await probe('control: fixed TiH data in eV/atom can join an elemental Ti-H workshop at the same pressure', async () => {
@@ -273,13 +273,13 @@ for (const missing of [0, 1, 2]) await probe(`all ternary edges preserve endmemb
   const result = computeWorkshopGeometricHull([
     row(1, comp(1, 0), -2), row(2, comp(0, 1), -1), row(3, comp(1, 1), -2.5), row(4, comp(1, 1), -2),
   ], ternaryInfo);
-  result.structures.forEach((s, i) => close(s.fitness, [0, 0, 0, 0.5][i]));
+  result.structures.forEach((s, i) => close(s.eHullRecons, [0, 0, 0, 0.5][i]));
   assert.equal(result.hullEdges?.length, 2);
 });
 
 await probe('three ternary endmembers form a coplanar hull with three tie lines', () => {
   const result = computeWorkshopGeometricHull([row(1, [1, 0, 0], -2), row(2, [0, 1, 0], -1), row(3, [0, 0, 1], -0.5)], ternaryInfo);
-  assert.deepEqual(result.structures.map(s => s.fitness), [0, 0, 0]); assert.equal(result.hullEdges?.length, 3);
+  assert.deepEqual(result.structures.map(s => s.eHullRecons), [0, 0, 0]); assert.equal(result.hullEdges?.length, 3);
 });
 await probe('coplanar hull interpolates a sloped plane rather than subtracting its minimum', () => {
   const geometry = buildTernaryHullGeometry([{ x: 0, y: 0, z: -2 }, { x: 1, y: 0, z: -1 },
@@ -297,13 +297,13 @@ await probe('an arbitrary collinear slice uses its local binary lower envelope',
 await probe('a manual row above a ternary edge does not expand the hull', () => {
   const manual = { ...row(4, [1, 1, 0], -2.25), isUserAdded: true };
   const result = computeWorkshopGeometricHull([...edgeRows(), manual], ternaryInfo);
-  close(result.structures[3].fitness, 0.25); assert.ok(!result.hullExpanded); assert.equal(result.hullEdges?.length, 2);
+  close(result.structures[3].eHullRecons, 0.25); assert.ok(!result.hullExpanded); assert.equal(result.hullEdges?.length, 2);
 });
 await probe('a manual row below a ternary edge expands it and retains the old tie lines', () => {
   const source = [...edgeRows(), { ...row(4, [1, 1, 0], -3), isUserAdded: true }];
   const before = structuredClone(source);
   const result = computeWorkshopGeometricHull(source, ternaryInfo);
-  close(result.structures[2].fitness, 0.5); close(result.structures[3].fitness, 0);
+  close(result.structures[2].eHullRecons, 0.5); close(result.structures[3].eHullRecons, 0);
   assert.equal(result.hullExpanded, true); assert.equal(result.oldHullEdges?.length, 2); assert.equal(result.hullEdges?.length, 2);
   assert.deepEqual(buildTernaryPlotModel(result.structures, ternaryInfo).edges, result.hullEdges);
   assert.deepEqual(source, before);
@@ -321,7 +321,7 @@ await probe('a full ternary hull preserves the compound minimum and polymorph di
   const source = [row(1, [1, 0, 0], -2), row(2, [0, 1, 0], -1), row(3, [0, 0, 1], -0.5),
     row(4, [1, 1, 1], -2.5), row(5, [1, 1, 1], -2)];
   const result = computeWorkshopGeometricHull(source, ternaryInfo);
-  result.structures.forEach((s, i) => close(s.fitness, i === 4 ? 0.5 : 0)); assert.ok(result.hullEdges!.length >= 6);
+  result.structures.forEach((s, i) => close(s.eHullRecons, i === 4 ? 0.5 : 0)); assert.ok(result.hullEdges!.length >= 6);
 });
 
 await probe('missing total energy derives from atom count, while explicit totals and nulls are preserved', () => {

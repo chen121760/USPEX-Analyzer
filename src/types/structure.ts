@@ -84,7 +84,7 @@ export interface Structure {
   enthalpyTotal: number;       // eV (total, from Individuals)
   volume: number;              // Å³/atom
   volumeTotal: number;         // Å³ (total, from Individuals)
-  fitness: number;             // eV/block — distance to convex hull
+  fitness: number;             // Raw USPEX fitness (eV/block); NaN = not supplied
   spaceGroup: number;
   hullX: number[];             // composition coordinate(s): [x] for binary, [x1,x2] for ternary
   hullY: number;               // formation energy (eV/atom)
@@ -203,6 +203,8 @@ export interface SystemInfo {
   maxFitness: number;
   /** Which file was used as the primary data source for totalStructures */
   totalStructuresSource: string;
+  /** Absent in saved projects whose Fitness may contain reconstructed values. */
+  fitnessSemantics?: 'uspex-original';
   calculationType: number;         // 3-digit code from Parameters.txt
   externalPressure: number | null; // GPa, null if not specified
   isPickup: boolean;               // true if pickUpGen or pickUpFolder is non-zero

@@ -1,3 +1,4 @@
+import { useHullMetric } from './HullMetricContext';
 import { formationEnergy, formationEnergyUnit } from '@/domain/structure/formationEnergy';
 /**
  * Binary 2D convex hull plot — extracted from original ConvexHullPage.
@@ -66,6 +67,7 @@ function makeStarTrace(
 
 export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = true, showTags = true, showFooter = true, oldHullLine, hullExpanded, onStructureClick }: Props) {
   const { t } = useTranslation();
+  const metric = useHullMetric();
   const openViewer = useUIStore((s) => s.openViewer);
   const markActiveTags  = useMarkStore((s) => s.markActiveTags);
   const markEaInput     = useMarkStore((s) => s.markEaInput);
@@ -120,7 +122,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
     `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
     `E_form: ${energyOf(s).toFixed(4)} ${formationUnit}<br>` +
     `H: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
-    `Fitness: ${s.fitness.toFixed(4)} eV/block<br>` +
+    `${metric.name}: ${s.fitness.toFixed(4)} ${metric.unit}<br>` +
     `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>` +
     `Origin: ${s.origin}`;
 
@@ -183,7 +185,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
   function handleExport() {
     const hasGroup = groupMap != null || structures.some((s) => s.groupName != null);
     const groupCol = hasGroup ? ['Group'] : [];
-    const pointHeaders = [...groupCol, 'EA_ID', 'Formula', `x(${componentB})`, `Formation_Energy(${formationUnit})`, 'Enthalpy(eV/atom)', 'Fitness(eV/block)', 'SpaceGroup', 'Generation', 'Origin', 'Type'];
+    const pointHeaders = [...groupCol, 'EA_ID', 'Formula', `x(${componentB})`, `Formation_Energy(${formationUnit})`, 'Enthalpy(eV/atom)', metric.header, 'SpaceGroup', 'Generation', 'Origin', 'Type'];
     const groupField = (s: Structure) => hasGroup ? { 'Group': s.groupName ?? '' } : {};
     const stableRows = stable.map((s) => ({
       ...groupField(s),
@@ -192,7 +194,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
       [`x(${componentB})`]: s.hullX[0] ?? 0,
       [`Formation_Energy(${formationUnit})`]: energyOf(s),
       'Enthalpy(eV/atom)': s.enthalpy,
-      'Fitness(eV/block)': 0,
+      [metric.header]: 0,
       'SpaceGroup': s.spaceGroup,
       'Generation': s.generation,
       'Origin': s.origin,
@@ -205,7 +207,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
       [`x(${componentB})`]: s.hullX[0] ?? 0,
       [`Formation_Energy(${formationUnit})`]: energyOf(s),
       'Enthalpy(eV/atom)': s.enthalpy,
-      'Fitness(eV/block)': s.fitness,
+      [metric.header]: s.fitness,
       'SpaceGroup': s.spaceGroup,
       'Generation': s.generation,
       'Origin': s.origin,
@@ -217,7 +219,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
       [`Formation_Energy(${formationUnit})`]: p.y,
     }));
     const tag = fitnessMax.toFixed(3).replace('.', 'p');
-    downloadMultiSectionCsv(`${components.join('-')}_binary_hull_fitness${tag}`, [
+    downloadMultiSectionCsv(`${components.join('-')}_binary_hull_${metric.name === 'Fitness' ? 'fitness' : 'Ed'}${tag}`, [
       { title: 'All Points (Stable + Unstable)', headers: pointHeaders, rows: [...stableRows, ...unstableRows] },
       { title: 'Convex Hull Line', headers: hullHeaders, rows: hullRows },
     ]);
@@ -233,7 +235,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
       marker: {
         color: unstable.map((s) => s.fitness),
         colorscale: 'Viridis',
-        colorbar: { title: 'Fitness\n(eV/block)', thickness: 15, len: 0.6 },
+        colorbar: { title: `${metric.name}\n(${metric.unit})`, thickness: 15, len: 0.6 },
         size: 6,
         opacity: 0.6,
       },
@@ -243,7 +245,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
           `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
           `E_form: ${energyOf(s).toFixed(4)} ${formationUnit}<br>` +
           `H: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
-          `Fitness: ${s.fitness.toFixed(4)} eV/block<br>` +
+          `${metric.name}: ${s.fitness.toFixed(4)} ${metric.unit}<br>` +
           `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>` +
           `Origin: ${s.origin}`,
       ),
@@ -285,7 +287,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
           `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
           `E_form: ${energyOf(s).toFixed(4)} ${formationUnit}<br>` +
           `H: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
-          `Fitness: ${s.fitness.toFixed(4)} eV/block<br>` +
+          `${metric.name}: ${s.fitness.toFixed(4)} ${metric.unit}<br>` +
           `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>` +
           `Origin: ${s.origin}`,
       ),
@@ -312,7 +314,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
           `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
           `E_form: ${energyOf(s).toFixed(4)} ${formationUnit}<br>` +
           `H: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
-          `Fitness: ${s.fitness.toFixed(4)} eV/block`,
+          `${metric.name}: ${s.fitness.toFixed(4)} ${metric.unit}`,
       ),
       hoverinfo: 'text' as const,
       customdata: userAdded.map((s: any) => s._mergeSeq ?? s.id),
@@ -374,7 +376,7 @@ export function BinaryHullPlot({ structures, systemInfo, groupMap, showExport = 
       {/* Fitness filter slider */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
         <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
-          Fitness max
+          {metric.limitLabel}
         </span>
         <input
           type="range"

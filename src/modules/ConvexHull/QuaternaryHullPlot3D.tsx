@@ -1,3 +1,4 @@
+import { useHullMetric } from './HullMetricContext';
 import { formationEnergy, formationEnergyUnit } from '@/domain/structure/formationEnergy';
 /**
  * 3D tetrahedron phase diagram for quaternary systems.
@@ -442,6 +443,7 @@ export function QuaternaryHullPlot3D({
   onStructureClick,
 }: Props) {
   const { t } = useTranslation();
+  const metric = useHullMetric();
   const openViewer = useUIStore((s) => s.openViewer);
   const markActiveTags = useMarkStore((s) => s.markActiveTags);
   const markEaInput = useMarkStore((s) => s.markEaInput);
@@ -658,7 +660,7 @@ export function QuaternaryHullPlot3D({
           : '') +
         `EA${id}: ${formulaToHtml(s?.formula ?? fallbackFormula)}<br>` +
         `Enthalpy: ${formationEnergy(s, systemInfo)?.toFixed(4) ?? '—'} ${formationEnergyUnit(systemInfo)}<br>` +
-        `Fitness: ${s?.fitness.toFixed(4) ?? '-'} eV/block<br>` +
+        `${metric.name}: ${s?.fitness.toFixed(4) ?? '-'} ${metric.unit}<br>` +
         `SG: ${s?.spaceGroup ?? '-'} | Gen: ${s?.generation ?? '-'}<br>` +
         `Origin: ${s?.origin ?? '-'}`
       );
@@ -841,14 +843,14 @@ export function QuaternaryHullPlot3D({
         y: unstablePts.map((p) => p.y),
         z: unstablePts.map((p) => p.z),
         mode: 'markers',
-        name: `Fitness ≤ ${fitnessMax.toFixed(3)}`,
+        name: `${metric.name} ≤ ${fitnessMax.toFixed(3)}`,
         marker: {
           symbol: 'circle',
           size: 3,
           color: fitnessVals,
           colorscale: 'Viridis',
           colorbar: {
-            title: { text: 'Fitness (eV/block)', font: CHART_FONT },
+            title: { text: `${metric.name} (${metric.unit})`, font: CHART_FONT },
             tickfont: CHART_FONT,
             len: 0.5,
           },
@@ -968,19 +970,19 @@ export function QuaternaryHullPlot3D({
       : systemInfo.elements.slice(0, 4);
     const energyUnit = formationEnergyUnit(systemInfo);
     const tag = fitnessMax.toFixed(3).replace('.', 'p');
-    const headers = ['EA', 'Formula', 'Composition', `E_form(${energyUnit})`, 'Fitness(eV/block)', 'SpaceGroup', 'Generation', 'Origin'];
+    const headers = ['EA', 'Formula', 'Composition', `E_form(${energyUnit})`, metric.header, 'SpaceGroup', 'Generation', 'Origin'];
     const rows = allPts.map((p) => ({
       EA: String(p.id),
       Formula: p.formula,
       Composition: `[${p.s.composition.join(', ')}]`,
       [`E_form(${energyUnit})`]: p.enthalpy.toFixed(6),
-      'Fitness(eV/block)': p.fitness.toFixed(6),
+      [metric.header]: p.fitness.toFixed(6),
       SpaceGroup: String(p.spaceGroup),
       Generation: String(p.generation),
       Origin: p.origin,
     }));
     downloadCsv(
-      `${components.join('-')}_quaternary_hull_fitness${tag}`,
+      `${components.join('-')}_quaternary_hull_${metric.name === 'Fitness' ? 'fitness' : 'Ed'}${tag}`,
       headers,
       rows,
     );
@@ -1006,7 +1008,7 @@ export function QuaternaryHullPlot3D({
         }}
       >
         <span style={{ fontSize: 12, fontWeight: 500 }}>
-          {'Fitness (eV/block) ≤ '}
+          {metric.limitLabel}
         </span>
         <input
           type="number"

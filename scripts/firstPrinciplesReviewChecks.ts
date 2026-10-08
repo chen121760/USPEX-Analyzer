@@ -52,7 +52,8 @@ await probe('B1: fixed TiH ranking must work without elemental reference phases'
   const parsed = await parseAllFiles([], contents);
   assert.equal(parsed.systemInfo.compositionMode, 'fixed');
   console.log('  relative energies:', parsed.structures.map(s => [s.fitness, s.eHullRecons]));
-  assert.deepEqual(parsed.structures.map(s => s.fitness), [0, 0.5]);
+  assert.deepEqual(parsed.structures.map(s => s.eHullRecons), [0, 0.5]);
+  assert.ok(parsed.structures.every(s => Number.isNaN(s.fitness)));
 });
 
 await probe('B2: main ternary reconstruction must preserve the Ti-H boundary hull', () => {
@@ -128,12 +129,12 @@ await probe('B8: an imported formula must not become executable HTML', async () 
 
 await probe('control: workshop fixed ranking does not require pure references', () => {
   const result = computeWorkshopGeometricHull([row(1, [1, 1], -2), row(2, [1, 1], -1.5)], { ...info, compositionMode: 'fixed' });
-  assert.deepEqual(result.structures.map(s => s.fitness), [0, 0.5]);
+  assert.deepEqual(result.structures.map(s => s.eHullRecons), [0, 0.5]);
 });
 await probe('control: workshop ternary boundary has the correct distances', () => {
   const result = computeWorkshopGeometricHull([row(1, [1, 0, 0], -2), row(2, [0, 1, 0], -1), row(3, [1, 1, 0], -2.5), row(4, [1, 1, 0], -2)],
     { ...info, elements: ['Ti', 'H', 'Li'], systemType: 'ternary' });
-  assert.deepEqual(result.structures.map(s => s.fitness), [0, 0, 0, 0.5]);
+  assert.deepEqual(result.structures.map(s => s.eHullRecons), [0, 0, 0, 0.5]);
 });
 await probe('control: ordinary binary reconstruction matches analytical distances', () => {
   const result = reconstructHullStructures([row(1, [1, 0], -2), row(2, [0, 1], -1), row(3, [1, 1], -2.5), row(4, [1, 1], -2)], 'binary', 'varcomp', info.elements);
@@ -182,7 +183,8 @@ await probe('valid energy with unknown USPEX25 Ed is reconstructed', async () =>
     ['individuals', header + '\n1 1 [1,0] -2 20 0\n1 2 [0,1] -1 20 0\n1 3 [1,1] -5 20 nan'],
     ['gathered_poscars', [poscar(1, [1, 0]), poscar(2, [0, 1]), poscar(3, [1, 1])].join('\n')],
   ]));
-  assert.equal(parsed.structures[2].fitness, 0);
+  assert.ok(Number.isNaN(parsed.structures[2].fitness));
+  assert.equal(parsed.structures[2].eHullRecons, 0);
   assert.equal(parsed.structures[2].enthalpyTotal, -5);
 });
 await probe('cross-list duplicate IDs reject atomically and keep the active project', async () => {

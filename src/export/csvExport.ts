@@ -17,6 +17,7 @@ interface BuildCsvOptions {
 export function escapeCsvCell(value: CsvCellValue): string {
   const cell = isCsvCell(value) ? value : { value };
   if (cell.value == null) return cell.forceQuote ? '""' : '';
+  if (typeof cell.value === 'number' && !Number.isFinite(cell.value)) return cell.forceQuote ? '""' : '';
   const str = String(cell.value);
   if (cell.forceQuote || str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
     return `"${str.replace(/"/g, '""')}"`;
@@ -170,7 +171,7 @@ export function buildStructureCsvRows(
     // must not reach the file as the literal `NaN`.
     'Enthalpy_eV_atom': finiteOrBlank(s.enthalpy),
     'Volume_A3_atom': finiteOrBlank(s.volume),
-    'Fitness_eV_block': finiteOrBlank(s.fitness),
+    'Fitness_eV_block': s.fitness >= 0 ? finiteOrBlank(s.fitness) : '',
     'Density_g_cm3': finiteOrBlank(s.density),
     'Origin': s.origin,
     'ParentIDs': quoted(s.parentIds.join(' ')),

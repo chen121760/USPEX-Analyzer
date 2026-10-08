@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
 import { PageSkeleton } from '@/components/ui/Skeleton';
@@ -8,6 +8,8 @@ import { TernaryHullPlot } from './TernaryHullPlot';
 import { TernaryHullPlot3D } from './TernaryHullPlot3D';
 import { QuaternaryHullPlot3D } from './QuaternaryHullPlot3D';
 import { EnergyRankingChart } from './EnergyRankingChart';
+import { HullMetricContext } from './HullMetricContext';
+import { hullDisplayStructures, type HullDisplayMetric } from '@/domain/hull/displayMetric';
 
 export function ConvexHullPage() {
   const { t } = useTranslation();
@@ -26,6 +28,11 @@ export function ConvexHullPage() {
   const setViewMode = (mode: '2d' | '3d') => setViewState({ projectId, mode });
   const fitnessLimit = fitnessState.projectId === projectId ? fitnessState.value : null;
   const onFitnessLimitChange = (value: number) => setFitnessState({ projectId, value });
+  const [metricState, setMetricState] = useState<{ projectId: string; value: HullDisplayMetric }>({ projectId, value: 'fitness' });
+  const metric = metricState.projectId === projectId ? metricState.value : 'fitness';
+  const chartStructures = useMemo(() => hullDisplayStructures(structures, metric), [structures, metric]);
+  const metricInfo = metric === 'fitness' ? { name: 'Fitness', unit: 'eV/block' }
+    : { name: 'Ed (Recons)', unit: systemInfo?.referenceInfo?.unit ?? 'eV/atom' };
 
   // Every hook above is unconditional; the loading and empty states come after.
   if (!ready) {
@@ -167,19 +174,39 @@ export function ConvexHullPage() {
           </div>
         )}
 
+      {compositionMode !== 'fixed' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, fontSize: 13 }}>
+          <label>
+            {t('hull.distanceSource')}{' '}
+            <select value={metric} onChange={event => {
+              setMetricState({ projectId, value: event.target.value as HullDisplayMetric });
+              setFitnessState({ projectId, value: null });
+            }}>
+              <option value="fitness">{t(systemInfo.fitnessSemantics === 'uspex-original' ? 'hull.rawFitness' : 'hull.legacyFitness')}</option>
+              <option value="reconstructed">{t('hull.reconstructedDistance')}</option>
+            </select>
+          </label>
+          {metric === 'fitness' && structures.some(s => !Number.isFinite(s.fitness)) &&
+            <span style={{ color: 'var(--color-text-secondary)' }}>{t('hull.missingFitnessDetail')}</span>}
+        </div>
+      )}
+      {systemInfo.fitnessSemantics !== 'uspex-original' &&
+        <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--color-warning)' }} role="status">{t('hull.legacyFitnessDetail')}</div>}
+      <HullMetricContext.Provider value={metricInfo}>
       {compositionMode === 'fixed' ? (
         <EnergyRankingChart structures={structures} systemInfo={systemInfo} />
       ) : systemType === 'ternary' ? (
         viewMode === '2d' ? (
-          <TernaryHullPlot key={projectId} structures={structures} systemInfo={systemInfo} fitnessLimit={fitnessLimit} onFitnessLimitChange={onFitnessLimitChange} />
+          <TernaryHullPlot key={`${projectId}-${metric}`} structures={chartStructures} systemInfo={systemInfo} fitnessLimit={fitnessLimit} onFitnessLimitChange={onFitnessLimitChange} />
         ) : (
-          <TernaryHullPlot3D key={projectId} structures={structures} systemInfo={systemInfo} fitnessLimit={fitnessLimit} onFitnessLimitChange={onFitnessLimitChange} />
+          <TernaryHullPlot3D key={`${projectId}-${metric}`} structures={chartStructures} systemInfo={systemInfo} fitnessLimit={fitnessLimit} onFitnessLimitChange={onFitnessLimitChange} />
         )
       ) : systemType === 'quaternary' ? (
-        <QuaternaryHullPlot3D structures={structures} systemInfo={systemInfo} />
+        <QuaternaryHullPlot3D key={`${projectId}-${metric}`} structures={chartStructures} systemInfo={systemInfo} />
       ) : (
-        <BinaryHullPlot structures={structures} systemInfo={systemInfo} />
+        <BinaryHullPlot key={`${projectId}-${metric}`} structures={chartStructures} systemInfo={systemInfo} />
       )}
+      </HullMetricContext.Provider>
     </div>
   );
 }

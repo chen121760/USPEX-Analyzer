@@ -265,15 +265,15 @@ section('Hull rebuilt from all converged structures (no USPEX Ed)');
 
   // The bug: with no USPEX Ed the old fallback made only the most cohesive
   // element (Li) stable.  Zr must be stable too, and so must the compounds.
-  const stable = structures.filter((s) => s.fitness === 0).map((s) => s.id).sort((a, b) => a - b);
+  const stable = structures.filter((s) => s.eHullRecons === 0).map((s) => s.id).sort((a, b) => a - b);
   check(
     'six structures are stable, not just the most cohesive element',
     stable.join(',') === '1,2,3,4,5,7',
     `stable = ${stable.join(',')}`,
   );
   check(
-    'the reconstructed distance is adopted as fitness',
-    structures.every((s) => s.fitness === s.eHullRecons || (Number.isNaN(s.fitness) && Number.isNaN(s.eHullRecons))),
+    'missing raw fitness is not replaced by reconstruction',
+    structures.every((s) => Number.isNaN(s.fitness)),
   );
 
   // A run that does provide Ed must keep it untouched.
@@ -326,8 +326,8 @@ section('Ternary hull rebuilt from all converged structures (no USPEX Ed)');
   );
   check(
     'four structures are stable (previously the empty hull made all five stable)',
-    rebuilt.filter((s) => s.fitness === 0).length === 4,
-    `got ${rebuilt.filter((s) => s.fitness === 0).length}`,
+    rebuilt.filter((s) => s.eHullRecons === 0).length === 4,
+    `got ${rebuilt.filter((s) => s.eHullRecons === 0).length}`,
   );
 }
 
@@ -397,30 +397,30 @@ section('parseAllFiles: Individuals-only run yields a real hull');
     result.warnings.join(' | '),
   );
   check(
-    'every converged structure has a finite fitness',
-    structures.every((s) => Number.isFinite(s.fitness)),
-    structures.map((s) => s.fitness).join(','),
+    'every converged structure has a finite reconstructed distance',
+    structures.every((s) => Number.isFinite(s.eHullRecons)),
+    structures.map((s) => s.eHullRecons).join(','),
   );
   check(
     'Zr (not the most cohesive element) is stable',
-    byId(2).fitness === 0,
-    `fitness ${byId(2).fitness}`,
+    byId(2).eHullRecons === 0,
+    `fitness ${byId(2).eHullRecons}`,
   );
-  check('the compounds are stable', byId(5).fitness === 0 && byId(7).fitness === 0);
+  check('the compounds are stable', byId(5).eHullRecons === 0 && byId(7).eHullRecons === 0);
   check(
     'shallow Li2Cl2 is 1.5 eV/atom above the hull',
-    close(byId(6).fitness, 1.5, 1e-6),
-    `got ${byId(6).fitness}`,
+    close(byId(6).eHullRecons, 1.5, 1e-6),
+    `got ${byId(6).eHullRecons}`,
   );
   check(
-    'six stable structures are counted',
-    systemInfo.stableCount === 6,
+    'no measured stable structures are invented',
+    systemInfo.stableCount === 0,
     `got ${systemInfo.stableCount}`,
   );
   check(
     'the old "E/atom - min(E/atom)" proxy is gone (it gave Li2Cl2 2.5)',
-    !close(byId(6).fitness, 2.5, 1e-6),
-    `got ${byId(6).fitness}`,
+    !close(byId(6).eHullRecons, 2.5, 1e-6),
+    `got ${byId(6).eHullRecons}`,
   );
 }
 

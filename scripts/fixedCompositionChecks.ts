@@ -95,18 +95,18 @@ check('the run is fixed composition', systemInfo.compositionMode === 'fixed', sy
 check('the one-element system is unary', systemInfo.systemType === 'unary', systemInfo.systemType);
 check('Pareto_ranking promotes it to multi-objective', systemInfo.optimizationType === 'multi', systemInfo.optimizationType);
 check('all nine Individuals rows are retained', structures.length === 9, String(structures.length));
-check('every converged structure gets a finite relative-energy fitness',
-  structures.every((structure) => Number.isFinite(structure.fitness)),
-  structures.filter((structure) => !Number.isFinite(structure.fitness)).map((structure) => `EA${structure.id}`).join(', '));
-check('the lowest-enthalpy structures have zero fitness',
-  [2, 3, 7].every((id) => byId.get(id)?.fitness === 0),
-  [2, 3, 7].map((id) => `EA${id}:${byId.get(id)?.fitness}`).join(', '));
-check('EA1 fitness is its per-atom enthalpy above the minimum',
-  close(byId.get(1)?.fitness ?? Number.NaN, 0.0365),
-  String(byId.get(1)?.fitness));
-check('the published fitness agrees with the fixed-composition reconstruction',
-  structures.every((structure) => close(structure.fitness, structure.eHullRecons)),
-  structures.map((structure) => `EA${structure.id}:${structure.fitness}/${structure.eHullRecons}`).join(', '));
+check('every converged structure gets a finite relative-energy distance',
+  structures.every((structure) => Number.isFinite(structure.eHullRecons)),
+  structures.filter((structure) => !Number.isFinite(structure.eHullRecons)).map((structure) => `EA${structure.id}`).join(', '));
+check('the lowest-enthalpy structures have zero relative energy',
+  [2, 3, 7].every((id) => byId.get(id)?.eHullRecons === 0),
+  [2, 3, 7].map((id) => `EA${id}:${byId.get(id)?.eHullRecons}`).join(', '));
+check('EA1 relative energy is its per-atom enthalpy above the minimum',
+  close(byId.get(1)?.eHullRecons ?? Number.NaN, 0.0365),
+  String(byId.get(1)?.eHullRecons));
+check('original Fitness stays missing when USPEX supplies none',
+  structures.every((structure) => Number.isNaN(structure.fitness)),
+  structures.map((structure) => `EA${structure.id}:${structure.eHullRecons}/${structure.eHullRecons}`).join(', '));
 check('Property_X preserves the USPEX sign convention across both files',
   byId.get(1)?.extraProps?.['Property_X-Individuals'] === -221 &&
     byId.get(1)?.extraProps?.['Property_X-Pareto_ranking'] === 221,

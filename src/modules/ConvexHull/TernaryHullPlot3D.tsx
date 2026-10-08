@@ -1,3 +1,4 @@
+import { useHullMetric } from './HullMetricContext';
 import { formationEnergy, formationEnergyUnit } from '@/domain/structure/formationEnergy';
 /**
  * 3D ternary phase diagram convex hull plot.
@@ -67,6 +68,7 @@ export function TernaryHullPlot3D({
   onFitnessLimitChange,
 }: Props) {
   const { t } = useTranslation();
+  const metric = useHullMetric();
   const openViewer = useUIStore((s) => s.openViewer);
   const markActiveTags = useMarkStore((s) => s.markActiveTags);
   const markEaInput = useMarkStore((s) => s.markEaInput);
@@ -290,7 +292,7 @@ export function TernaryHullPlot3D({
           : '') +
         `EA${id}: ${formulaToHtml(s?.formula ?? fallbackFormula)}<br>` +
         `E_form: ${formationEnergy(s, systemInfo)?.toFixed(4) ?? '—'} ${formationEnergyUnit(systemInfo)}<br>` +
-        `Fitness: ${s?.fitness.toFixed(4) ?? '-'} eV/block<br>` +
+        `${metric.name}: ${s?.fitness.toFixed(4) ?? '-'} ${metric.unit}<br>` +
         `SG: ${s?.spaceGroup ?? '-'} | Gen: ${s?.generation ?? '-'}<br>` +
         `Origin: ${s?.origin ?? '-'}`
       );
@@ -518,7 +520,7 @@ export function TernaryHullPlot3D({
         cmin: 0,
         cmax: Math.max(fitnessMax, 0.01),
         colorbar: {
-          title: 'Fitness<br>(eV/block)',
+          title: `${metric.name}<br>(${metric.unit})`,
           thickness: 14,
           len: 0.46,
           x: 0.73,
@@ -535,7 +537,7 @@ export function TernaryHullPlot3D({
           : '') +
         `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
         `E_form: ${formationEnergy(s, systemInfo)?.toFixed(4) ?? '—'} ${formationEnergyUnit(systemInfo)}<br>` +
-        `Fitness: ${s.fitness.toFixed(4)} eV/block<br>` +
+        `${metric.name}: ${s.fitness.toFixed(4)} ${metric.unit}<br>` +
         `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>` +
         `Origin: ${s.origin}`,
       ),
@@ -564,7 +566,7 @@ export function TernaryHullPlot3D({
             : '') +
           `EA${p.id}: ${formulaToHtml(s?.formula ?? '')}<br>` +
           `E_form: ${p.eForm.toFixed(4)} ${formationEnergyUnit(systemInfo)}<br>` +
-          `Fitness: 0.0000 eV/block<br>` +
+          `${metric.name}: 0.0000 ${metric.unit}<br>` +
           `SG: ${s?.spaceGroup ?? '-'} | Gen: ${s?.generation ?? '-'}<br>` +
           `Origin: ${s?.origin ?? '-'}`
         );
@@ -594,7 +596,7 @@ export function TernaryHullPlot3D({
           (s.groupName ? `Group: ${s.groupName}<br>` : '') +
           `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
           `E_form: ${u.eForm.toFixed(4)} ${formationEnergyUnit(systemInfo)}<br>` +
-          `Fitness: ${s.fitness.toFixed(4)} eV/block`
+          `${metric.name}: ${s.fitness.toFixed(4)} ${metric.unit}`
         );
       }),
       hoverinfo: 'text',
@@ -725,7 +727,7 @@ export function TernaryHullPlot3D({
       `x_${elB}`,
       `x_${elC}`,
       `E_form(${energyUnit})`,
-      'Fitness(eV/block)',
+      metric.header,
       'SpaceGroup',
       'Generation',
       'Origin',
@@ -743,7 +745,7 @@ export function TernaryHullPlot3D({
         [`x_${elB}`]: (p.composition[1] / total).toFixed(6),
         [`x_${elC}`]: (p.composition[2] / total).toFixed(6),
         [`E_form(${energyUnit})`]: p.eForm,
-        'Fitness(eV/block)': 0,
+        [metric.header]: 0,
         SpaceGroup: s?.spaceGroup ?? '',
         Generation: s?.generation ?? '',
         Origin: s?.origin ?? '',
@@ -766,7 +768,7 @@ export function TernaryHullPlot3D({
         [`x_${elB}`]: (exportComposition[1] / total).toFixed(6),
         [`x_${elC}`]: (exportComposition[2] / total).toFixed(6),
         [`E_form(${energyUnit})`]: ef,
-        'Fitness(eV/block)': s.fitness,
+        [metric.header]: s.fitness,
         SpaceGroup: s.spaceGroup,
         Generation: s.generation,
         Origin: s.origin,
@@ -776,7 +778,7 @@ export function TernaryHullPlot3D({
 
     const tag = fitnessMax.toFixed(3).replace('.', 'p');
     downloadCsv(
-      `${components.join('-')}_ternary_3d_hull_fitness${tag}`,
+      `${components.join('-')}_ternary_3d_hull_${metric.name === 'Fitness' ? 'fitness' : 'Ed'}${tag}`,
       headers,
       [...stableRows, ...unstableRows],
     );
@@ -800,11 +802,11 @@ export function TernaryHullPlot3D({
             whiteSpace: 'nowrap',
           }}
         >
-          {t('hull.fitnessMax')}
+          {metric.limitLabel}
         </span>
         <input
           type="range"
-          aria-label={t('hull.fitnessMax')}
+          aria-label={metric.limitLabel}
           min={0}
           max={maxFitness}
           step="any"
@@ -815,7 +817,7 @@ export function TernaryHullPlot3D({
         />
         <input
           type="number"
-          aria-label={t('hull.fitnessMax')}
+          aria-label={metric.limitLabel}
           min={0}
           max={maxFitness}
           step="any"
@@ -837,7 +839,7 @@ export function TernaryHullPlot3D({
           }}
         />
         <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-          eV/block
+          {metric.unit}
         </span>
         {showExport && (
           <ExportDataButton

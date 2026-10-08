@@ -38,7 +38,7 @@ console.log('\nFeature regression checks');
 check('manual eV/atom input becomes total cell energy', () => { assert.equal(manual.enthalpy, -3); assert.equal(manual.enthalpyTotal, -12); });
 check('TiH3 formation energy is -1.75 and expands the hull', () => {
   const result = computeWorkshopGeometricHull([...refs, manual], info);
-  assert.equal(result.structures[2].eForm, -1.75); assert.equal(result.structures[2].fitness, 0); assert.equal(result.hullExpanded, true);
+  assert.equal(result.structures[2].eForm, -1.75); assert.equal(result.structures[2].eHullRecons, 0); assert.equal(result.hullExpanded, true);
   assert.equal(manual.eForm, -1); // Pure wrapper leaves the source untouched.
 });
 check('manual input rejects invalid energy and composition', () => {
@@ -47,11 +47,11 @@ check('manual input rejects invalid energy and composition', () => {
 });
 check('fixed compound ranking works without pure references', () => {
   const result = computeWorkshopGeometricHull([row(1, [1, 1], -5), row(2, [1, 1], -4)], { ...info, compositionMode: 'fixed' });
-  assert.deepEqual(result.structures.map(s => s.fitness), [0, 1]);
+  assert.deepEqual(result.structures.map(s => s.eHullRecons), [0, 1]);
 });
 check('fixed rankings normalize cell size and compare equal stoichiometry', () => {
   const result = computeWorkshopGeometricHull([row(1, [1, 1], -5), row(2, [2, 2], -4), row(3, [1, 3], -10)], { ...info, compositionMode: 'fixed' });
-  assert.deepEqual(result.structures.map(s => s.fitness), [0, 1, 0]);
+  assert.deepEqual(result.structures.map(s => s.eHullRecons), [0, 1, 0]);
 });
 const reversed = { ...info, elements: ['H', 'Ti'] };
 check('element order is remapped before hull calculation', () => {

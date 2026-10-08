@@ -39,6 +39,7 @@ export function validateSystemInfo(value: unknown): asserts value is SystemInfo 
   }
   numericFields(value, ['totalStructures', 'totalGenerations', 'stableCount', 'unconvergedCount',
     'minEnthalpy', 'maxFitness', 'calculationType', 'pickUpGen', 'pickUpFolder'], 'system information');
+  if (value.fitnessSemantics != null && value.fitnessSemantics !== 'uspex-original') throw new Error('Invalid fitness semantics');
   for (const key of ['secondObjectiveName', 'totalStructuresSource']) {
     if (value[key] != null && typeof value[key] !== 'string') throw new Error(`Invalid system information ${key}`);
   }

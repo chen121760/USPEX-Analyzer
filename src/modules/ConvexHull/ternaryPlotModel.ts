@@ -78,14 +78,14 @@ export function ternaryMarkGroups(entries: TernaryPlotEntry[], activeTags: strin
 }
 
 /** CSV exports the complete fitness-filtered dataset, independently of view cropping and legend toggles. */
-export function ternaryExportData(entries: TernaryPlotEntry[], components: string[], energyUnit: string, hasGroup: boolean) {
+export function ternaryExportData(entries: TernaryPlotEntry[], components: string[], energyUnit: string, hasGroup: boolean, metricHeader = 'Fitness(eV/block)') {
   const fractionHeaders = components.map((label) => `x_${label}`);
   const headers = [...(hasGroup ? ['Group'] : []), 'EA_ID', 'Formula', ...fractionHeaders,
-    `E_form(${energyUnit})`, 'Fitness(eV/block)', 'SpaceGroup', 'Generation', 'Origin', 'Type'];
+    `E_form(${energyUnit})`, metricHeader, 'SpaceGroup', 'Generation', 'Origin', 'Type'];
   const rows = entries.map(({ structure: s, composition, eForm }) => ({
     ...(hasGroup ? { Group: s.groupName ?? '' } : {}), EA_ID: s.id, Formula: s.formula,
     ...Object.fromEntries(fractionHeaders.map((header, i) => [header, composition[i].toFixed(6)])),
-    [`E_form(${energyUnit})`]: eForm ?? '', 'Fitness(eV/block)': s.fitness,
+    [`E_form(${energyUnit})`]: eForm ?? '', [metricHeader]: s.fitness,
     SpaceGroup: s.spaceGroup, Generation: s.generation, Origin: s.origin,
     Type: s.isUserAdded ? 'Manual' : s.fitness === 0 ? 'Stable' : 'Unstable',
   }));

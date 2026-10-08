@@ -97,9 +97,9 @@ function buildHeaderMapping(headerLine: string): HeaderMapping | null {
 /**
  * Get a value from the middle-section numeric array by column name.
  */
-function getMid(preNums: number[], midMap: Map<string, number>, name: string): number {
+function getMid(preNums: number[], midMap: Map<string, number>, name: string, missing = 0): number {
   const idx = midMap.get(name);
-  if (idx === undefined || idx >= preNums.length) return 0;
+  if (idx === undefined || idx >= preNums.length) return missing;
   return preNums[idx] ?? 0;
 }
 
@@ -369,7 +369,7 @@ export function parseIndividuals(content: string): IndividualsParseResult {
     const thickness = getMid(preNums, midMap, 'Thick');
     const surfArea = getMid(preNums, midMap, 'Surf_area');
     const specSurfArea = getMid(preNums, midMap, 'Spec_surf_area');
-    const indFitness = getMid(preNums, midMap, 'Fitness');
+    const indFitness = getMid(preNums, midMap, 'Fitness', Number.NaN);
     const secondObjectiveValue = secondObjectiveName
       ? getMid(preNums, midMap, secondObjectiveName)
       : 0;

@@ -1,3 +1,4 @@
+import { fixedRelativeEnergy } from '@/domain/hull/displayMetric';
 /**
  * Energy ranking chart for fixed-composition calculations.
  *
@@ -78,12 +79,12 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
     const top = allSorted.slice(0, displayCount);
     return {
       ranks: top.map((_, i) => i + 1),
-      fitness: top.map((s) => s.fitness ?? 0),
+      fitness: top.map((s) => fixedRelativeEnergy(s)),
       colors: top.map((s) => originColorMap.get(s.origin) ?? plotTheme.defaultMarkerColor),
       hoverTexts: top.map((s) =>
         (s.groupName || groupMap ? `Group: ${s.groupName ?? groupMap?.get(s.id) ?? '—'}<br>` : '') +
         `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
-        `ΔH: ${(s.fitness ?? 0).toFixed(4)} eV/atom<br>` +
+        `ΔH: ${(fixedRelativeEnergy(s)).toFixed(4)} eV/atom<br>` +
         `Enthalpy: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
         `SG: ${s.spaceGroup}<br>` +
         `Origin: ${s.origin}<br>` +
@@ -114,7 +115,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
   const rankMap = useMemo(() => {
     const map = new Map<number, { rank: number; fitness: number }>();
     allSorted.slice(0, displayCount).forEach((s, i) => {
-      map.set(s.id, { rank: i + 1, fitness: s.fitness ?? 0 });
+      map.set(s.id, { rank: i + 1, fitness: fixedRelativeEnergy(s) });
     });
     // User-added — compute rank by insertion into sorted list
     const topN = allSorted.slice(0, displayCount);
@@ -123,7 +124,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
       for (let i = 0; i < topN.length; i++) {
         if (ua.enthalpy < topN[i].enthalpy) { rank = i + 1; break; }
       }
-      map.set(ua.id, { rank, fitness: ua.fitness ?? 0 });
+      map.set(ua.id, { rank, fitness: fixedRelativeEnergy(ua) });
     }
     return map;
   }, [allSorted, displayCount, userAdded]);
@@ -144,7 +145,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
       `[Manual]<br>` +
       (s.groupName ? `Group: ${s.groupName}<br>` : '') +
       `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
-      `ΔH: ${(s.fitness ?? 0).toFixed(4)} eV/atom<br>` +
+      `ΔH: ${(fixedRelativeEnergy(s)).toFixed(4)} eV/atom<br>` +
       `Enthalpy: ${s.enthalpy.toFixed(4)} eV/atom`
     ),
     hoverinfo: 'text' as const,
@@ -155,7 +156,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
   const getStructureHoverText = (s: Structure) =>
     (s.groupName || groupMap ? `Group: ${s.groupName ?? groupMap?.get(s.id) ?? '—'}<br>` : '') +
     `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
-    `ΔH: ${(s.fitness ?? 0).toFixed(4)} eV/atom<br>` +
+    `ΔH: ${(fixedRelativeEnergy(s)).toFixed(4)} eV/atom<br>` +
     `Enthalpy: ${s.enthalpy.toFixed(4)} eV/atom<br>` +
     `SG: ${s.spaceGroup}<br>` +
     `Origin: ${s.origin}<br>` +
@@ -270,7 +271,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
       xHeaders = elements.map((el) => `x_${el}`);
     }
 
-    const headers = [...groupCol, 'Rank', 'EA_ID', 'Formula', ...xHeaders, 'SpaceGroup', 'Generation', 'Origin', 'Enthalpy(eV/atom)', 'Fitness(eV/atom)'];
+    const headers = [...groupCol, 'Rank', 'EA_ID', 'Formula', ...xHeaders, 'SpaceGroup', 'Generation', 'Origin', 'Enthalpy(eV/atom)', 'DeltaH(eV/atom)'];
     const groupField = (s: Structure) => hasGroup ? { 'Group': s.groupName ?? '' } : {};
 
     function xFraction(s: Structure): Record<string, number> {
@@ -299,7 +300,7 @@ export function EnergyRankingChart({ structures, systemInfo, groupMap, showExpor
       'Generation': s.generation,
       'Origin': s.origin,
       'Enthalpy(eV/atom)': s.enthalpy,
-      'Fitness(eV/atom)': s.fitness ?? 0,
+      'DeltaH(eV/atom)': fixedRelativeEnergy(s),
     }));
 
     // Build metadata comment lines — export as varcomp for workshop compatibility

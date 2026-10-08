@@ -26,12 +26,15 @@ export function computeWorkshopGeometricHull(
   systemInfo: SystemInfo,
 ): WorkshopDomainHullResult {
   const normalized = structures.map(normalizeWorkshopStructure);
+  const originalFitness = new Map(normalized.map(s => [s, s.fitness]));
   const result = computeGeometricHull(normalized, { ...systemInfo });
 
   return {
     ...result,
     structures: result.structures.map((structure) =>
-      normalizeWorkshopStructure({ ...structure, eHullRecons: structure.fitness } as WorkshopStructure),
+      normalizeWorkshopStructure({ ...structure, eHullRecons: systemInfo.systemType === 'quaternary' && systemInfo.compositionMode !== 'fixed'
+        ? structure.eHullRecons : structure.fitness,
+        fitness: originalFitness.get(structure) ?? Number.NaN } as WorkshopStructure),
     ),
   };
 }

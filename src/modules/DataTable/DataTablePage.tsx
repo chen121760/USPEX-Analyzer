@@ -318,8 +318,9 @@ export function DataTablePage() {
       },
       {
         id: 'fitness',
-        accessorKey: 'fitness',
-        header: t('col.fitness'),
+        accessorFn: s => Number.isFinite(s.fitness) && s.fitness >= 0 ? s.fitness : undefined,
+        sortUndefined: 'last',
+        header: () => <span title={t(systemInfo?.fitnessSemantics === 'uspex-original' ? 'col.fitnessDesc' : 'hull.legacyFitnessDetail')}>{t('col.fitness')}</span>,
         size: 110,
         cell: ({ getValue }) => {
           const v = getValue<number | null>();
@@ -382,7 +383,7 @@ export function DataTablePage() {
         size: 130,
         cell: ({ getValue }) => {
           const v = getValue<number>();
-          return v === -1 ? '—' : v.toFixed(4);
+          return !Number.isFinite(v) || v < 0 ? '—' : v.toFixed(4);
         },
       });
     }
@@ -519,7 +520,7 @@ export function DataTablePage() {
       });
     }
     return cols;
-  }, [t, isVarcomp, hasPareto, hasML, hasFingerprint, hasVolume, hasDensity, extraPropKeys, tags, compareIds, openViewer, toggleCompare]);
+  }, [t, isVarcomp, hasPareto, hasML, hasFingerprint, hasVolume, hasDensity, extraPropKeys, tags, compareIds, openViewer, toggleCompare, systemInfo]);
 
   const tableData = useMemo(() => {
     const elements = systemInfo?.elements ?? [];
@@ -585,6 +586,8 @@ export function DataTablePage() {
 
   return (
     <div className="fade-in">
+    {systemInfo?.fitnessSemantics !== 'uspex-original' &&
+      <div role="status" style={{ marginBottom: 12, fontSize: 13, color: 'var(--color-warning)' }}>{t('hull.legacyFitnessDetail')}</div>}
 
     {/* ===== 工具栏 ===== */}
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>

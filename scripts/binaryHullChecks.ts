@@ -109,7 +109,7 @@ check('seven structures were merged', structures.length === 7, String(structures
 // ── The published hull distance is complete, whatever the file covers ──────
 const converged = structures.filter((s) => s.enthalpyTotal <= 900);
 const missing = converged.filter((s) => !Number.isFinite(s.fitness));
-check('every converged structure gets a hull distance', missing.length === 0,
+check('USPEX-missing fitness remains missing', missing.length === 4,
   missing.map((s) => `EA${s.id}`).join(', '));
 check('the partly measured run is recognised as such', converged.length === 7);
 
@@ -118,20 +118,20 @@ check('USPEX own Ed is kept where the file provides one',
 check('...while the reconstruction still reports the geometric distance',
   Math.abs(at(4).eHullRecons - 0.25) < 1e-6, String(at(4).eHullRecons));
 check('a structure the file omits gets the reconstructed distance',
-  Math.abs(at(5).fitness - 0.2) < 1e-6, String(at(5).fitness));
+  Math.abs(at(5).eHullRecons - 0.2) < 1e-6, String(at(5).fitness));
 
 // ── The hull itself: the omitted compound must be found ───────────────────
-const stable = structures.filter((s) => s.fitness === 0);
-check('the omitted compound is stable', at(3).fitness === 0, String(at(3).fitness));
+const stable = structures.filter((s) => s.eHullRecons === 0);
+check('the omitted compound is stable', at(3).eHullRecons === 0, String(at(3).fitness));
 check('exactly the endmembers and that compound are stable',
   stable.length === 3, stable.map((s) => `EA${s.id}`).join(', '));
 
-const distances = structures.map((s) => Math.abs(s.eHullRecons - s.fitness));
+const distances = structures.filter(s => Number.isFinite(s.fitness)).map((s) => Math.abs(s.eHullRecons - s.fitness));
 check('USPEX Ed and the reconstruction only differ where the file disagrees',
   distances.filter((d) => d > 1e-6).length === 1, distances.join(', '));
 
 // ── What the plot draws ───────────────────────────────────────────────────
-// Same construction as BinaryHullPlot: lower hull over the stable structures in
+// Ed display draws the lower hull over reconstructed stable structures in
 // (x, formation energy).
 const hullLine = computeLowerHull2D(
   stable
@@ -159,7 +159,7 @@ check('the Individuals-only rows no longer expose a raw enthalpy as their energy
 check('one compound at two cell sizes plots at exactly the same x',
   at(6).hullX[0] === at(7).hullX[0], `${at(6).hullX[0]} vs ${at(7).hullX[0]}`);
 check('both cell sizes report the same distance',
-  Math.abs(at(6).fitness - at(7).fitness) < 1e-9, `${at(6).fitness} vs ${at(7).fitness}`);
+  Math.abs(at(6).eHullRecons - at(7).eHullRecons) < 1e-9, `${at(6).fitness} vs ${at(7).fitness}`);
 
 // A duplicate composition must not survive into the drawn hull.
 const deduped = computeLowerHull2D([

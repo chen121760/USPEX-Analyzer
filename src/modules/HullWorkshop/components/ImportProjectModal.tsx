@@ -1,3 +1,4 @@
+import { canImportWorkshopStructure } from '@/domain/hull/displayMetric';
 import { workshopCompatibilityError } from '@/domain/hull/workshopCompatibility';
 import type { SystemInfo } from '@/types/structure';
 /**
@@ -51,7 +52,7 @@ function sameElements(a: string[], b: string[]): boolean {
 /** Filter structures suitable for geometric hull (same as current-project import). */
 function filterWorkshopStructures(structures: Structure[]): Structure[] {
   return structures.filter(
-    (s) => s.enthalpyTotal <= 900 && !isNaN(s.fitness) && s.fitness >= 0,
+    canImportWorkshopStructure,
   );
 }
 

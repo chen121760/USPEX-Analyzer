@@ -1,3 +1,4 @@
+import { useHullMetric } from './HullMetricContext';
 import { useMemo, useState, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ECharts } from 'echarts';
@@ -41,6 +42,7 @@ const inputStyle = { width: 92, padding: '5px 8px', border: '1px solid var(--col
 export function TernaryHullPlot(props: Props) {
   const { structures, systemInfo, groupMap, showExport = true, showTags = true, showFooter = true, oldHullEdges, onStructureClick } = props;
   const { t } = useTranslation();
+  const metric = useHullMetric();
   const inputId = useId();
   const theme = useThemeStore((s) => s.theme);
   const openViewer = useUIStore((s) => s.openViewer);
@@ -76,7 +78,7 @@ export function TernaryHullPlot(props: Props) {
     const group = s.groupName ?? groupMap?.get(s.id);
     return `${group ? `${t('hull.group')}: ${group}<br>` : ''}EA${s.id}: ${formulaToHtml(s.formula)}<br>`
       + model.components.map((label, i) => `${formulaToHtml(label)}: ${(100 * e.composition[i]).toFixed(2)}%`).join(' · ') + '<br>'
-      + `E_form: ${energyText(e)}<br>ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>Fitness: ${s.fitness.toFixed(4)} eV/block<br>`
+      + `E_form: ${energyText(e)}<br>ΔH: ${s.enthalpy.toFixed(4)} eV/atom<br>${metric.name}: ${s.fitness.toFixed(4)} ${metric.unit}<br>`
       + `SG: ${s.spaceGroup} | Gen: ${s.generation}<br>Origin: ${s.origin}`;
   };
   const scatter = (entries: TernaryPlotEntry[], name: string, marker: Record<string, unknown>, labels = false) => ({
@@ -103,7 +105,7 @@ export function TernaryHullPlot(props: Props) {
       line: { color: pt.structureLineColor, width: 1.5 }, showlegend: false, hoverinfo: 'skip' },
     scatter(unstable, t('hull.unstable'), { size: 5, opacity: 0.6, color: unstable.map((e) => e.structure.fitness),
       colorscale: [[0, 'rgb(238,63,77)'], [0.25, 'rgb(252,183,10)'], [0.5, 'rgb(65,174,60)'], [0.75, 'rgb(81,196,211)'], [1, 'rgb(36,116,181)']],
-      cmin: 0, cmax: Math.max(fitnessMax, 0.001), colorbar: { title: 'Fitness\n(eV/block)' } }),
+      cmin: 0, cmax: Math.max(fitnessMax, 0.001), colorbar: { title: `${metric.name}\n(${metric.unit})` } }),
     lineTrace(model.edges, t('hull.tieLines')),
     ...(oldHullEdges?.length ? [lineTrace(oldHullEdges, t('hull.previousTieLines'), 'dash')] : []),
     scatter(stable, t('hull.stable'), { symbol: 'diamond', size: 10, color: pt.frontColors[0] }, showLabels),
@@ -142,9 +144,9 @@ export function TernaryHullPlot(props: Props) {
   const zoomBy = (factor: number) => { setMode('inspect'); handleRelayout(ternaryRangePatch(zoomTernaryViewport(ranges, factor))); };
   const pan = (dx: number, dy: number) => handleRelayout(ternaryRangePatch(panTernaryViewport(ranges,
     [dx * (ranges.x[1] - ranges.x[0]) * 0.2, dy * (ranges.y[1] - ranges.y[0]) * 0.2])));
-  const filename = `${model.components.join('-')}_ternary_hull_fitness${fitnessMax.toFixed(3).replace('.', 'p')}`;
+  const filename = `${model.components.join('-')}_ternary_hull_${metric.name === 'Fitness' ? 'fitness' : 'Ed'}${fitnessMax.toFixed(3).replace('.', 'p')}`;
   const exportCsv = () => {
-    const { headers, rows } = ternaryExportData(filtered, model.components, model.energyUnit, !!groupMap || structures.some((s) => !!s.groupName));
+    const { headers, rows } = ternaryExportData(filtered, model.components, model.energyUnit, !!groupMap || structures.some((s) => !!s.groupName), metric.header);
     downloadCsv(filename, headers, rows);
   };
   const exportImage = () => {
@@ -157,13 +159,13 @@ export function TernaryHullPlot(props: Props) {
 
   return <>
     <div style={{ ...controlStyle, marginBottom: 12 }}>
-      <label htmlFor={`${inputId}-number`} style={{ fontSize: 13 }}>{t('hull.fitnessMax')}</label>
-      <input type="range" aria-label={t('hull.fitnessMax')} min={0} max={model.maxFitness} step="any"
+      <label htmlFor={`${inputId}-number`} style={{ fontSize: 13 }}>{metric.limitLabel}</label>
+      <input type="range" aria-label={metric.limitLabel} min={0} max={model.maxFitness} step="any"
         value={fitnessMax} disabled={model.maxFitness === 0} onChange={(e) => handleFitnessChange(Number(e.target.value))}
         style={{ flex: '1 1 140px', maxWidth: 280 }} />
       <input id={`${inputId}-number`} type="number" min={0} max={model.maxFitness} step="any" value={fitnessMax}
         onChange={(e) => { if (e.target.value !== '') handleFitnessChange(Number(e.target.value)); }} style={inputStyle} />
-      <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>eV/block</span>
+      <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{metric.unit}</span>
       {showExport && <button type="button" className="btn btn-outline btn-sm" onClick={exportCsv} title={t('hull.csvScope')} style={{ marginLeft: 'auto' }}>{t('hull.exportFiltered')}</button>}
     </div>
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
