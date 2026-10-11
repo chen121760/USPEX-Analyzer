@@ -1,6 +1,7 @@
 import type { LatticeParams, Structure, SymmetryAnalysis } from '@/types/structure';
 import { ML_FIELD_KEYS, USPEX_OBJECTIVE_PLACEHOLDER, type MLFieldKey } from '@/lib/constants';
 import { isMLPropertyValue, ML_PROPERTY_MISSING } from './mlProperties';
+import { fitnessValue } from './fitness';
 
 export type StructureLike = Partial<Structure> & { id: number };
 
@@ -88,9 +89,11 @@ export function normalizeStructure(structure: StructureLike): Structure {
     volume,
     volumeTotal: structure.volumeTotal === null ? Number.NaN : structure.volumeTotal ?? volume,
     // JSON turns NaN into null; restore missing fitness without inventing zero
-    // or exposing the old -1 sentinel to filters and exports.
-    fitness: Number.isFinite(enthalpyTotal) && Number.isFinite(structure.fitness) && structure.fitness! >= 0
-      ? structure.fitness! : Number.NaN,
+    // or exposing the old distance -1 sentinel to filters and exports.
+    fitness: structure.fitnessKind === 'objective' || Number.isFinite(enthalpyTotal)
+      ? fitnessValue({ fitness: structure.fitness ?? Number.NaN, fitnessKind: structure.fitnessKind }) ?? Number.NaN
+      : Number.NaN,
+    fitnessKind: structure.fitnessKind,
     spaceGroup: structure.spaceGroup ?? 0,
     hullX: normalizeHullX(structure.hullX),
     hullY: structure.hullY ?? 0,

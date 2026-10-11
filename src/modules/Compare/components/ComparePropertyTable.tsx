@@ -1,5 +1,6 @@
 import { FormulaDisplay } from '@/components/FormulaDisplay';
 import { hasMLProperties } from '@/domain/structure/mlProperties';
+import { fitnessValue } from '@/domain/structure/fitness';
 import type { Structure } from '@/types/structure';
 
 function PropRow({
@@ -64,7 +65,7 @@ export function ComparePropertyTable({
           <tr><td colSpan={compareStructures.length + 1} style={{ padding: '10px 12px 4px', fontSize: 11, fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: 1 }}>Thermodynamic</td></tr>
           <PropRow label={t('col.enthalpy')} values={compareStructures.map((s) => s.enthalpy)} fmt={numFmt(4)} />
           <PropRow label={t('col.volume')} values={compareStructures.map((s) => s.volume)} fmt={numFmt(3)} />
-          <PropRow label={t('col.fitness')} values={compareStructures.map((s) => s.fitness)} fmt={numFmt(4)} />
+          <PropRow label={t('col.fitness')} values={compareStructures.map(fitnessValue)} fmt={(v) => typeof v === 'number' ? v.toFixed(4) : '—'} />
           <PropRow label={t('col.density')} values={compareStructures.map((s) => s.density)} fmt={numFmt(3)} />
 
           <tr><td colSpan={compareStructures.length + 1} style={{ padding: '10px 12px 4px', fontSize: 11, fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: 1 }}>Symmetry & Origin</td></tr>

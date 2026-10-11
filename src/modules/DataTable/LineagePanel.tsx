@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback } from 'react';
 import { X, Eye } from 'lucide-react';
 import { FormulaDisplay } from '@/components/FormulaDisplay';
+import { fitnessValue } from '@/domain/structure/fitness';
 import type { Structure, SystemInfo } from '@/types/structure';
 
 interface Props {
@@ -689,7 +690,7 @@ export function LineagePanel({
           <div>SG: {tooltip.s.spaceGroup}</div>
           <div>
             Fitness:{' '}
-            {tooltip.s.fitness != null && tooltip.s.fitness >= 0 ? tooltip.s.fitness.toFixed(4) : 'N/A'}
+            {fitnessValue(tooltip.s)?.toFixed(4) ?? 'N/A'}
           </div>
 
           {hasSecondObj && tooltip.s.extraProps && (() => {

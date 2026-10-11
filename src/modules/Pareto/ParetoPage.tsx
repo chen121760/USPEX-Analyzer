@@ -14,6 +14,7 @@ import { ExportDataButton } from '@/components/ExportDataButton';
 import { downloadWideCsv } from '@/lib/exportCsv';
 import { PlotFrame } from '@/charts/shared/PlotFrame';
 import { useStructurePointClick } from '@/charts/shared/useStructurePointClick';
+import { fitnessValue } from '@/domain/structure/fitness';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlotlyData = any;
 
@@ -76,14 +77,14 @@ export function ParetoPage() {
 
     return (
       `EA${s.id}: ${formulaToHtml(s.formula)}<br>` +
-      `Fitness: ${Number.isFinite(s.fitness) ? s.fitness.toFixed(4) : '—'}<br>` +
+      `Fitness: ${fitnessValue(s)?.toFixed(4) ?? '—'}<br>` +
       `${objName}: ${typeof objectiveValue === 'number' ? objectiveValue.toFixed(3) : '—'}<br>` +
       `SG: ${s.spaceGroup} | Origin: ${s.origin}`
     );
   };
 
   const visibleStructures = structures.filter(s => selectedFronts.has(s.paretoFront)
-    && Number.isFinite(s.fitness) && s.fitness >= 0 && paretoKey != null && Number.isFinite(s.extraProps?.[paretoKey]));
+    && fitnessValue(s) !== undefined && paretoKey != null && Number.isFinite(s.extraProps?.[paretoKey]));
   const traces: PlotlyData[] = [];
 
   if (paretoKey != null) {

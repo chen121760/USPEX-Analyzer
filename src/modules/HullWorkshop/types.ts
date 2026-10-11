@@ -12,6 +12,8 @@ export interface WorkshopGroup {
   visible: boolean;
   color: string;       // from GROUP_COLORS palette
   importSource: 'project' | 'csv' | 'json' | 'manual';
+  /** JSON groups restored with explicit archive provenance. */
+  sourceRecorded?: boolean;
 }
 
 /** Metadata parsed from a workshop-exported CSV header comments */
@@ -57,6 +59,10 @@ export interface WorkshopJsonExport {
   groups: {
     name: string;
     color: string;
+    importSource?: WorkshopGroup['importSource'];
+    compositionMode?: SystemInfo['compositionMode'];
+    fitnessSemantics?: SystemInfo['fitnessSemantics'];
+    uspexSelection?: SystemInfo['uspexSelection'];
     structures: WorkshopJsonStructure[];
   }[];
 }
@@ -76,6 +82,7 @@ export interface WorkshopJsonStructure {
   volume: number;
   volumeTotal: number;
   fitness: number;
+  fitnessKind?: Structure['fitnessKind'];
   hullX: number[];
   hullY: number;
   eForm: number;

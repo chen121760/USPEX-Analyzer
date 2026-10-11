@@ -1,4 +1,4 @@
-import { canImportWorkshopStructure } from '@/domain/hull/displayMetric';
+import { hasWorkshopSelection, selectWorkshopStructures } from '@/domain/hull/displayMetric';
 import { workshopCompatibilityError } from '@/domain/hull/workshopCompatibility';
 import type { SystemInfo } from '@/types/structure';
 /**
@@ -14,7 +14,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Database, Check, Archive } from 'lucide-react';
 import { listAllProjects, loadProjectById, type StoredProject } from '@/lib/projectStorage';
-import type { Structure } from '@/types/structure';
 import type { WorkshopGroup } from '../types';
 import { GROUP_COLORS, defaultGroupName } from '../types';
 
@@ -47,13 +46,6 @@ function sameElements(a: string[], b: string[]): boolean {
   const sa = [...a].sort();
   const sb = [...b].sort();
   return sa.every((el, i) => el === sb[i]);
-}
-
-/** Filter structures suitable for geometric hull (same as current-project import). */
-function filterWorkshopStructures(structures: Structure[]): Structure[] {
-  return structures.filter(
-    canImportWorkshopStructure,
-  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -133,7 +125,11 @@ export function ImportProjectModal({
         if (!stored) continue;
 
         const rawStructures = stored.project.structures ?? [];
-        const chartStructures = filterWorkshopStructures(rawStructures);
+        if (!hasWorkshopSelection(stored.project.systemInfo)) {
+          throw new Error(t(stored.project.systemInfo.compositionMode === 'fixed'
+            ? 'workshop.retainedSourceMissingFixed' : 'workshop.retainedSourceMissingVarcomp'));
+        }
+        const chartStructures = selectWorkshopStructures(rawStructures, stored.project.systemInfo);
         if (chartStructures.length === 0) continue;
 
         const systemInfo = stored.project.systemInfo;
@@ -197,7 +193,7 @@ export function ImportProjectModal({
               <div className="workshop-project-list">
               {compatibleProjects.map((p) => {
                 const sysInfo = p.project.systemInfo;
-                const structCount = p.project.structures?.length ?? 0;
+                const structCount = selectWorkshopStructures(p.project.structures ?? [], sysInfo).length;
                 const savedTime = new Date(p.savedAt).toLocaleString();
                 const isSelected = selectedIds.has(p.id);
 

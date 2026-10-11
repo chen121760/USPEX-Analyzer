@@ -14,6 +14,12 @@ export type OptimizationType = 'single' | 'multi';
 /** Whether composition is variable or fixed */
 export type CompositionMode = 'varcomp' | 'fixed';
 
+/** USPEX's explicit retained-structure IDs, independent of any Fitness value. */
+export interface UspexSelection {
+  source: 'extended_convex_hull' | 'goodStructures' | 'goodStructures_POSCARS';
+  ids: number[];
+}
+
 /** Numeric parser columns not represented by first-class Structure fields. */
 export type ParserExtras = Record<string, number>;
 
@@ -84,7 +90,9 @@ export interface Structure {
   enthalpyTotal: number;       // eV (total, from Individuals)
   volume: number;              // Å³/atom
   volumeTotal: number;         // Å³ (total, from Individuals)
-  fitness: number;             // Raw USPEX fitness (eV/block); NaN = not supplied
+  fitness: number;             // Raw USPEX value; distance in eV/block, objective unit depends on source; NaN = missing
+  /** Fixed-composition Fitness can be a signed optimization objective. */
+  fitnessKind?: 'distance' | 'objective';
   spaceGroup: number;
   hullX: number[];             // composition coordinate(s): [x] for binary, [x1,x2] for ternary
   hullY: number;               // formation energy (eV/atom)
@@ -160,6 +168,8 @@ export interface LatticeParams {
 export interface ParsedFileStatus {
   parameters: boolean;
   extended_convex_hull: boolean;
+  good_structures: boolean;
+  good_structures_poscars: boolean;
   individuals: boolean;
   pareto_ranking: boolean;
   ml_properties: boolean;
@@ -205,6 +215,8 @@ export interface SystemInfo {
   totalStructuresSource: string;
   /** Absent in saved projects whose Fitness may contain reconstructed values. */
   fitnessSemantics?: 'uspex-original';
+  /** Absent when no authoritative USPEX retained-structure file was supplied. */
+  uspexSelection?: UspexSelection;
   calculationType: number;         // 3-digit code from Parameters.txt
   externalPressure: number | null; // GPa, null if not specified
   isPickup: boolean;               // true if pickUpGen or pickUpFolder is non-zero
@@ -455,6 +467,8 @@ export interface AxisRangeSetting {
 export type USPEXFileType =
   | 'parameters'
   | 'extended_convex_hull'
+  | 'good_structures'
+  | 'good_structures_poscars'
   | 'individuals'
   | 'pareto_ranking'
   | 'ml_properties'

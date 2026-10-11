@@ -9,6 +9,8 @@ import { hasMLProperties } from '@/domain/structure/mlProperties';
 export const EMPTY_PARSED_FILE_STATUS: ParsedFileStatus = {
   parameters: false,
   extended_convex_hull: false,
+  good_structures: false,
+  good_structures_poscars: false,
   individuals: false,
   pareto_ranking: false,
   ml_properties: false,
@@ -50,7 +52,10 @@ export function inferParsedFiles(
 
   return {
     parameters: !!sysInfo,
-    extended_convex_hull: structures.some((s) => !Number.isNaN(s.fitness)),
+    extended_convex_hull: sysInfo?.uspexSelection?.source === 'extended_convex_hull'
+      || (sysInfo?.compositionMode !== 'fixed' && structures.some((s) => s.fitnessKind !== 'objective' && Number.isFinite(s.fitness))),
+    good_structures: sysInfo?.uspexSelection?.source === 'goodStructures',
+    good_structures_poscars: sysInfo?.uspexSelection?.source === 'goodStructures_POSCARS',
     individuals: structures.some((s) => s.generation > 0),
     pareto_ranking: structures.some((s) => s.paretoFront >= 0),
     // MLProperties predictions may legitimately be negative, so presence is

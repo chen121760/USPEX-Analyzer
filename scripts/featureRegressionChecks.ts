@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { normalizeStructure } from '@/domain/structure/normalizeStructure';
 import { formationEnergy } from '@/domain/structure/formationEnergy';
+import { fitnessValue } from '@/domain/structure/fitness';
 import { manualWorkshopStructure } from '@/domain/hull/manualWorkshopStructure';
 import { computeWorkshopGeometricHull } from '@/domain/hull/workshopHull';
 import { prepareWorkshopGroups, workshopCompatibilityError } from '@/domain/hull/workshopCompatibility';
@@ -201,8 +202,8 @@ for (const file of [beta, explorer]) {
 check('Pareto mark scope follows selected fronts, including empty selection', () => {
   const file = 'src/modules/Pareto/ParetoPage.tsx';
   const data = points.map((s, i) => ({ ...s, paretoFront: i + 1, extraProps: { objective: i } }));
-  assert.equal(extract<Structure[]>(file, 'visibleStructures', { structures: data, selectedFronts: new Set([1]), paretoKey: 'objective' }).length, 1);
-  assert.equal(extract(file, 'visibleStructures', { structures: data, selectedFronts: new Set(), paretoKey: 'objective' }).length, 0);
+  assert.equal(extract<Structure[]>(file, 'visibleStructures', { structures: data, selectedFronts: new Set([1]), paretoKey: 'objective', fitnessValue }).length, 1);
+  assert.equal(extract(file, 'visibleStructures', { structures: data, selectedFronts: new Set(), paretoKey: 'objective', fitnessValue }).length, 0);
   useChartSettingsStore.getState().setParetoSelectedFronts([]);
   assert.equal(useChartSettingsStore.getState().paretoSelectionInitialized, true);
 });

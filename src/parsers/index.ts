@@ -12,6 +12,7 @@ import type {
   SystemType,
   OptimizationType,
   CompositionMode,
+  UspexSelection,
   USPEXFileType,
   DetectedFile,
   HullGeneration,
@@ -32,6 +33,7 @@ import { parseParetoRanking, type ParetoParseResult } from './paretoParser';
 import { parseMLProperties } from './mlPropertiesParser';
 import { parseOrigin } from './originParser';
 import { parseGatheredPoscars } from './poscarParser';
+import { parseRetainedStructureIds, parseRetainedStructureTable } from './retainedStructuresParser';
 import { parseConvexHullGenerations } from './convexHullParser';
 import {
   buildFormula,
@@ -52,6 +54,8 @@ export {
   parseMLProperties,
   parseOrigin,
   parseGatheredPoscars,
+  parseRetainedStructureIds,
+  parseRetainedStructureTable,
   parseConvexHullGenerations,
 };
 
@@ -59,6 +63,8 @@ export {
 export interface FileContents {
   parameters?: string;
   extended_convex_hull?: string;
+  good_structures?: string;
+  good_structures_poscars?: string;
   individuals?: string;
   pareto_ranking?: string;
   ml_properties?: string;
@@ -119,11 +125,13 @@ export type ParseProgressHandler = (progress: ParseProgress) => void | Promise<v
 const FILE_PROGRESS: ReadonlyArray<readonly [USPEXFileType, number]> = [
   ['parameters', 0.01],
   ['extended_convex_hull', 0.02],
+  ['good_structures', 0.025],
   ['individuals', 0.20],
   ['pareto_ranking', 0.21],
   ['ml_properties', 0.26],
   ['origin', 0.31],
   ['gathered_poscars', 0.55],
+  ['good_structures_poscars', 0.555],
   ['convex_hull', 0.56],
 ];
 
@@ -229,14 +237,32 @@ function hasIndividualsFitnessColumn(result: IndividualsParseResult): boolean {
   return result.midColNames.some(name => ['fitness', 'eabovehull'].includes(normalizeColumnName(name)));
 }
 
+function stoichiometryKey(composition: number[]): string {
+  // Atomic counts are integers. Reduce them before comparing: [4, 8] and
+  // [3, 6] are the same fixed composition in different-sized unit cells.
+  // Integer GCD avoids rounding a normalized fraction (e.g. 1 / 3).
+  if (composition.length === 0
+    || !composition.every((count) => Number.isSafeInteger(count) && count >= 0)
+    || !composition.some((count) => count > 0)) return composition.join(',');
+
+  const gcd = (a: number, b: number): number => {
+    while (b !== 0) [a, b] = [b, a % b];
+    return a;
+  };
+  const divisor = composition.reduce(gcd, 0);
+  return composition.map((count) => count / divisor).join(',');
+}
+
+function inferCompositionModeFromCompositions(compositions: number[][]): CompositionMode {
+  return new Set(compositions.map(stoichiometryKey)).size > 1 ? 'varcomp' : 'fixed';
+}
+
 function inferCompositionModeFromIndividuals(
   individualsResult: IndividualsParseResult | null,
 ): CompositionMode {
-  if (!individualsResult || individualsResult.data.length <= 1) return 'fixed';
-  const compositions = new Set(
-    individualsResult.data.map((individual) => individual.composition.join(',')),
+  return inferCompositionModeFromCompositions(
+    individualsResult?.data.map((individual) => individual.composition) ?? [],
   );
-  return compositions.size > 1 ? 'varcomp' : 'fixed';
 }
 
 /**
@@ -297,9 +323,27 @@ export async function parseAllFiles(
   // Extended convex hull (primary data source for varcomp)
   let hullData: ParsedExtendedHull[] = [];
   const hullContent = fileContents.get('extended_convex_hull');
-  if (hullContent) {
-    hullData = parseExtendedConvexHull(hullContent);
+  const hasHullSource = fileContents.has('extended_convex_hull');
+  if (hasHullSource) {
+    hullData = parseExtendedConvexHull(hullContent ?? '');
     await reportFile('extended_convex_hull');
+  }
+  // Capture only the actual USPEX rows, before Individuals can supply a
+  // fallback structure list. Missing Fitness never changes membership.
+  const retainedHullIds = [...new Set(hullData.map((row) => row.id))]
+    .filter((id) => Number.isSafeInteger(id) && id > 0);
+
+  const hasGoodStructures = fileContents.has('good_structures');
+  let retainedFixedIds: number[] = [];
+  let retainedFixedFitness = new Map<number, number>();
+  if (hasGoodStructures) {
+    const retainedTable = parseRetainedStructureTable(fileContents.get('good_structures') ?? '');
+    retainedFixedIds = retainedTable.ids;
+    retainedFixedFitness = retainedTable.fitness;
+    if (retainedFixedIds.length === 0) {
+      warnings.push('goodStructures contains no recognizable retained ID rows — the workshop selection remains empty');
+    }
+    await reportFile('good_structures');
   }
 
   // Individuals
@@ -340,8 +384,38 @@ export async function parseAllFiles(
   if (poscarContent) {
     poscarMap = parseGatheredPoscars(poscarContent);
     await reportFile('gathered_poscars');
-  } else {
-    warnings.push('gatheredPOSCARS not found — structure viewing will be unavailable');
+  }
+
+  const hasGoodPoscars = fileContents.has('good_structures_poscars');
+  const retainedPoscarIds: number[] = [];
+  const retainedPoscarMap = new Map<number, ParsedPoscar>();
+  if (hasGoodPoscars) {
+    const goodPoscars = parseGatheredPoscars(fileContents.get('good_structures_poscars') ?? '');
+    for (const [id, poscar] of goodPoscars) {
+      if (!Number.isSafeInteger(id) || id <= 0 || poscar.elements.length === 0
+        || poscar.atomCounts.length !== poscar.elements.length
+        || !poscar.atomCounts.every((count) => Number.isSafeInteger(count) && count >= 0)
+        || !poscar.atomCounts.some((count) => count > 0)) continue;
+      retainedPoscarIds.push(id);
+      retainedPoscarMap.set(id, poscar);
+      // The ordinary geometry collection takes precedence. Good-structure
+      // geometry only fills a missing block; it never creates an energy row.
+      if (!poscarMap.has(id)) poscarMap.set(id, poscar);
+    }
+    if (retainedPoscarIds.length === 0) {
+      warnings.push('goodStructures_POSCARS contains no recognizable retained structures — the workshop selection remains empty');
+    }
+    await reportFile('good_structures_poscars');
+  }
+  if (poscarMap.size === 0) {
+    warnings.push('No usable gatheredPOSCARS or goodStructures_POSCARS data — structure viewing will be unavailable');
+  }
+  if (hasGoodStructures && hasGoodPoscars) {
+    const tableIds = new Set(retainedFixedIds);
+    if (retainedPoscarIds.length !== tableIds.size
+      || retainedPoscarIds.some((id) => !tableIds.has(id))) {
+      warnings.push('goodStructures and goodStructures_POSCARS have different retained IDs — using the goodStructures table as the authoritative selection');
+    }
   }
 
   const poscarElements = inferElementsFromPoscars(poscarMap);
@@ -390,16 +464,17 @@ export async function parseAllFiles(
 
   if (!paramsResult) {
     // compositionMode from hull file presence or actual Individuals diversity
-    compositionMode = hullContent ? 'varcomp' : inferCompositionModeFromIndividuals(individualsResult);
+    compositionMode = hasHullSource ? 'varcomp' : inferCompositionModeFromIndividuals(individualsResult);
     // optimizationType from Pareto file presence
     const hasPareto = paretoResult !== null && paretoResult.data.length > 0;
     optimizationType = hasPareto ? 'multi' : 'single';
   } else {
-    const inferredCompositionMode = hullContent
-      ? 'varcomp'
-      : inferCompositionModeFromIndividuals(individualsResult);
+    const inferredCompositionMode = inferCompositionModeFromCompositions([
+      ...hullData.map((row) => row.composition),
+      ...(individualsResult?.data.map((row) => row.composition) ?? []),
+    ]);
     if (inferredCompositionMode === 'varcomp' && compositionMode !== 'varcomp') {
-      warnings.push('Parameters indicate fixed composition, but parsed structures contain multiple compositions; using variable-composition mode');
+      warnings.push('Parameters indicate fixed composition, but parsed structures contain multiple stoichiometries; using variable-composition mode');
       compositionMode = 'varcomp';
     }
   }
@@ -417,6 +492,26 @@ export async function parseAllFiles(
   if (optimizationType === 'single' && paretoResult !== null && paretoResult.data.length > 0) {
     optimizationType = 'multi';
   }
+
+  let uspexSelection: UspexSelection | undefined;
+  if (compositionMode === 'varcomp' && hasHullSource) {
+    uspexSelection = { source: 'extended_convex_hull', ids: retainedHullIds };
+  } else if (compositionMode === 'fixed' && hasGoodStructures) {
+    uspexSelection = { source: 'goodStructures', ids: retainedFixedIds };
+  } else if (compositionMode === 'fixed' && hasGoodPoscars) {
+    uspexSelection = { source: 'goodStructures_POSCARS', ids: retainedPoscarIds };
+  }
+  if (!uspexSelection) {
+    warnings.push(compositionMode === 'fixed'
+      ? 'No goodStructures or goodStructures_POSCARS file supplied — fixed-composition USPEX retained IDs cannot be verified for workshop import'
+      : 'No extended_convex_hull file supplied — variable-composition USPEX retained IDs cannot be verified for workshop import');
+  }
+
+  const fixedObjectiveFitness = (id: number, individual?: ParsedIndividual): number => {
+    if (individual && individualsResult && hasIndividualsFitnessColumn(individualsResult)
+      && Number.isFinite(individual.indFitness)) return individual.indFitness;
+    return retainedFixedFitness.get(id) ?? Number.NaN;
+  };
 
   // ---- Step 1c: If no extended_convex_hull but have Individuals, build from Individuals ----
 
@@ -442,7 +537,9 @@ export async function parseAllFiles(
       // "E/atom minus the run's lowest E/atom" is not a variable-composition hull
       // distance — for a multi-element system it makes the most cohesive pure
       // element the only stable phase.
-      fitness: hasIndividualsFitness ? ind.indFitness : Number.NaN,
+      fitness: compositionMode === 'fixed'
+        ? fixedObjectiveFitness(ind.id, ind)
+        : hasIndividualsFitness && Number.isFinite(ind.indFitness) ? ind.indFitness : Number.NaN,
       symm: ind.symm,
       x: inferHullCoordinates(ind.composition, systemType, compositionBasis),
       y: 0,
@@ -593,7 +690,8 @@ export async function parseAllFiles(
       enthalpyTotal: ind?.enthalpy ?? hull.enthalpy * nAtoms,
       volume: hull.volume,
       volumeTotal: ind?.volume ?? hull.volume * nAtoms,
-      fitness: hull.fitness,
+      fitness: compositionMode === 'fixed' ? fixedObjectiveFitness(hull.id, ind) : hull.fitness,
+      fitnessKind: compositionMode === 'fixed' ? 'objective' : 'distance',
       spaceGroup: hull.symm || ind?.symm || 0,
       hullX: hull.x,
       hullY: hull.y,
@@ -669,9 +767,11 @@ export async function parseAllFiles(
         enthalpyTotal: ind.enthalpy,
         volume: volumePerAtom,
         volumeTotal: ind.volume,
-        // Individuals Fitness is a separate objective column. Do not use it
-        // to fill a missing extended_convex_hull measurement.
-        fitness: Number.NaN,
+        // For variable composition, Individuals Fitness does not fill a
+        // missing extended_convex_hull measurement. Fixed composition keeps
+        // the original signed optimization objective when it was supplied.
+        fitness: compositionMode === 'fixed' ? fixedObjectiveFitness(id, ind) : Number.NaN,
+        fitnessKind: compositionMode === 'fixed' ? 'objective' : 'distance',
         spaceGroup: ind.symm,
         hullX,
         hullY: enthalpyPerAtom,
@@ -715,6 +815,25 @@ export async function parseAllFiles(
         notes: '',
       });
     }
+  }
+
+  // A conflicting retained geometry cannot certify membership for an energy
+  // row from another composition, even if ordinary gatheredPOSCARS matched.
+  // Keep the energy record in the project, but exclude that ID from import.
+  if (uspexSelection?.source === 'goodStructures_POSCARS') {
+    const energyById = new Map(structures.map(s => [s.id, s]));
+    uspexSelection.ids = uspexSelection.ids.filter(id => {
+      const structure = energyById.get(id);
+      const poscar = retainedPoscarMap.get(id);
+      if (!structure || !poscar) return true;
+      const counts = elements.map(element => poscar.elements.reduce((sum, symbol, i) =>
+        sum + (symbol === element ? poscar.atomCounts[i] : 0), 0));
+      const matches = !poscar.elements.some((element, i) => !elements.includes(element) && poscar.atomCounts[i] > 0)
+        && counts.length === structure.composition.length
+        && counts.every((count, i) => count === structure.composition[i]);
+      if (!matches) warnings.push(`EA${id}: goodStructures_POSCARS composition conflicts with energy data — retained membership excluded`);
+      return matches;
+    });
   }
 
   // ---- Step 3c: Reconstruct convex hull (compute eForm / eHullRecons) ----
@@ -778,7 +897,9 @@ export async function parseAllFiles(
 
   await report({ stage: 'loadStage.finalizing', progress: FINALIZE_START, count: structures.length });
 
-  const fitnessValues = structures.map((s) => s.fitness).filter((f) => f >= 0);
+  const fitnessValues = structures
+    .filter((s) => Number.isFinite(s.fitness) && (s.fitnessKind === 'objective' || s.fitness >= 0))
+    .map((s) => s.fitness);
   const unconvergedCount = structures.filter((s) => s.enthalpyTotal > 900).length;
   const enthalpyValues = structures
     .filter((s) => !isNaN(s.enthalpy) && isFinite(s.enthalpy) && s.enthalpyTotal <= 900)
@@ -809,8 +930,11 @@ export async function parseAllFiles(
     totalStructures: structures.length,
     totalStructuresSource: primarySource,
     fitnessSemantics: 'uspex-original',
+    uspexSelection,
     totalGenerations: individualsResult?.maxGeneration ?? hullGenerations.length,
-    stableCount: structures.filter((s) => s.fitness === 0).length,
+    stableCount: structures.filter((s) => compositionMode === 'fixed'
+      ? s.eHullRecons === 0 && Number.isFinite(s.enthalpyTotal) && s.enthalpyTotal <= 900
+      : s.fitness === 0).length,
     unconvergedCount,
     minEnthalpy: enthalpyValues.length > 0 ? Math.min(...enthalpyValues) : 0,
     maxFitness: fitnessValues.length > 0 ? Math.max(...fitnessValues) : 0,

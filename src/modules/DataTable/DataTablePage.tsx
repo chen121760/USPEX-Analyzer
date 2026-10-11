@@ -1,4 +1,5 @@
 import { formationEnergy } from '@/domain/structure/formationEnergy';
+import { fitnessValue } from '@/domain/structure/fitness';
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
@@ -318,16 +319,16 @@ export function DataTablePage() {
       },
       {
         id: 'fitness',
-        accessorFn: s => Number.isFinite(s.fitness) && s.fitness >= 0 ? s.fitness : undefined,
+        accessorFn: s => fitnessValue(s),
         sortUndefined: 'last',
         header: () => <span title={t(systemInfo?.fitnessSemantics === 'uspex-original' ? 'col.fitnessDesc' : 'hull.legacyFitnessDetail')}>{t('col.fitness')}</span>,
         size: 110,
-        cell: ({ getValue }) => {
+        cell: ({ getValue, row }) => {
           const v = getValue<number | null>();
-          // NaN = the run provides no hull distance for this structure.
-          if (v == null || !Number.isFinite(v) || v < 0) return '—';
+          if (v == null || !Number.isFinite(v)) return '—';
+          const onHull = row.original.fitnessKind !== 'objective' && v === 0;
           return (
-            <span style={{ color: v === 0 ? 'var(--color-success)' : undefined, fontWeight: v === 0 ? 600 : undefined }}>
+            <span style={{ color: onHull ? 'var(--color-success)' : undefined, fontWeight: onHull ? 600 : undefined }}>
               {v.toFixed(4)}
             </span>
           );

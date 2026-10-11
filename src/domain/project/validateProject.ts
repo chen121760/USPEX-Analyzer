@@ -40,6 +40,16 @@ export function validateSystemInfo(value: unknown): asserts value is SystemInfo 
   numericFields(value, ['totalStructures', 'totalGenerations', 'stableCount', 'unconvergedCount',
     'minEnthalpy', 'maxFitness', 'calculationType', 'pickUpGen', 'pickUpFolder'], 'system information');
   if (value.fitnessSemantics != null && value.fitnessSemantics !== 'uspex-original') throw new Error('Invalid fitness semantics');
+  if (value.uspexSelection != null) {
+    const selection = value.uspexSelection;
+    if (!record(selection) || typeof selection.source !== 'string' || !Array.isArray(selection.ids)
+      || selection.ids.some(id => typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0)
+      || new Set(selection.ids).size !== selection.ids.length
+      || !(value.compositionMode === 'varcomp' ? selection.source === 'extended_convex_hull'
+        : value.compositionMode === 'fixed' && ['goodStructures', 'goodStructures_POSCARS'].includes(selection.source))) {
+      throw new Error('Invalid USPEX retained structure selection');
+    }
+  }
   for (const key of ['secondObjectiveName', 'totalStructuresSource']) {
     if (value[key] != null && typeof value[key] !== 'string') throw new Error(`Invalid system information ${key}`);
   }
@@ -69,6 +79,7 @@ export function validateStructures(value: unknown, elementCount: number, ids = n
     }
     if (Array.isArray(s.tags) && s.tags.some(tag => typeof tag !== 'string')) throw new Error('Invalid structure tags');
     if (s.isUserAdded != null && typeof s.isUserAdded !== 'boolean') throw new Error('Invalid manual structure flag');
+    if (s.fitnessKind != null && (typeof s.fitnessKind !== 'string' || !['distance', 'objective'].includes(s.fitnessKind))) throw new Error('Invalid fitness kind');
     if (s.extraProps != null) {
       if (!record(s.extraProps)) throw new Error('Invalid structure extra properties');
       numericFields(s.extraProps, Object.keys(s.extraProps), 'extra property');

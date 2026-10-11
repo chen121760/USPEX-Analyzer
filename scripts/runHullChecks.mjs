@@ -18,6 +18,7 @@ const outDir = path.join(root, 'node_modules', '.cache', 'node-checks');
 const checkFiles = ['fitnessMissingChecks.ts', 'hullReferenceChecks.ts', 'quaternaryHullChecks.ts', 'binaryHullChecks.ts', 'fixedCompositionChecks.ts', 'objectivePlaceholderChecks.ts', 'loadingStateChecks.ts', 'parseProgressChecks.ts', 'manifestChecks.ts', 'symmetryChecks.ts', 'echartsAdapterChecks.ts', 'ternaryZoomChecks.ts', 'ternaryPlotChecks.ts', 'chartPaintChecks.ts', 'filterLogicChecks.ts', 'persistenceChecks.ts', 'featureRegressionChecks.ts', 'adversarialReviewChecks.ts', 'firstPrinciplesReviewChecks.ts'];
 
 fs.mkdirSync(outDir, { recursive: true });
+checkFiles.unshift('fixedFitnessChecks.ts');
 
 let failed = false;
 

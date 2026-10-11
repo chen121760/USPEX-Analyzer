@@ -1,5 +1,6 @@
 import type { DynamicFieldMetadata, Structure } from '@/types/structure';
 import { formationEnergy } from './formationEnergy';
+import { fitnessValue } from './fitness';
 
 const TWO_DIMENSIONAL_FIELD_KEYS = new Set(['Thick', 'Surf_area', 'Spec_surf_area']);
 
@@ -18,7 +19,7 @@ export function collectDynamicFieldKeys(
 }
 
 export function getStructureFieldValue(structure: Structure, field: string): unknown {
-  if (field === 'fitness') return Number.isFinite(structure.fitness) && structure.fitness >= 0 ? structure.fitness : undefined;
+  if (field === 'fitness') return fitnessValue(structure);
   if (field === 'eForm') return formationEnergy(structure) ?? undefined;
   if (field === 'eHullRecons') return Number.isFinite(structure.eHullRecons) && structure.eHullRecons >= 0 ? structure.eHullRecons : undefined;
   const direct = (structure as unknown as Record<string, unknown>)[field];

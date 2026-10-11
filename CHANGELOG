@@ -4,6 +4,12 @@
 
 ### V1.5.5 — 2026-10-05
 
+2026-10-11：凸包工作台使用 USPEX 保留结构
+
+- 变组分按 `extended_convex_hull` 的结构 ID 导入；定组分按 `goodStructures` 或 `goodStructures_POSCARS`，保留集合与 Fitness 是否有值无关
+- 项目导入与工作台缓存分组共用保留 ID，数量、重算凸包、绘图和导出保持一致；缺少记录时提示补充对应 USPEX 文件
+- 工作台 JSON 保留分组来源、组分模式及保留 ID；定组分的原始 Fitness 可为负目标值，缺失仍显示空值，计算的相对焓独立保存
+
 2026-10-08：Fitness 来源修复
 
 - Fitness 只保留 USPEX 原始值，缺失显示 `—`；重建距离独立保存在 Ed，凸包页可明确切换来源

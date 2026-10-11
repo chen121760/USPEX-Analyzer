@@ -12,6 +12,8 @@ const FILENAME_MAP: Record<string, USPEXFileType> = {
   'parameters': 'parameters',
   'parameter': 'parameters',
   'extended_convex_hull': 'extended_convex_hull',
+  'goodstructures': 'good_structures',
+  'goodstructures_poscars': 'good_structures_poscars',
   'individuals': 'individuals',
   'pareto_ranking': 'pareto_ranking',
   'mlproperties': 'ml_properties',
@@ -26,6 +28,8 @@ const FILENAME_MAP: Record<string, USPEXFileType> = {
 const FILE_INFO: Record<USPEXFileType, { displayKey: string; descKey: string; required: boolean }> = {
   parameters:                  { displayKey: 'files.parameters',        descKey: 'files.parametersDesc',        required: true },
   extended_convex_hull:        { displayKey: 'files.extendedHull',      descKey: 'files.extendedHullDesc',      required: false },
+  good_structures:             { displayKey: 'files.goodStructures',    descKey: 'files.goodStructuresDesc',    required: false },
+  good_structures_poscars:     { displayKey: 'files.goodStructuresPoscars', descKey: 'files.goodStructuresPoscarsDesc', required: false },
   individuals:                 { displayKey: 'files.individuals',       descKey: 'files.individualsDesc',       required: true },
   pareto_ranking:              { displayKey: 'files.pareto',            descKey: 'files.paretoDesc',            required: false },
   ml_properties:               { displayKey: 'files.mlProperties',      descKey: 'files.mlPropertiesDesc',      required: false },
@@ -160,6 +164,8 @@ export const ALL_USPEX_FILE_TYPES: USPEXFileType[] = [
   'gathered_poscars',
   // Optional — workflow-specific
   'extended_convex_hull',
+  'good_structures',
+  'good_structures_poscars',
   'pareto_ranking',
   'ml_properties',
 ];

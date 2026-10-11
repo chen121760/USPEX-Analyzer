@@ -1,4 +1,5 @@
 import type { Structure } from '@/types/structure';
+import { fitnessValue } from '@/domain/structure/fitness';
 import { downloadBlob, ensureFileExtension } from './exportFileNames';
 
 export type CsvPrimitive = string | number | null | undefined;
@@ -144,7 +145,7 @@ export function buildStructureCsvHeaders(
 
   return [
     'ID', 'Formula', 'Composition', 'SpaceGroup', 'Generation',
-    'Enthalpy_eV_atom', 'Volume_A3_atom', 'Fitness_eV_block',
+    'Enthalpy_eV_atom', 'Volume_A3_atom', fitnessCsvHeader(structures),
     'Density_g_cm3', 'Origin', 'ParentIDs',
     ...(hasPareto ? ['ParetoFront', 'ExtraProps'] : []),
     ...extraPropKeys,
@@ -160,6 +161,7 @@ export function buildStructureCsvRows(
 ): CsvRow[] {
   const { hasPareto = false, hasML = false, hasFingerprint = false, includeDynamicExtraProps = true } = opts;
   const extraPropKeys = includeDynamicExtraProps ? (opts.extraPropKeys ?? collectExtraPropKeys(structures)) : [];
+  const fitnessHeader = fitnessCsvHeader(structures);
 
   return structures.map((s) => ({
     'ID': s.id,
@@ -171,7 +173,7 @@ export function buildStructureCsvRows(
     // must not reach the file as the literal `NaN`.
     'Enthalpy_eV_atom': finiteOrBlank(s.enthalpy),
     'Volume_A3_atom': finiteOrBlank(s.volume),
-    'Fitness_eV_block': s.fitness >= 0 ? finiteOrBlank(s.fitness) : '',
+    [fitnessHeader]: fitnessValue(s) ?? '',
     'Density_g_cm3': finiteOrBlank(s.density),
     'Origin': s.origin,
     'ParentIDs': quoted(s.parentIds.join(' ')),
@@ -203,6 +205,10 @@ export function structuresToCSV(structures: Structure[], opts: StructureCsvOptio
   const headers = buildStructureCsvHeaders(structures, opts);
   const rows = buildStructureCsvRows(structures, opts);
   return buildCsvText(headers, rows, { lineEnding: '\n' });
+}
+
+function fitnessCsvHeader(structures: readonly Structure[]): string {
+  return structures.some(s => s.fitnessKind === 'objective') ? 'Fitness' : 'Fitness_eV_block';
 }
 
 function isCsvCell(value: CsvCellValue): value is CsvCell {

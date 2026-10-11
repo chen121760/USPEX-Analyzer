@@ -1,6 +1,6 @@
-import { canImportWorkshopStructure, hullDisplayStructures } from '@/domain/hull/displayMetric';
+import { hasWorkshopSelection, selectWorkshopStructures, hullDisplayStructures, workshopEligibleGroups } from '@/domain/hull/displayMetric';
 import { HullMetricContext } from '@/modules/ConvexHull/HullMetricContext';
-import { prepareWorkshopGroups, remapWorkshopStructure } from '@/domain/hull/workshopCompatibility';
+import { prepareWorkshopGroups, remapWorkshopStructure, workshopJsonImportSource } from '@/domain/hull/workshopCompatibility';
 /**
  * Hull Workshop (凸包工作台) — main page.
  *
@@ -46,12 +46,18 @@ export function HullWorkshopPage() {
   const projectSystemInfo = useProjectStore(s => s.systemInfo);
   const workshopContext = groups[0]?.systemInfo ?? projectSystemInfo;
 
-  const hasData = groups.some((g) => g.visible && g.structures.length > 0);
+  const eligibleGroups = useMemo(() => workshopEligibleGroups(groups), [groups]);
+  const missingSelectionGroup = groups.find(g => g.importSource === 'project' && !hasWorkshopSelection(g.systemInfo));
+  const hasLegacyJsonGroups = groups.some(g => g.importSource === 'json' && !g.sourceRecorded);
+  const sourceNotice = hasLegacyJsonGroups ? t('workshop.legacyArchiveSourceUnknown')
+    : missingSelectionGroup ? t(missingSelectionGroup.systemInfo.compositionMode === 'fixed'
+      ? 'workshop.retainedSourceMissingFixed' : 'workshop.retainedSourceMissingVarcomp') : '';
+  const hasData = eligibleGroups.some((g) => g.visible && g.structures.length > 0);
 
   /* ── Derived: visible groups ── */
   const visibleGroups = useMemo(
-    () => groups.filter((g) => g.visible && g.structures.length > 0),
-    [groups],
+    () => eligibleGroups.filter((g) => g.visible && g.structures.length > 0),
+    [eligibleGroups],
   );
 
   /* ── Derived: merged system info from visible groups ── */
@@ -100,10 +106,13 @@ export function HullWorkshopPage() {
     const state = useProjectStore.getState();
     const { structures, systemInfo } = state;
     if (structures.length === 0 || !systemInfo) return;
+    if (!hasWorkshopSelection(systemInfo)) {
+      alert(t(systemInfo.compositionMode === 'fixed'
+        ? 'workshop.retainedSourceMissingFixed' : 'workshop.retainedSourceMissingVarcomp'));
+      return;
+    }
 
-    const chartStructures = structures.filter(
-      canImportWorkshopStructure,
-    );
+    const chartStructures = selectWorkshopStructures(structures, systemInfo);
 
     if (chartStructures.length === 0) {
       alert(t('workshop.noProjectData'));
@@ -193,27 +202,35 @@ export function HullWorkshopPage() {
           return;
         }
 
-        const newGroups: WorkshopGroup[] = archive.groups.map((jg, gi) => ({
-          id: crypto.randomUUID(),
-          name: jg.name,
-          structures: jg.structures.map((js) => workshopJsonToStructure(js)),
-          systemInfo: {
-            elements: archive.systemInfo.elements,
-            componentLabels: archive.systemInfo.componentLabels,
-            compositionBasis: archive.systemInfo.compositionBasis,
-            systemType: archive.systemInfo.systemType,
-            compositionMode: archive.systemInfo.compositionMode,
-            externalPressure: archive.systemInfo.externalPressure,
+        const newGroups: WorkshopGroup[] = archive.groups.map((jg, gi) => {
+          const importSource = workshopJsonImportSource(jg);
+          if (!importSource) throw new Error(t('workshop.legacyArchiveSourceUnknown'));
+          const systemInfo = {
+            ...archive.systemInfo,
+            compositionMode: jg.compositionMode ?? archive.systemInfo.compositionMode,
+            fitnessSemantics: jg.fitnessSemantics,
+            uspexSelection: jg.uspexSelection,
             optimizationType: 'single',
             totalStructures: jg.structures.length,
             totalGenerations: 0,
             minEnthalpy: 0,
             calculationType: 0,
-          } as SystemInfo,
-          visible: true,
-          color: jg.color || GROUP_COLORS[(groups.length + gi) % GROUP_COLORS.length],
-          importSource: 'json' as const,
-        }));
+          } as SystemInfo;
+          if (importSource === 'project' && !hasWorkshopSelection(systemInfo)) {
+            throw new Error(t(systemInfo.compositionMode === 'fixed'
+              ? 'workshop.retainedSourceMissingFixed' : 'workshop.retainedSourceMissingVarcomp'));
+          }
+          return {
+            id: crypto.randomUUID(),
+            name: jg.name,
+            structures: jg.structures.map((js) => workshopJsonToStructure(js)),
+            systemInfo,
+            visible: true,
+            color: jg.color || GROUP_COLORS[(groups.length + gi) % GROUP_COLORS.length],
+            importSource,
+            sourceRecorded: true,
+          };
+        });
 
         for (const g of prepareWorkshopGroups(newGroups, workshopContext)) {
           addGroup(g);
@@ -369,7 +386,7 @@ export function HullWorkshopPage() {
       {/* Left workspace sidebar */}
       <WorkspaceSidebar
         context={workshopContext}
-        groups={groups}
+        groups={eligibleGroups}
         hasData={hasData}
         structuresCount={hullResult?.structures.length ?? 0}
         elements={workshopElements}
@@ -390,8 +407,11 @@ export function HullWorkshopPage() {
         hasData={hasData}
         pageTitle={pageTitle}
         emptyTitle={t('workshop.emptyTitle', 'Hull Workshop')}
-        emptyHint={t('workshop.emptyHint', 'Import data from the current project or load external data to get started.')}
+        emptyHint={sourceNotice ||
+          t('workshop.emptyHint', 'Import data from the current project or load external data to get started.')}
       >
+        {sourceNotice &&
+          <div role="status" style={{ marginBottom: 12, fontSize: 13, color: 'var(--color-warning)' }}>{sourceNotice}</div>}
         <HullMetricContext.Provider value={{ name: 'Ed (Recons)', unit: mergedSystemInfo?.referenceInfo?.unit
           ?? (mergedSystemInfo?.compositionMode === 'varcomp' && mergedSystemInfo?.compositionBasis?.length ? 'eV/block' : 'eV/atom') }}>
           {renderChart()}

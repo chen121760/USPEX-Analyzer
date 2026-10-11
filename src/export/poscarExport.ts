@@ -1,4 +1,5 @@
 import type { CustomNamePart, Structure } from '@/types/structure';
+import { fitnessValue } from '@/domain/structure/fitness';
 import { downloadBlob, ensureFileExtension } from './exportFileNames';
 
 /**
@@ -8,7 +9,7 @@ import { downloadBlob, ensureFileExtension } from './exportFileNames';
  *   1 = sort index (001, 002, ...)
  *   2 = structure ID (EA134)
  *   3 = space group (SG71)
- *   4 = fitness (Ed0.0000)
+ *   4 = fitness (Ed0.0000 for distances, Fitness-1.0000 for signed objectives)
  *   5 = second objective from *-Pareto_ranking (Obj92.7)
  *   6 = formula (Ti3H8)
  */
@@ -33,9 +34,12 @@ export function buildExportFilename(
       case 3:
         segments.push(`SG${structure.spaceGroup}`);
         break;
-      case 4:
-        segments.push(`Ed${structure.fitness >= 0 ? structure.fitness.toFixed(4) : 'NA'}`);
+      case 4: {
+        const fitness = fitnessValue(structure);
+        const prefix = structure.fitnessKind === 'objective' ? 'Fitness' : 'Ed';
+        segments.push(`${prefix}${fitness !== undefined ? fitness.toFixed(4) : 'NA'}`);
         break;
+      }
       case 5: {
         const paretoVal = findParetoRankingValue(structure);
         segments.push(`${secondObjPrefix}${paretoVal != null ? paretoVal.toFixed(1) : 'NA'}`);
@@ -51,7 +55,7 @@ export function buildExportFilename(
     const raw = getStructureExportValue(structure, customPart.field);
     if (raw == null) continue;
     const num = Number(raw);
-    if (isNaN(num)) continue;
+    if (!Number.isFinite(num)) continue;
     const formatted = Number.isInteger(num) ? String(num) : num.toFixed(3);
     const prefix = customPart.label.trim();
     segments.push(prefix ? `${prefix}${formatted}` : formatted);
@@ -78,6 +82,7 @@ export function buildSeedsFile(structures: Structure[]): string {
 }
 
 export function getStructureExportValue(structure: Structure, field: string): unknown {
+  if (field === 'fitness') return fitnessValue(structure);
   const direct = (structure as unknown as Record<string, unknown>)[field];
   if (direct !== undefined) return direct;
   return structure.extraProps?.[field];

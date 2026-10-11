@@ -5,6 +5,7 @@ import type { WorkshopGroup, WorkshopJsonExport, WorkshopJsonStructure } from '@
 import { buildCsvText, type CsvRow } from './csvExport';
 import { downloadBlob, ensureFileExtension } from './exportFileNames';
 import { normalizeStructure } from '@/domain/structure/normalizeStructure';
+import { fitnessValue } from '@/domain/structure/fitness';
 import { componentAmountsFromComposition } from '@/parsers/compositionUtils';
 
 type WorkshopStructure = Structure & { groupName?: string };
@@ -65,6 +66,10 @@ export function buildWorkshopJsonExport(
     groups: visibleGroups.map((group) => ({
       name: group.name,
       color: group.color,
+      importSource: group.importSource,
+      compositionMode: group.systemInfo.compositionMode,
+      fitnessSemantics: group.systemInfo.fitnessSemantics,
+      uspexSelection: group.systemInfo.uspexSelection,
       structures: group.structures.map((structure) => structureToWorkshopJson(remapWorkshopStructure(structure, group.systemInfo, systemInfo))),
     })),
   };
@@ -92,6 +97,7 @@ export function structureToWorkshopJson(s: Structure): WorkshopJsonStructure {
     volume: s.volume,
     volumeTotal: s.volumeTotal,
     fitness: s.fitness,
+    fitnessKind: s.fitnessKind,
     hullX: s.hullX,
     hullY: s.hullY,
     eForm: s.eForm,
@@ -132,6 +138,7 @@ export function workshopJsonToStructure(js: WorkshopJsonStructure): Structure {
     volume: js.volume,
     volumeTotal: js.volumeTotal,
     fitness: js.fitness,
+    fitnessKind: js.fitnessKind,
     hullX: js.hullX,
     hullY: js.hullY,
     eForm: js.eForm,
@@ -166,10 +173,12 @@ function buildWorkshopCsvRows(
   structures: WorkshopStructure[],
 ): { headers: string[]; rows: CsvRow[] } {
   const { elements, systemType, compositionMode } = systemInfo;
+  const fitnessHeader = compositionMode === 'fixed' || structures.some(s => s.fitnessKind === 'objective')
+    ? 'Fitness' : 'Fitness(eV/block)';
 
   if (compositionMode === 'fixed') {
     return {
-      headers: ['Group', 'EA_ID', 'Formula', 'SpaceGroup', 'Generation', 'Origin', 'Enthalpy(eV/atom)', 'Fitness(eV/block)', 'DeltaH(eV/atom)'],
+      headers: ['Group', 'EA_ID', 'Formula', 'SpaceGroup', 'Generation', 'Origin', 'Enthalpy(eV/atom)', fitnessHeader, 'DeltaH(eV/atom)'],
       rows: structures.map((s) => ({
         'Group': s.groupName ?? '',
         'EA_ID': s.id,
@@ -179,7 +188,7 @@ function buildWorkshopCsvRows(
         'Origin': s.origin,
         'Enthalpy(eV/atom)': s.enthalpy,
         'DeltaH(eV/atom)': Number.isFinite(s.eHullRecons) && s.eHullRecons >= 0 ? s.eHullRecons : '',
-        'Fitness(eV/block)': Number.isFinite(s.fitness) && s.fitness >= 0 ? s.fitness : '',
+        [fitnessHeader]: fitnessValue(s) ?? '',
       })),
     };
   }
@@ -191,7 +200,7 @@ function buildWorkshopCsvRows(
     const elB = components[1] || 'B';
     const energyUnit = systemInfo.compositionBasis?.length ? 'eV/block' : 'eV/atom';
     return {
-      headers: ['Group', 'EA_ID', 'Formula', `x(${elB})`, `Formation_Energy(${energyUnit})`, 'Enthalpy(eV/atom)', 'Fitness(eV/block)', `Ed_Recons(${energyUnit})`],
+      headers: ['Group', 'EA_ID', 'Formula', `x(${elB})`, `Formation_Energy(${energyUnit})`, 'Enthalpy(eV/atom)', fitnessHeader, `Ed_Recons(${energyUnit})`],
       rows: structures.map((s) => ({
         'Group': s.groupName ?? '',
         'EA_ID': s.id,
@@ -200,7 +209,7 @@ function buildWorkshopCsvRows(
         [`Formation_Energy(${energyUnit})`]: formationEnergy(s, systemInfo) ?? '',
         [`Ed_Recons(${energyUnit})`]: Number.isFinite(s.eHullRecons) && s.eHullRecons >= 0 ? s.eHullRecons : '',
         'Enthalpy(eV/atom)': s.enthalpy,
-        'Fitness(eV/block)': Number.isFinite(s.fitness) && s.fitness >= 0 ? s.fitness : '',
+        [fitnessHeader]: fitnessValue(s) ?? '',
       })),
     };
   }
@@ -211,7 +220,7 @@ function buildWorkshopCsvRows(
   const [elA, elB, elC] = components;
   const energyUnit = systemInfo.compositionBasis?.length ? 'eV/block' : 'eV/atom';
   return {
-    headers: ['Group', 'EA_ID', 'Formula', `x_${elA}`, `x_${elB}`, `x_${elC}`, `E_form(${energyUnit})`, 'Fitness(eV/block)', `Ed_Recons(${energyUnit})`],
+    headers: ['Group', 'EA_ID', 'Formula', `x_${elA}`, `x_${elB}`, `x_${elC}`, `E_form(${energyUnit})`, fitnessHeader, `Ed_Recons(${energyUnit})`],
     rows: structures.map((s) => {
       const exportComposition = systemInfo.compositionBasis?.length
         ? componentAmountsFromComposition(s.composition, systemInfo.compositionBasis) ?? []
@@ -226,7 +235,7 @@ function buildWorkshopCsvRows(
         [`x_${elC}`]: (exportComposition[2] / total).toFixed(6),
         [`E_form(${energyUnit})`]: formationEnergy(s, systemInfo) ?? '',
         [`Ed_Recons(${energyUnit})`]: Number.isFinite(s.eHullRecons) && s.eHullRecons >= 0 ? s.eHullRecons : '',
-        'Fitness(eV/block)': Number.isFinite(s.fitness) && s.fitness >= 0 ? s.fitness : '',
+        [fitnessHeader]: fitnessValue(s) ?? '',
       };
     }),
   };

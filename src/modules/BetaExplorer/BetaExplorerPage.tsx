@@ -1,5 +1,6 @@
 import { validPlotStructure, selectedFrontData } from '@/domain/structure/plotData';
 import { formationEnergy } from '@/domain/structure/formationEnergy';
+import { fitnessValue } from '@/domain/structure/fitness';
 import type { SystemInfo } from '@/types/structure';
 import { animationFrames } from '@/charts/shared/animationFrames';
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
@@ -50,7 +51,7 @@ function getFieldOptions(
   const opts: FieldOption[] = [
     { key: 'enthalpy', label: t('col.enthalpy'), accessor: (s) => s.enthalpy, type: 'numeric' },
     { key: 'enthalpyTotal', label: t('col.enthalpyTotal'), accessor: (s) => s.enthalpyTotal, type: 'numeric' },
-    { key: 'fitness', label: t('col.fitness'), accessor: (s) => (s.fitness >= 0 ? s.fitness : undefined), type: 'numeric' },
+    { key: 'fitness', label: t('col.fitness'), accessor: fitnessValue, type: 'numeric' },
     { key: 'spaceGroup', label: t('col.spaceGroup'), accessor: (s) => s.spaceGroup, type: 'numeric' },
     { key: 'generation', label: t('col.generation'), accessor: (s) => s.generation, type: 'numeric' },
     { key: 'qEntropy', label: t('col.qEntropy'), accessor: (s) => s.qEntropy, type: 'numeric' },

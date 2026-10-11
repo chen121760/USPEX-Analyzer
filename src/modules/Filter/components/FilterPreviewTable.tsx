@@ -1,5 +1,6 @@
 import { FormulaDisplay } from '@/components/FormulaDisplay';
 import { getStructureFieldValue } from '@/domain/structure/dynamicFields';
+import { fitnessValue } from '@/domain/structure/fitness';
 import type { NumericOperator, Structure, UnifiedConditionGroup } from '@/types/structure';
 
 export function FilterPreviewTable({
@@ -69,7 +70,7 @@ export function FilterPreviewTable({
               <td><FormulaDisplay formula={s.formula} /></td>
               <td>{s.spaceGroup}</td>
               <td>{s.enthalpyTotal <= 900 ? s.enthalpy.toFixed(4) : '—'}</td>
-              <td>{s.fitness != null && s.fitness >= 0 ? s.fitness.toFixed(4) : '—'}</td>
+              <td>{fitnessValue(s)?.toFixed(4) ?? '—'}</td>
               <td>{s.origin}</td>
               {extraFields.map((f) => {
                 const v = Number(getStructureFieldValue(s, f));

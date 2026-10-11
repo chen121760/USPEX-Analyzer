@@ -262,7 +262,8 @@ export function DashboardPage() {
       {/* Stat cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
         <StatCard label={t('system.totalStructures')} value={systemInfo.totalStructures} sub={`(${systemInfo.totalStructuresSource})`} />
-        <StatCard label={t('system.stableStructures')} value={systemInfo.stableCount} sub="fitness = 0" />
+        <StatCard label={t('system.stableStructures')} value={systemInfo.stableCount}
+          sub={systemInfo.compositionMode === 'fixed' ? 'ΔH = 0' : 'fitness = 0'} />
         {systemInfo.unconvergedCount > 0 && (
           <StatCard label={t('system.unconvergedStructures')} value={systemInfo.unconvergedCount} sub="Enthalpy > 900 eV" />
         )}

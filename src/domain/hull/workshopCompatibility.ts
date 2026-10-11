@@ -1,7 +1,15 @@
 import type { Structure, SystemInfo } from '@/types/structure';
-import type { WorkshopGroup } from '@/modules/HullWorkshop/types';
+import type { WorkshopGroup, WorkshopJsonExport } from '@/modules/HullWorkshop/types';
 import { normalizeStructure } from '@/domain/structure/normalizeStructure';
 import { validateStructures, validateSystemInfo } from '@/domain/project/validateProject';
+
+/** Old archives did not record project/external provenance. Only a wholly
+ * manual group can be recovered without guessing a USPEX selection status. */
+export function workshopJsonImportSource(group: WorkshopJsonExport['groups'][number]): WorkshopGroup['importSource'] | null {
+  if (group.importSource && ['project', 'csv', 'json', 'manual'].includes(group.importSource)) return group.importSource;
+  return Array.isArray(group.structures) && group.structures.length > 0
+    && group.structures.every(s => s.isUserAdded === true || s.origin === 'manual') ? 'manual' : null;
+}
 
 export function workshopCompatibilityError(source: SystemInfo, target: SystemInfo): string | null {
   if (source.elements.length !== target.elements.length || source.elements.some(el => !target.elements.includes(el))) return 'Element sets do not match';
@@ -30,6 +38,8 @@ export function prepareWorkshopGroups(groups: WorkshopGroup[], context?: SystemI
     const error = workshopCompatibilityError(group.systemInfo, target);
     if (error) throw new Error(error);
     return { ...group, structures: group.structures.map(s => remapWorkshopStructure(s, group.systemInfo, target)),
-      systemInfo: { ...target, compositionMode: group.systemInfo.compositionMode ?? 'varcomp', referenceInfo: undefined } };
+      systemInfo: { ...target, compositionMode: group.systemInfo.compositionMode ?? 'varcomp',
+        fitnessSemantics: group.systemInfo.fitnessSemantics,
+        uspexSelection: group.systemInfo.uspexSelection, referenceInfo: undefined } };
   });
 }
