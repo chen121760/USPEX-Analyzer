@@ -22,7 +22,9 @@ Fitness 保留 USPEX 文件提供的原始数值。未提供 Fitness 的结构�
 
 新解析项目记录 `uspexSelection: { source, ids }`。变组分在 `Individuals` 回退之前记录实际凸包文件的 ID；定组分按保留结果表的 ID 列读取，或按对应 POSCARS 的结构 ID 读取。两份定组分保留文件不一致时报告差异，结果表优先。
 
-当前项目、历史项目及已有工作台缓存中的项目分组，都在计算之前按这份 ID 记录筛选。侧栏数量、凸包绘图、CSV 和 JSON 导出使用同一批结构。只有 `Individuals` 或只有文件表头的任务继续支持原项目分析，但工作台不能猜测去重状态。缺少保留记录的旧项目提示补充对应 USPEX 输出。
+当前项目、历史项目及已有工作台缓存中的项目分组，都在计算之前按这份 ID 记录筛选。侧栏数量、凸包绘图、CSV 和 JSON 导出使用同一批结构。只有 `Individuals` 或只有文件表头的任务继续支持原项目分析，但工作台不能猜测去重状态。缺少保留记录的旧项目提示用首页提取指令重新打包原始结果。
+
+提取指令不区分定组分和变组分，统一收集现有的 `extended_convex_hull` 和 `goodStructures`。几何数据沿用已经打包的 `gatheredPOSCARS`，不再重复打包 `goodStructures_POSCARS`。上传压缩包后由后台识别和读取，上传页不增加保留文件选择步骤。
 
 本地 USPEX 10.6 官方参考示例验证了定组分来源：EX01 的 `Individuals` 有 197 个 ID，`goodStructures` 与对应 POSCARS 都有 6 个；EX38 的 `goodStructures` 有 20 个 ID，而 `Pareto_ranking` 有 74 个。`BESTIndividuals`、`Pareto_ranking` 和全体 `gatheredPOSCARS` 不能替代指定保留集合。[USPEX 官方手册](https://uspex-team.org/static/file/uspex_manual_english_v2022.0.pdf)也分别列明定组分和变组分的对应结果文件。
 
@@ -37,5 +39,7 @@ Fitness 保留 USPEX 文件提供的原始数值。未提供 Fitness 的结构�
 `fitnessMissingChecks.ts` 的 18 项边界检查覆盖缺失值、保留 ID、文件识别、几何冲突、源文件优先级及混合分组 JSON 往返；`fixedFitnessChecks.ts` 的 8 项检查覆盖真实负目标值、筛选、表格、CSV、JSON 与文件命名。既有二元、三元、四元和固定组分数值检查继续验证重建距离。
 
 子 agent 对修改进行只读对抗性审查，核对官方定组分参考输出并独立复现同化学比例晶胞被误判为变组分的问题；该问题已修复。最终用 EX01 和 EX38 原始参考输出复核，工作台分别准确导入 6 个和 20 个保留 ID，原始负 Fitness 保持不变。
+
+直接执行网页中的提取指令并重新导入生成的压缩包，EX01 和 EX38 仅凭 `goodStructures` 仍分别导入 6 个和 20 个保留 ID；即使目录中存在 `goodStructures_POSCARS`，也不会打包。变组分样例按同一指令收集凸包表；两份保留表同时存在时都被收集。
 
 验证结果：完整 `npm test` 通过，生产构建通过；lint 为 0 errors、25 项已有 warnings。

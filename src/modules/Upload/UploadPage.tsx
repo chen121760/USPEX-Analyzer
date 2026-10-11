@@ -477,10 +477,6 @@ export function UploadPage() {
                 { labelKey: 'upload.groupVarcomp' as const, color: '#3b82f6', bg: 'rgba(59,130,246,0.12)', files: [
                   { name: 'extended_convex_hull', type: 'extended_convex_hull' as const },
                 ] },
-                { labelKey: 'upload.groupFixed' as const, color: '#0891b2', bg: 'rgba(8,145,178,0.12)', files: [
-                  { name: 'goodStructures', type: 'good_structures' as const },
-                  { name: 'goodStructures_POSCARS', type: 'good_structures_poscars' as const },
-                ] },
                 { labelKey: 'upload.groupMulti' as const, color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)', files: [
                   { name: 'Pareto_ranking', type: 'pareto_ranking' as const },
                 ] },

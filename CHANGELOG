@@ -7,7 +7,8 @@
 2026-10-11：凸包工作台使用 USPEX 保留结构
 
 - 变组分按 `extended_convex_hull` 的结构 ID 导入；定组分按 `goodStructures` 或 `goodStructures_POSCARS`，保留集合与 Fitness 是否有值无关
-- 项目导入与工作台缓存分组共用保留 ID，数量、重算凸包、绘图和导出保持一致；缺少记录时提示补充对应 USPEX 文件
+- 提取指令统一收集可用的 `extended_convex_hull` 和 `goodStructures`，后台自动读取；几何数据沿用 `gatheredPOSCARS`，不再重复打包 `goodStructures_POSCARS`，上传页无需单独选择保留文件
+- 项目导入与工作台缓存分组共用保留 ID，数量、重算凸包、绘图和导出保持一致；缺少记录时提示用首页提取指令重新打包原始结果
 - 工作台 JSON 保留分组来源、组分模式及保留 ID；定组分的原始 Fitness 可为负目标值，缺失仍显示空值，计算的相对焓独立保存
 
 2026-10-08：Fitness 来源修复
