@@ -1,0 +1,71 @@
+1
+00:00:00,900 --> 00:00:03,886
+Still post-processing USPEX the old way?
+
+2
+00:00:04,400 --> 00:00:09,402
+So many files — Origin, Excel, VESTA, round and round.
+
+3
+00:00:10,400 --> 00:00:12,522
+There's a better way.
+
+4
+00:00:15,400 --> 00:00:18,698
+Drop your USPEX output straight into the browser.
+
+5
+00:00:19,600 --> 00:00:23,402
+No install. No upload. Everything runs right here.
+
+6
+00:00:24,400 --> 00:00:26,714
+The whole run, at a glance.
+
+7
+00:00:31,000 --> 00:00:34,586
+Every structure, every property, in one table.
+
+8
+00:00:35,400 --> 00:00:39,994
+Each keeps its lineage: parents, offspring, variations.
+
+9
+00:00:40,800 --> 00:00:44,962
+Open any structure in 3D with one click — and spin it.
+
+10
+00:00:46,600 --> 00:00:51,554
+Convex hulls, from binary to quaternary, in 2D or 3D.
+
+11
+00:00:51,800 --> 00:00:54,786
+Click any point to inspect the structure behind it.
+
+12
+00:00:56,800 --> 00:01:01,154
+Merge runs at the same pressure — fixed or variable composition.
+
+13
+00:01:02,400 --> 00:01:04,954
+Test a candidate: will it change the hull?
+
+14
+00:01:06,600 --> 00:01:11,266
+Pareto front and hypervolume, tracked generation by generation.
+
+15
+00:01:12,400 --> 00:01:15,938
+Watch the population evolve, one generation at a time.
+
+16
+00:01:16,800 --> 00:01:20,626
+Pick the structures you want, and export them any way you need.
+
+17
+00:01:22,000 --> 00:01:26,018
+Runs locally in your browser. Your data never leaves your machine.
+
+18
+00:01:27,800 --> 00:01:31,866
+USPEX Analyzer. Give post-processing back to science.

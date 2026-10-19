@@ -6,6 +6,14 @@ A browser-based analysis tool for USPEX crystal structure prediction outputs. Su
 
 > This tool is listed on the official [USPEX Tools & Utilities](https://uspex-team.org/zh/uspex/tools) page.
 
+## Watch the video
+
+[![Watch USPEX Analyzer in action](public/promo/cover.png)](https://chen121760.github.io/USPEX-Analyzer/promo/)
+
+**[Watch the overview](https://chen121760.github.io/USPEX-Analyzer/promo/)** · English narration · 1080p · 1 min 37 sec
+
+[Download MP4](https://chen121760.github.io/USPEX-Analyzer/promo/uspex-analyzer-promo-en.mp4) · [English subtitles](public/promo/uspex-analyzer-promo-en.srt)
+
 ## What's New in v1.5.5
 
 - Fixed-composition searches now calculate relative energy per atom without requiring pure-element reference structures. Ternary hull reconstruction and Hull Workshop share geometry that handles single points, binary edges, and planar data.
