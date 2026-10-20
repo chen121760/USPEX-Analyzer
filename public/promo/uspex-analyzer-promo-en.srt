@@ -1,71 +1,55 @@
 1
-00:00:00,900 --> 00:00:03,886
-Still post-processing USPEX the old way?
+00:00:00,500 --> 00:00:02,948
+From output files to a structure viewer.
 
 2
-00:00:04,400 --> 00:00:09,402
-So many files — Origin, Excel, VESTA, round and round.
+00:00:04,000 --> 00:00:05,872
+One connected workflow.
 
 3
-00:00:10,400 --> 00:00:12,522
-There's a better way.
-
-4
-00:00:15,400 --> 00:00:18,698
+00:00:06,000 --> 00:00:09,048
 Drop your USPEX output straight into the browser.
 
+4
+00:00:09,500 --> 00:00:12,212
+Analysis runs locally in your browser.
+
 5
-00:00:19,600 --> 00:00:23,402
-No install. No upload. Everything runs right here.
+00:00:13,500 --> 00:00:16,620
+Structures and their properties, in one table.
 
 6
-00:00:24,400 --> 00:00:26,714
-The whole run, at a glance.
+00:00:17,250 --> 00:00:20,154
+Open a structure in 3D with one click.
 
 7
-00:00:31,000 --> 00:00:34,586
-Every structure, every property, in one table.
-
-8
-00:00:35,400 --> 00:00:39,994
-Each keeps its lineage: parents, offspring, variations.
-
-9
-00:00:40,800 --> 00:00:44,962
-Open any structure in 3D with one click — and spin it.
-
-10
-00:00:46,600 --> 00:00:51,554
+00:00:21,750 --> 00:00:26,454
 Convex hulls, from binary to quaternary, in 2D or 3D.
 
-11
-00:00:51,800 --> 00:00:54,786
-Click any point to inspect the structure behind it.
+8
+00:00:27,000 --> 00:00:29,328
+Select a point to inspect its structure.
 
-12
-00:00:56,800 --> 00:01:01,154
-Merge runs at the same pressure — fixed or variable composition.
+9
+00:00:30,250 --> 00:00:33,226
+Compare compatible datasets in Hull Workshop.
 
-13
-00:01:02,400 --> 00:01:04,954
-Test a candidate: will it change the hull?
-
-14
-00:01:06,600 --> 00:01:11,266
+10
+00:00:34,750 --> 00:00:39,166
 Pareto front and hypervolume, tracked generation by generation.
 
-15
-00:01:12,400 --> 00:01:15,938
+11
+00:00:39,750 --> 00:00:43,038
 Watch the population evolve, one generation at a time.
 
-16
-00:01:16,800 --> 00:01:20,626
-Pick the structures you want, and export them any way you need.
+12
+00:00:43,500 --> 00:00:46,404
+Filter structures, then export the selection.
 
-17
-00:01:22,000 --> 00:01:26,018
-Runs locally in your browser. Your data never leaves your machine.
+13
+00:00:50,250 --> 00:00:53,322
+Take selected structures into your next calculation.
 
-18
-00:01:27,800 --> 00:01:31,866
-USPEX Analyzer. Give post-processing back to science.
+14
+00:00:55,000 --> 00:00:58,888
+USPEX Analyzer. Your results. One connected workflow.

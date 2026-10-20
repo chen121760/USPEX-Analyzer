@@ -8,9 +8,9 @@ A browser-based analysis tool for USPEX crystal structure prediction outputs. Su
 
 ## Watch the video
 
-[![Watch USPEX Analyzer in action](public/promo/cover.png)](https://chen121760.github.io/USPEX-Analyzer/promo/)
+[![Watch USPEX Analyzer in action](public/promo/cover.png?v=f1557dfe)](https://chen121760.github.io/USPEX-Analyzer/promo/)
 
-**[Watch the overview](https://chen121760.github.io/USPEX-Analyzer/promo/)** · English narration · 1080p · 1 min 37 sec
+**[Watch the overview](https://chen121760.github.io/USPEX-Analyzer/promo/)** · English narration · 1080p · 1 min
 
 [Download MP4](https://chen121760.github.io/USPEX-Analyzer/promo/uspex-analyzer-promo-en.mp4) · [English subtitles](public/promo/uspex-analyzer-promo-en.srt)
 
