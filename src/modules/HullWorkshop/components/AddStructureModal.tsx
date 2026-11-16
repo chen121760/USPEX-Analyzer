@@ -169,7 +169,7 @@ export function AddStructureModal({ open, elements, onClose, onAdd }: Props) {
               step="any"
               value={enthalpy}
               onChange={(e) => setEnthalpy(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && canSubmit) handleSubmit(); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.nativeEvent.keyCode !== 229 && canSubmit) handleSubmit(); }}
               placeholder="-1.234"
             />
           </div>

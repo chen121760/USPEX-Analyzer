@@ -1,21 +1,23 @@
 import { useTranslation } from 'react-i18next';
 import { useCompareStore } from '@/store/useCompareStore';
-import { useLayoutStore } from '@/store/useLayoutStore';
 import { useProjectStore } from '@/store/useProjectStore';
-import { Globe, UploadCloud, HelpCircle, Contact, Github, Monitor, Moon, Sun, Loader2 } from 'lucide-react';
+import { Globe, UploadCloud, HelpCircle, Contact, Github, Menu, Monitor, Moon, Sun, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { CitePopover } from '@/components/CitePopover';
 import { useThemeStore } from '@/theme/themeStore';
 
-export function Header() {
+export function Header({ onOpenMenu, menuOpen, guideOpen, onToggleGuide }: {
+  onOpenMenu: () => void;
+  menuOpen: boolean;
+  guideOpen: boolean;
+  onToggleGuide: () => void;
+}) {
   const { t, i18n } = useTranslation();
   const systemInfo = useProjectStore((s) => s.systemInfo);
   const persistenceError = useProjectStore(s => s.persistenceError);
   const projectName = useProjectStore((s) => s.projectName);
   const symmetryStatus = useProjectStore((s) => s.symmetryStatus);
   const compareIds = useCompareStore((s) => s.compareIds);
-  const hintPanelOpen = useLayoutStore((s) => s.hintPanelOpen);
-  const toggleHintPanel = useLayoutStore((s) => s.toggleHintPanel);
   const theme = useThemeStore((s) => s.theme);
   const themePreference = useThemeStore((s) => s.themePreference);
   const cycleThemePreference = useThemeStore((s) => s.cycleThemePreference);
@@ -27,22 +29,26 @@ export function Header() {
 
   return (
     <header className="header">
+      <button type="button" className="btn btn-ghost mobile-menu-trigger" onClick={onOpenMenu}
+        aria-controls="workspace-navigation" aria-expanded={menuOpen} aria-label={t('nav.menu')}>
+        <Menu size={21} />
+      </button>
       {/* System summary */}
       {systemInfo && (
-        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', display: 'flex', gap: 16, alignItems: 'center' }}>
+        <div className="header-project">
           {projectName && (
-            <span style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>
+            <span className="header-project-name">
               {projectName}
             </span>
           )}
-          <span>
+          <span className="header-project-stat">
             {t('system.totalStructures')}: <b>{systemInfo.totalStructures}</b>
           </span>
-          <span>
+          <span className="header-project-stat">
             {t('system.stableStructures')}: <b>{systemInfo.stableCount}</b>
           </span>
           {systemInfo.totalGenerations > 0 && (
-            <span>
+            <span className="header-project-stat">
               {t('system.generations')}: <b>{systemInfo.totalGenerations}</b>
             </span>
           )}
@@ -58,6 +64,7 @@ export function Header() {
       {/* Background moyo symmetry analysis progress */}
       {symmetryStatus.running && (
         <span
+          className="symmetry-progress"
           title={t('symmetry.progressTitle')}
           style={{
             display: 'inline-flex',
@@ -80,92 +87,91 @@ export function Header() {
         </span>
       )}
 
-      {/* Compare badge */}
-      {compareIds.length > 0 && (
-        <button
-          className="btn btn-outline btn-sm"
-          onClick={() => navigate('/compare')}
-          style={{ position: 'relative' }}
-        >
-          {t('btn.compare')}
-          <span
-            style={{
-              background: 'var(--color-primary)',
-              color: 'var(--color-primary-contrast)',
-              borderRadius: 9999,
-              padding: '0 6px',
-              fontSize: 11,
-              minWidth: 18,
-              textAlign: 'center',
-            }}
+      <div className="header-actions">
+        {/* Compare badge */}
+        {compareIds.length > 0 && (
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={() => navigate('/compare')}
+            style={{ position: 'relative' }}
           >
-            {compareIds.length}
-          </span>
+            {t('btn.compare')}
+            <span
+              style={{
+                background: 'var(--color-primary)',
+                color: 'var(--color-primary-contrast)',
+                borderRadius: 9999,
+                padding: '0 6px',
+                fontSize: 11,
+                minWidth: 18,
+                textAlign: 'center',
+              }}
+            >
+              {compareIds.length}
+            </span>
+          </button>
+        )}
+
+        {/* New upload */}
+        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')} aria-label={t('btn.upload')} title={t('btn.upload')}>
+          <UploadCloud size={16} />
         </button>
-      )}
 
-      {/* New upload */}
-      <button className="btn btn-ghost btn-sm" onClick={() => navigate('/')} title={t('btn.upload')}>
-        <UploadCloud size={16} />
-      </button>
+        {/* Language toggle */}
+        <button className="btn btn-ghost btn-sm" onClick={toggleLang} aria-label={i18n.language === 'zh' ? 'Switch to English' : '切换为中文'}>
+          <Globe size={16} />
+          <span style={{ fontSize: 12 }}>{i18n.language === 'zh' ? 'EN' : '中'}</span>
+        </button>
 
-      {/* Language toggle */}
-      <button className="btn btn-ghost btn-sm" onClick={toggleLang} title="Switch language">
-        <Globe size={16} />
-        <span style={{ fontSize: 12 }}>{i18n.language === 'zh' ? 'EN' : '中'}</span>
-      </button>
+        {/* Theme toggle */}
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={cycleThemePreference}
+          aria-label={getThemeTitle(i18n.language, themePreference, theme)}
+          title={getThemeTitle(i18n.language, themePreference, theme)}
+        >
+          {themePreference === 'system'
+            ? <Monitor size={16} />
+            : theme === 'dark'
+              ? <Sun size={16} />
+              : <Moon size={16} />}
+        </button>
 
-      {/* Theme toggle */}
-      <button
-        className="btn btn-ghost btn-sm"
-        onClick={cycleThemePreference}
-        title={getThemeTitle(i18n.language, themePreference, theme)}
-      >
-        {themePreference === 'system'
-          ? <Monitor size={16} />
-          : theme === 'dark'
-            ? <Sun size={16} />
-            : <Moon size={16} />}
-      </button>
+        {/* Cite USPEX */}
+        <CitePopover />
 
-      {/* Cite USPEX */}
-      <CitePopover />
+        {/* Contact author */}
+        <a
+          className="btn btn-ghost btn-sm"
+          href="https://chen121760.github.io/"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={t('app.contact')}
+        >
+          <Contact size={16} />
+        </a>
 
-      {/* Contact author */}
-      <a
-        className="btn btn-ghost btn-sm"
-        href="https://chen121760.github.io/"
-        target="_blank"
-        rel="noopener noreferrer"
-        title={i18n.language === 'zh' ? '联系作者' : 'Contact Author'}
-      >
-        <Contact size={16} />
-      </a>
+        {/* Source repository */}
+        <a
+          className="btn btn-ghost btn-sm"
+          href="https://github.com/chen121760/USPEX-Analyzer"
+          target="_blank"
+          rel="noopener noreferrer"
+          title={i18n.language === 'zh' ? 'GitHub 仓库' : 'GitHub repository'}
+        >
+          <Github size={16} />
+        </a>
 
-      {/* Source repository */}
-      <a
-        className="btn btn-ghost btn-sm"
-        href="https://github.com/chen121760/USPEX-Analyzer"
-        target="_blank"
-        rel="noopener noreferrer"
-        title={i18n.language === 'zh' ? 'GitHub 仓库' : 'GitHub repository'}
-      >
-        <Github size={16} />
-      </a>
-
-      {/* Help / hint panel toggle */}
-      <button
-        className="btn btn-ghost btn-sm"
-        onClick={toggleHintPanel}
-        title="Page guide"
-        style={{
-          color: hintPanelOpen ? '#68b88e' : undefined,
-          background: hintPanelOpen ? 'rgba(104,184,142,0.12)' : undefined,
-          borderRadius: 6,
-        }}
-      >
-        <HelpCircle size={16} />
-      </button>
+        {/* Help / hint panel toggle */}
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={onToggleGuide}
+          aria-label={t('app.guide')}
+          aria-pressed={guideOpen}
+        >
+          <HelpCircle size={16} />
+        </button>
+      </div>
     </header>
   );
 }

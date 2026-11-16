@@ -1,3 +1,4 @@
+import { useUIStore } from '@/store/useUIStore';
 import { FormulaDisplay } from '@/components/FormulaDisplay';
 import { getStructureFieldValue } from '@/domain/structure/dynamicFields';
 import { fitnessValue } from '@/domain/structure/fitness';
@@ -6,12 +7,15 @@ import type { NumericOperator, Structure, UnifiedConditionGroup } from '@/types/
 export function FilterPreviewTable({
   sortedStructures,
   groups,
+  showGeometry,
   t,
 }: {
   sortedStructures: Structure[];
   groups: UnifiedConditionGroup[];
-  t: (key: string) => string;
+  showGeometry: boolean;
+  t: (key: string, options?: Record<string, unknown>) => string;
 }) {
+  const openViewer = useUIStore(state => state.openViewer);
   if (sortedStructures.length === 0) return null;
 
   const headerStyle: React.CSSProperties = {
@@ -31,6 +35,9 @@ export function FilterPreviewTable({
   return (
     <div
       className="card"
+      tabIndex={0}
+      role="region"
+      aria-label={t('filter.previewLabel')}
       style={{
         marginTop: 16,
         maxHeight: 300,
@@ -55,6 +62,7 @@ export function FilterPreviewTable({
             <th style={headerStyle}>{t('col.enthalpy')}</th>
             <th style={headerStyle}>{t('col.fitness')}</th>
             <th style={headerStyle}>{t('col.origin')}</th>
+            {showGeometry && <th style={headerStyle}>POSCAR</th>}
             {extraFields.map((f) => (
               <th key={f} style={{ ...headerStyle, color: 'var(--color-primary)', fontStyle: 'italic' }}>
                 {t(`col.${f}`) || f}
@@ -66,12 +74,18 @@ export function FilterPreviewTable({
           {sortedStructures.slice(0, 50).map((s, i) => (
             <tr key={s.id}>
               <td>{i + 1}</td>
-              <td style={{ fontWeight: 600 }}>EA{s.id}</td>
+              <th scope="row">
+                {s.poscarData
+                  ? <button type="button" className="structure-link" onClick={() => openViewer(s.id)}
+                      aria-label={`EA${s.id} · ${t('btn.viewStructure')}`}>EA{s.id}</button>
+                  : `EA${s.id}`}
+              </th>
               <td><FormulaDisplay formula={s.formula} /></td>
               <td>{s.spaceGroup}</td>
               <td>{s.enthalpyTotal <= 900 ? s.enthalpy.toFixed(4) : '—'}</td>
               <td>{fitnessValue(s)?.toFixed(4) ?? '—'}</td>
               <td>{s.origin}</td>
+              {showGeometry && <td>{t(s.poscarData ? 'upload.recognized' : 'upload.missing')}</td>}
               {extraFields.map((f) => {
                 const v = Number(getStructureFieldValue(s, f));
                 return (
@@ -86,7 +100,7 @@ export function FilterPreviewTable({
       </table>
       {sortedStructures.length > 50 && (
         <div style={{ padding: 8, textAlign: 'center', fontSize: 12, color: 'var(--color-text-muted)' }}>
-          ... and {sortedStructures.length - 50} more
+          {t('filter.previewRemaining', { count: sortedStructures.length - 50 })}
         </div>
       )}
     </div>

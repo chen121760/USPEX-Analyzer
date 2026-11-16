@@ -89,6 +89,16 @@ function cleanupJSmolInstance(
     }
 
     try {
+      const panel = (applet as { _appletPanel?: { paint?: unknown; update?: unknown } } | null)?._appletPanel;
+      if (panel) {
+        // JSmol's queued repaint can still call the panel after destroy clears its viewer.
+        if (typeof panel.paint === 'function') panel.paint = () => {};
+        if (typeof panel.update === 'function') panel.update = () => {};
+      }
+      const timers = Jmol as unknown as Record<string, number | undefined>;
+      const resizeKey = `__resizeTimeout_${appletId}`;
+      window.clearTimeout(timers[resizeKey]);
+      delete timers[resizeKey];
       if (applet) Jmol._destroy?.(applet);
     } catch {
       // Ignore partial teardown errors from JSmol internals.

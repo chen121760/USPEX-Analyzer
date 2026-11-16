@@ -321,7 +321,7 @@ export function DataTablePage() {
         id: 'fitness',
         accessorFn: s => fitnessValue(s),
         sortUndefined: 'last',
-        header: () => <span title={t(systemInfo?.fitnessSemantics === 'uspex-original' ? 'col.fitnessDesc' : 'hull.legacyFitnessDetail')}>{t('col.fitness')}</span>,
+        header: () => <span title={systemInfo?.fitnessSemantics === 'uspex-original' ? t('col.fitnessDesc') : undefined}>{t('col.fitness')}</span>,
         size: 110,
         cell: ({ getValue, row }) => {
           const v = getValue<number | null>();
@@ -587,9 +587,6 @@ export function DataTablePage() {
 
   return (
     <div className="fade-in">
-    {systemInfo?.fitnessSemantics !== 'uspex-original' &&
-      <div role="status" style={{ marginBottom: 12, fontSize: 13, color: 'var(--color-warning)' }}>{t('hull.legacyFitnessDetail')}</div>}
-
     {/* ===== 工具栏 ===== */}
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
 

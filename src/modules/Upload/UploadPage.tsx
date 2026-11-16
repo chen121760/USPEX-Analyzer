@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
-import { detectFileType } from '@/lib/fileDetection';
+import { detectFileType, getFileTypeInfo } from '@/lib/fileDetection';
 import {
   UploadCloud,
   FileText,
@@ -13,6 +13,8 @@ import {
   Moon,
   Sun,
   Contact,
+  ArrowRight,
+  Play,
 } from 'lucide-react';
 import type { DetectedFile, USPEXFileType, ProjectFile } from '@/types/structure';
 import { useEffect } from 'react';
@@ -80,12 +82,9 @@ export function UploadPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [suffix, setSuffix] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
-  const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
   const [loadingSample, setLoadingSample] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const canStartRef = useRef(false);
-  const startAnalysisRef = useRef<() => void>(() => {});
 
   // 存储历史项目列表
   const [recentProjects, setRecentProjects] = useState<StoredProject[]>([]);
@@ -100,21 +99,6 @@ export function UploadPage() {
       .then(setRecentProjects)
       .finally(() => setProjectsLoading(false));
   }, []); // [] 表示只在组件第一次渲染时执行
-
-  // Enter 键快捷启动分析（ref 在每次渲染时更新，effect 只在挂载时注册一次）
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Enter') return;
-      // 不在输入框内响应 Enter
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      if (!canStartRef.current) return;
-      e.preventDefault();
-      startAnalysisRef.current();
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
 
   // 点击历史项目 → 恢复数据 → 跳转到 Dashboard
   const handleRestoreProject = async (stored: StoredProject) => {
@@ -225,7 +209,8 @@ export function UploadPage() {
   const handleClick = () => inputRef.current?.click();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) handleFiles(e.target.files);
+    if (e.target.files) void handleFiles(e.target.files);
+    e.currentTarget.value = '';
   };
 
   const isUspex25Schema = hasUspex25Schema(fileContents);
@@ -239,18 +224,17 @@ export function UploadPage() {
     fileContents.has('individuals') &&
     fileContents.has('gathered_poscars');
   const canStart = canStartLegacy || canStartUspex25;
-  const requiredFilesHint = isUspex25Schema
-    ? t('upload.requiredFilesHintUspex25')
-    : detectedFiles.length > 0
-      ? t('upload.requiredFilesHint')
-      : t('upload.requiredFilesFallback');
-
   const startAnalysis = async () => {
     // Parsing a large run takes seconds and blocks the main thread, so the store
     // paints its loading overlay first (see `nextPaint`) and the button below
     // stays disabled with a spinner until the data is in.
+    const previousProjectId = useProjectStore.getState().projectId;
     await processFiles(detectedFiles, fileContents);
     const state = useProjectStore.getState();
+    if (state.projectId === previousProjectId) {
+      setErrors(state.parseWarnings);
+      return;
+    }
     const si = state.systemInfo;
     const fixedFormula = state.structures?.[0]?.formula;
     const autoName = si
@@ -259,10 +243,6 @@ export function UploadPage() {
     setProjectName(autoName);
     navigate('/dashboard');
   };
-
-  // 每帧更新 ref，确保 Enter 键回调拿到最新值
-  canStartRef.current = canStart;
-  startAnalysisRef.current = startAnalysis;
 
   const handleLoadSample = async () => {
     setLoadingSample(true);
@@ -285,362 +265,134 @@ export function UploadPage() {
     i18n.changeLanguage(i18n.language === 'zh' ? 'en' : 'zh');
   };
 
-  // Which file types have been detected?
-  const detectedTypes = new Set(detectedFiles.map((d) => d.type));
+  const requiredFiles: USPEXFileType[] = isUspex25Schema
+    ? ['individuals', 'gathered_poscars']
+    : ['individuals', 'gathered_poscars', 'origin', 'parameters'];
+  const filesByType = new Map(detectedFiles.map(file => [file.type, file]));
+  const missingFiles = requiredFiles.filter(type => !filesByType.has(type));
+  const hasFormatSource = filesByType.has('individuals') || filesByType.has('gathered_poscars');
+  const detectedVersion = isUspex25Schema ? 'USPEX 25' : hasFormatSource ? 'USPEX 10.5 / 10.6' : t('upload.detected');
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'flex-start',
-        padding: '32px 24px 88px 24px',
-        background: 'var(--color-bg)',
-      }}
-    >
-      {/* Utility actions top-right */}
-      <div
-        style={{
-          position: 'fixed',
-          top: 12,
-          right: 16,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          zIndex: 20,
-        }}
-      >
-        <button className="btn btn-ghost btn-sm" onClick={toggleLang} title="Switch language">
-          <Globe size={16} />
-          <span>{i18n.language === 'zh' ? 'EN' : '中'}</span>
-        </button>
-        <button
-          className="btn btn-ghost btn-sm"
-          onClick={cycleThemePreference}
-          title={getThemeTitle(i18n.language, themePreference, theme)}
-        >
-          {themePreference === 'system'
-            ? <Monitor size={16} />
-            : theme === 'dark'
-              ? <Sun size={16} />
-              : <Moon size={16} />}
-        </button>
-        <CitePopover />
-        <a
-          className="btn btn-ghost btn-sm"
-          href="https://chen121760.github.io/"
-          target="_blank"
-          rel="noopener noreferrer"
-          title={i18n.language === 'zh' ? '联系作者' : 'Contact Author'}
-        >
-          <Contact size={16} />
-        </a>
-      </div>
-
-      {/* Logo only */}
-      <div style={{ textAlign: 'center', marginBottom: 4 }} className="fade-in">
-        <UspexLogo style={{ width: 250, height: 250, margin: '0 auto' }} />
-      </div>
-
-      {/* Sample data banner */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '7px 16px', borderRadius: 10, marginBottom: 10,
-        background: 'var(--color-surface)',
-        border: '1px solid var(--color-border)',
-        fontSize: 13,
-      }}>
-        <span style={{ color: 'var(--color-text-muted)' }}>
-          {i18n.language === 'zh' ? '没有数据？' : 'No data yet?'}
-        </span>
-        <button
-          className="btn btn-ghost btn-sm"
-          onClick={handleLoadSample}
-          disabled={loadingSample}
-          style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-primary)', padding: '2px 8px' }}
-        >
-          {loadingSample ? '...' : t('btn.loadSample')} →
-        </button>
-        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-          {t('upload.sampleHint')}
-        </span>
-      </div>
-
-      {/* Quick-pack command card — visible before user uploads anything */}
-      <QuickPackCommand />
-
-      {/* Main content: upload + recent side by side when history exists */}
-      <div style={{
-        display: 'flex',
-        flexDirection: showProjectsPanel ? 'row' : 'column',
-        alignItems: showProjectsPanel ? 'flex-start' : 'center',
-        gap: 24,
-        width: '100%',
-        maxWidth: showProjectsPanel ? 1100 : 560,
-        justifyContent: 'center',
-      }}>
-        {/* Left: naming + drop zone + start button */}
-        <div style={{ flex: showProjectsPanel ? '0 0 560px' : undefined, width: showProjectsPanel ? undefined : '100%' }}>
-
-          {/* Suffix input — optional, above dropzone */}
-          <div style={{ marginBottom: 8 }}>
-            <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 4 }}>
-              {t('upload.suffixLabel')}
-            </label>
-            <input
-              type="text"
-              value={suffix}
-              onChange={(e) => setSuffix(e.target.value)}
-              placeholder={t('upload.suffixPlaceholder')}
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                width: '100%', padding: '7px 12px', borderRadius: 6,
-                border: '1px solid var(--color-border)', fontSize: 13,
-                background: 'var(--color-surface)', color: 'var(--color-text)',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
-
-          {/* Drop zone */}
-          <div
-            className={`dropzone ${isDragging ? 'active' : ''}`}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onClick={handleClick}
-            style={{ width: '100%', marginBottom: 12, padding: '14px 20px' }}
-          >
-            <input ref={inputRef} type="file" multiple style={{ display: 'none' }} onChange={handleInputChange} />
-            <UploadCloud size={24} color="var(--color-primary)" style={{ display: 'block', margin: '0 auto 6px' }} />
-            <p style={{ fontSize: 14, fontWeight: 600, margin: '0 0 2px', color: 'var(--color-text)' }}>
-              {t('upload.dragHint')}
-            </p>
-            <p style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: '0 0 10px' }}>
-              {t('upload.orLoadProject')}
-            </p>
-
-            {/* File groups with live status */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, width: '100%' }}>
-              {/* Core file groups */}
-              {([
-                { labelKey: 'upload.groupCore' as const, color: '#16a34a', bg: 'rgba(22,163,74,0.12)', files: [
-                  { name: 'Individuals', type: 'individuals' as const },
-                  { name: 'origin', type: 'origin' as const },
-                  { name: 'Parameters.txt', type: 'parameters' as const },
-                  { name: 'gatheredPOSCARS', type: 'gathered_poscars' as const },
-                ] },
-                { labelKey: 'upload.groupCoreUspex25' as const, color: '#0d9488', bg: 'rgba(13,148,136,0.12)', files: [
-                  { name: 'Individuals', type: 'individuals' as const },
-                  { name: 'gatheredPOSCARS', type: 'gathered_poscars' as const },
-                ] },
-              ] as const).map((group) => (
-                <div key={group.labelKey}>
-                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {t(group.labelKey)}
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 6px' }}>
-                    {group.files.map(({ name, type }) => {
-                      const uploaded = detectedTypes.has(type as USPEXFileType);
-                      return (
-                        <span
-                          key={name}
-                          style={{
-                            fontSize: 11, padding: '2px 8px', borderRadius: 10,
-                            background: group.bg,
-                            color: group.color,
-                            opacity: uploaded ? 1 : 0.5,
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                            transition: 'opacity 0.2s, box-shadow 0.2s',
-                            boxShadow: uploaded ? `0 0 0 1px ${group.color}60` : 'none',
-                          }}
-                        >
-                          {uploaded && <CheckCircle2 size={10} />}
-                          {name}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-              {/* Version split hint */}
-              <div style={{
-                fontSize: 10, fontWeight: 500, color: 'var(--color-text-muted)',
-                textAlign: 'center', padding: '2px 0', marginTop: -2,
-              }}>
-                {t('upload.versionSplit')}
-              </div>
-              {/* Optional file groups */}
-              {([
-                { labelKey: 'upload.groupVarcomp' as const, color: '#3b82f6', bg: 'rgba(59,130,246,0.12)', files: [
-                  { name: 'extended_convex_hull', type: 'extended_convex_hull' as const },
-                ] },
-                { labelKey: 'upload.groupMulti' as const, color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)', files: [
-                  { name: 'Pareto_ranking', type: 'pareto_ranking' as const },
-                ] },
-                { labelKey: 'upload.groupML' as const, color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', files: [
-                  { name: 'MLProperties', type: 'ml_properties' as const },
-                ] },
-              ] as const).map((group) => (
-                <div key={group.labelKey}>
-                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {t(group.labelKey)}
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '4px 6px' }}>
-                    {group.files.map(({ name, type }) => {
-                      const uploaded = detectedTypes.has(type as USPEXFileType);
-                      return (
-                        <span
-                          key={name}
-                          style={{
-                            fontSize: 11, padding: '2px 8px', borderRadius: 10,
-                            background: group.bg,
-                            color: group.color,
-                            opacity: uploaded ? 1 : 0.5,
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                            transition: 'opacity 0.2s, box-shadow 0.2s',
-                            boxShadow: uploaded ? `0 0 0 1px ${group.color}60` : 'none',
-                          }}
-                        >
-                          {uploaded && <CheckCircle2 size={10} />}
-                          {name}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Errors inside dropzone */}
-            {errors.length > 0 && (
-              <div style={{ marginTop: 12 }}>
-                {errors.map((err, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center', color: 'var(--color-danger)', fontSize: 12 }}>
-                    <AlertCircle size={13} />
-                    {err}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Start button — fixed at bottom of viewport, full-width */}
-          <div style={{
-            position: 'fixed',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            textAlign: 'center',
-            padding: '12px 0',
-            background: 'var(--color-bg)',
-            borderTop: '1px solid var(--color-border)',
-            zIndex: 10,
-          }}>
-            <button
-              className="btn btn-primary"
-              onClick={startAnalysis}
-              disabled={!canStart || isParsing}
-              aria-busy={isParsing}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '10px 32px', fontSize: 15,
-                opacity: canStart && !isParsing ? 1 : 0.55,
-                cursor: canStart && !isParsing ? 'pointer' : 'not-allowed',
-              }}
-            >
-              {isParsing ? (
-                <>
-                  <Spinner size={16} />
-                  {t('upload.parsing')}
-                  {/* The same fraction the overlay shows, with reserved width so
-                      the button does not resize as it counts up. */}
-                  {parsingPercent != null ? (
-                    <span className="loading-percent">{parsingPercent}%</span>
-                  ) : null}
-                </>
-              ) : (
-                <>{t('btn.startAnalysis')} →</>
-              )}
-            </button>
-            {!canStart && (
-              <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 8 }}>
-                {requiredFilesHint}
-              </p>
-            )}
-          </div>
+    <main className="upload-home">
+      <header className="upload-topbar">
+        <span className="upload-wordmark">USPEX Analyzer</span>
+        <div className="upload-tools">
+          <button type="button" className="btn btn-ghost btn-sm" onClick={toggleLang} aria-label={i18n.language === 'zh' ? 'Switch to English' : '切换为中文'}>
+            <Globe size={16} />
+            {i18n.language === 'zh' ? 'EN' : '中'}
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={cycleThemePreference} aria-label={getThemeTitle(i18n.language, themePreference, theme)}>
+            {themePreference === 'system' ? <Monitor size={16} /> : theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+          <CitePopover />
+          <a className="btn btn-ghost btn-sm" href="https://chen121760.github.io/" target="_blank" rel="noopener noreferrer" aria-label={t('app.contact')}>
+            <Contact size={16} />
+          </a>
         </div>
+      </header>
 
-        {/* Right: Recent projects */}
-        {showProjectsPanel && (
-          <div style={{ flex: '1 1 300px', minWidth: 260, maxWidth: 400 }}>
-            <h3 style={{
-              fontSize: 13, fontWeight: 600, marginBottom: 10,
-              color: 'var(--color-text-secondary)',
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}>
-              <Clock size={14} />
-              {t('upload.recentProjects')}
-            </h3>
-            {projectsLoading ? (
-              <div aria-busy="true" aria-label={t('upload.projectsLoading')}>
-                <SkeletonRows rows={3} height={38} />
-              </div>
-            ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {recentProjects.map((stored) => {
-                const si = stored.project.systemInfo;
-                const systemLabel = si ? si.elements.join('-') : '—';
-                const compMode = si ? (si.compositionMode === 'varcomp' ? t('system.varcomp') : t('system.fixedComp')) : '';
-                const gens = si ? `${si.totalGenerations} gen` : '';
-                return (
-                  <div
-                    key={stored.id}
-                    onClick={() => handleRestoreProject(stored)}
-                    onMouseEnter={() => setHoveredProjectId(stored.id)}
-                    onMouseLeave={() => setHoveredProjectId(null)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '10px 14px', borderRadius: 8, cursor: 'pointer',
-                      border: `1px solid ${hoveredProjectId === stored.id ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                      background: hoveredProjectId === stored.id ? 'var(--color-surface-hover, rgba(99,102,241,0.06))' : 'var(--color-surface)',
-                      transition: 'border-color 0.15s, background 0.15s',
-                    }}
-                  >
-                    <FileText size={16} color="var(--color-primary)" style={{ flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {stored.name}
-                      </div>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--color-primary)', marginTop: 1 }}>
-                        {systemLabel}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        <span>{compMode}</span>
-                        {gens && <span>· {gens}</span>}
-                        <span>· {stored.project.structures.length} {t('system.totalStructures').toLowerCase()}</span>
-                      </div>
-                    </div>
-                    <button
-                      className="btn btn-ghost btn-sm"
-                      onClick={(e) => handleDeleteProject(stored.id, e)}
-                      style={{ padding: 4, flexShrink: 0 }}
-                    >
-                      <Trash2 size={14} color="var(--color-text-muted)" />
-                    </button>
-                  </div>
-                );
-              })}
+      <div className="upload-workspace">
+        <section className="upload-intro" aria-labelledby="upload-title">
+          <UspexLogo className="upload-logo" />
+          <h1 id="upload-title">{t('upload.title')}</h1>
+          <p>{t('upload.orLoadProject')}</p>
+          <QuickPackCommand />
+          <button className="btn btn-outline" type="button" onClick={handleLoadSample} disabled={loadingSample} aria-busy={loadingSample}>
+            {loadingSample ? <Spinner size={15} /> : <Play size={15} />}
+            {t('btn.loadSample')}
+          </button>
+          <p className="upload-sample-note">{t('upload.sampleHint')}</p>
+        </section>
+
+        <div className="upload-main">
+          <section className="card upload-card" aria-label={t('upload.title')}>
+            <div
+              className={`dropzone ${isDragging ? 'active' : ''}`}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+            >
+              <input ref={inputRef} type="file" multiple hidden onChange={handleInputChange} />
+              <span className="upload-drop-icon"><UploadCloud size={24} /></span>
+              <button className="btn btn-primary" type="button" onClick={handleClick}>{t('upload.chooseFiles')}</button>
+              <p>{t('upload.dropHint')}</p>
+              <span>ZIP · TAR.GZ · TGZ · JSON</span>
             </div>
+
+            {detectedFiles.length > 0 && (
+              <div className="upload-file-status" role="status">
+                <div className="upload-file-heading">
+                  <strong>{detectedVersion}</strong>
+                  <span>{t('upload.requiredCount', { count: requiredFiles.length - missingFiles.length, total: requiredFiles.length })}</span>
+                </div>
+                <ul className="upload-files">
+                  {requiredFiles.map(type => {
+                    const file = filesByType.get(type);
+                    return (
+                      <li key={type} className={file ? 'ready' : ''}>
+                        {file ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+                        <span>{t(getFileTypeInfo(type).displayKey)}</span>
+                        <span>{t(file ? 'upload.recognized' : 'upload.missing')}</span>
+                      </li>
+                    );
+                  })}
+                  {detectedFiles.filter(file => !requiredFiles.includes(file.type)).map(file => (
+                    <li key={file.type} className="ready">
+                      <CheckCircle2 size={14} />
+                      <span>{t(file.displayName)}</span>
+                      <span>{t('upload.recognized')}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
-          </div>
-        )}
+
+            {errors.length > 0 && (
+              <ul className="upload-errors" role="alert">
+                {errors.map((error, index) => <li key={index}><AlertCircle size={14} />{error}</li>)}
+              </ul>
+            )}
+
+            <div className="upload-name">
+              <label htmlFor="project-suffix">{t('upload.suffixLabel')}</label>
+              <input id="project-suffix" type="text" value={suffix} onChange={event => setSuffix(event.target.value)}
+                placeholder={t('upload.suffixPlaceholder')} title={t('upload.suffixHint')} />
+            </div>
+            <div className="upload-card-footer">
+              <button className="btn btn-primary" type="button" onClick={startAnalysis} disabled={!canStart || isParsing} aria-busy={isParsing}>
+                {isParsing ? <><Spinner size={16} />{t('upload.parsing')}{parsingPercent != null && <span className="loading-percent">{parsingPercent}%</span>}</>
+                  : <>{t('btn.startAnalysis')}<ArrowRight size={16} /></>}
+              </button>
+            </div>
+          </section>
+
+          {showProjectsPanel && (
+            <section className="upload-recent" aria-labelledby="recent-projects-title">
+              <h2 id="recent-projects-title"><Clock size={16} />{t('upload.recentProjects')}</h2>
+              {projectsLoading ? <div aria-busy="true" aria-label={t('upload.projectsLoading')}><SkeletonRows rows={3} height={38} /></div> : (
+                <div className="upload-projects">
+                  {recentProjects.map(stored => {
+                    const info = stored.project.systemInfo;
+                    const mode = info.compositionMode === 'varcomp' ? t('system.varcomp') : t('system.fixedComp');
+                    return (
+                      <div className="upload-project" key={stored.id}>
+                        <button type="button" className="upload-project-open" onClick={() => handleRestoreProject(stored)}>
+                          <FileText size={17} />
+                          <span><strong>{stored.name}</strong><small>{info.elements.join('-')} · {mode} · {t('upload.structureCount', { count: stored.project.structures.length })}</small></span>
+                        </button>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={event => handleDeleteProject(stored.id, event)}
+                          aria-label={t('upload.deleteProject', { name: stored.name })}><Trash2 size={15} /></button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+        </div>
       </div>
-    </div>
+    </main>
   );
 }
 

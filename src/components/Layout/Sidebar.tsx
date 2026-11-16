@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Save,
+  X,
 } from 'lucide-react';
 
 interface NavItemProps {
@@ -23,14 +24,17 @@ interface NavItemProps {
   icon: React.ReactNode;
   label: string;
   hidden?: boolean;
+  onNavigate?: () => void;
 }
 
-function NavItem({ to, icon, label, hidden }: NavItemProps) {
+function NavItem({ to, icon, label, hidden, onNavigate }: NavItemProps) {
   if (hidden) return null;
 
   return (
     <NavLink
       to={to}
+      onClick={onNavigate}
+      title={label}
       className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
     >
       {icon}
@@ -39,9 +43,10 @@ function NavItem({ to, icon, label, hidden }: NavItemProps) {
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ onClose }: { onClose?: () => void }) {
   const { t } = useTranslation();
-  const collapsed = useLayoutStore((s) => s.sidebarCollapsed);
+  const sidebarCollapsed = useLayoutStore((s) => s.sidebarCollapsed);
+  const collapsed = !onClose && sidebarCollapsed;
   const toggleSidebar = useLayoutStore((s) => s.toggleSidebar);
   const systemInfo = useProjectStore((s) => s.systemInfo);
 
@@ -59,11 +64,11 @@ export function Sidebar() {
   const iconSize = 18;
 
   return (
-    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+    <aside className={`sidebar ${onClose ? 'mobile' : collapsed ? 'desktop collapsed' : 'desktop'}`}>
       {/* Logo / Brand */}
       <div className="sidebar-brand">
         <UspexLogo className="sidebar-logo" />
-
+        {onClose && <button type="button" className="btn btn-ghost" onClick={onClose} aria-label={t('btn.close')} autoFocus><X size={19} /></button>}
       </div>
 
 
@@ -86,31 +91,32 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav style={{ flex: 1, padding: '8px 0', overflowY: 'auto' }}>
-        <NavItem to="/dashboard" icon={<LayoutDashboard size={iconSize} />} label={t('nav.dashboard')} />
-        <NavItem to="/table" icon={<Table2 size={iconSize} />} label={t('nav.table')} />
-        <NavItem to="/convex-hull" icon={<Triangle size={iconSize} />} label={isFixed ? t('nav.energyRanking', 'Energy Ranking') : t('nav.hull')} />
-        <NavItem to="/pareto" icon={<Target size={iconSize} />} label={t('nav.pareto')} hidden={!isMulti} />
-        <NavItem to="/explorer" icon={<ScatterChart size={iconSize} />} label={t('nav.explorer')} />
-        <NavItem to="/filter" icon={<Filter size={iconSize} />} label={t('nav.filter')} />
-        <NavItem to="/beta-explorer" icon={<ChartSpline size={iconSize} />} label={t('nav.betaExplorer')} />
-        <NavItem to="/hull-workshop" icon={<FlaskConical size={iconSize} />} label={t('nav.hullWorkshop', 'Hull Workshop')} />
+        <NavItem to="/dashboard" icon={<LayoutDashboard size={iconSize} />} onNavigate={onClose} label={t('nav.dashboard')} />
+        <NavItem to="/table" icon={<Table2 size={iconSize} />} onNavigate={onClose} label={t('nav.table')} />
+        <NavItem to="/convex-hull" icon={<Triangle size={iconSize} />} onNavigate={onClose} label={isFixed ? t('nav.energyRanking', 'Energy Ranking') : t('nav.hull')} />
+        <NavItem to="/pareto" icon={<Target size={iconSize} />} onNavigate={onClose} label={t('nav.pareto')} hidden={!isMulti} />
+        <NavItem to="/explorer" icon={<ScatterChart size={iconSize} />} onNavigate={onClose} label={t('nav.explorer')} />
+        <NavItem to="/filter" icon={<Filter size={iconSize} />} onNavigate={onClose} label={t('nav.filter')} />
+        <NavItem to="/beta-explorer" icon={<ChartSpline size={iconSize} />} onNavigate={onClose} label={t('nav.betaExplorer')} />
+        <NavItem to="/hull-workshop" icon={<FlaskConical size={iconSize} />} onNavigate={onClose} label={t('nav.hullWorkshop', 'Hull Workshop')} />
       </nav>
 
       {/* Bottom actions */}
-      <div style={{ padding: '8px', borderTop: '1px solid var(--color-border)' }}>
-        <button className="nav-item" onClick={saveProject} style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left' }}>
+      <div className="sidebar-actions">
+        <button type="button" className="nav-item" onClick={saveProject} aria-label={t('btn.save')} title={t('btn.save')}>
           <Save size={iconSize} />
           {!collapsed && <span>{t('btn.save')}</span>}
         </button>
 
-        <button
+        {!onClose && <button
+          type="button"
           className="nav-item"
           onClick={toggleSidebar}
-          style={{ width: '100%', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left' }}
+          aria-label={t(collapsed ? 'dashboard.expand' : 'dashboard.collapse')}
         >
           {collapsed ? <ChevronRight size={iconSize} /> : <ChevronLeft size={iconSize} />}
           {!collapsed && <span>{t('dashboard.collapse')}</span>}
-        </button>
+        </button>}
       </div>
     </aside>
   );

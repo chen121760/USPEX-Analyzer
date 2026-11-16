@@ -138,40 +138,51 @@ export function FilterPage() {
     return sortReverse ? sorted.reverse() : sorted;
   }, [filteredStructures, sortKey, sortReverse]);
 
+  const needsGeometry = exportFormat === 'zip' || exportFormat === 'seeds';
+  const exportStructures = useMemo(() =>
+    needsGeometry ? sortedStructures.filter(structure => Boolean(structure.poscarData)) : sortedStructures,
+  [needsGeometry, sortedStructures]);
+  const firstExportStructure = exportStructures[0];
+  const previewName = firstExportStructure ? buildExportFilename(0, firstExportStructure, nameParts,
+    String(exportStructures.length).length, secondObjPrefix, customNameParts) : '';
+
   // 导出
   const handleExport = useCallback(async () => {
-    if (sortedStructures.length === 0) return;
-    const padding = String(sortedStructures.length).length;
+    if (exportStructures.length === 0) return;
+    const padding = String(exportStructures.length).length;
     if (exportFormat === 'zip') {
       const zip = new JSZip();
-      sortedStructures.forEach((s, i) => {
-        if (!s.poscarData) return;
-        zip.file(buildExportFilename(i, s, nameParts, padding, secondObjPrefix, customNameParts), s.poscarData);
+      exportStructures.forEach((s, i) => {
+        const filename = buildExportFilename(i, s, nameParts, padding, secondObjPrefix, customNameParts);
+        const stem = filename.slice(0, -'.vasp'.length);
+        let uniqueName = filename;
+        let suffix = 1;
+        while (zip.file(uniqueName)) {
+          uniqueName = `${stem}-${suffix}.vasp`;
+          suffix++;
+        }
+        zip.file(uniqueName, s.poscarData!);
       });
-      downloadBlob(await zip.generateAsync({ type: 'blob' }), `uspex-structures-${sortedStructures.length}.zip`);
+      downloadBlob(await zip.generateAsync({ type: 'blob' }), `uspex-structures-${exportStructures.length}.zip`);
     } else if (exportFormat === 'seeds') {
-      downloadBlob(new Blob([buildSeedsFile(sortedStructures)], { type: 'text/plain' }), 'seeds.txt');
+      downloadBlob(new Blob([buildSeedsFile(exportStructures)], { type: 'text/plain' }), 'seeds.txt');
     } else if (exportFormat === 'csv') {
-      downloadBlob(new Blob([structuresToCSV(sortedStructures, { hasPareto, hasML, hasFingerprint })], { type: 'text/csv' }), 'structures.csv');
+      downloadBlob(new Blob([structuresToCSV(exportStructures, { hasPareto, hasML, hasFingerprint })], { type: 'text/csv' }), 'structures.csv');
     } else if (exportFormat === 'json') {
-      const project = filteredProject(useProjectStore.getState().exportProjectFile(), sortedStructures);
+      const project = filteredProject(useProjectStore.getState().exportProjectFile(), exportStructures);
       downloadBlob(new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' }), `uspex-project-${systemInfo?.elements.join('-') ?? 'data'}.json`);
     }
-  }, [sortedStructures, exportFormat, nameParts, customNameParts, secondObjPrefix, hasPareto, hasML, hasFingerprint, systemInfo]);
+  }, [exportStructures, exportFormat, nameParts, customNameParts, secondObjPrefix, hasPareto, hasML, hasFingerprint, systemInfo]);
 
   const toggleNamePart = (part: number) => {
     setNameParts(nameParts.includes(part) ? nameParts.filter((p) => p !== part) : [...nameParts, part].sort());
   };
 
-  const previewName = sortedStructures.length > 0
-    ? buildExportFilename(0, sortedStructures[0], nameParts, String(sortedStructures.length).length, secondObjPrefix, customNameParts)
-    : '001-EA2-Ti10H28-SG82.vasp';
-
   return (
     <div className="fade-in">
       <h1 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>{t('filter.title')}</h1>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div className="filter-layout">
         {/* ── 左：筛选条件 ── */}
         <div className="card">
           <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>{t('filter.conditions')}</h3>
@@ -226,7 +237,7 @@ export function FilterPage() {
           </div>
 
           {/* 匹配结果 */}
-          <div style={{
+          <div role="status" style={{
             padding: 10, borderRadius: 6, fontSize: 13, fontWeight: 600,
             background: filteredStructures.length > 0 ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.1)',
             color: filteredStructures.length > 0 ? 'var(--color-success)' : 'var(--color-danger)',
@@ -248,7 +259,8 @@ export function FilterPage() {
           sortKey={sortKey}
           sortReverse={sortReverse}
           previewName={previewName}
-          filteredCount={filteredStructures.length}
+          exportCount={exportStructures.length}
+          missingGeometryCount={filteredStructures.length - exportStructures.length}
           toggleNamePart={toggleNamePart}
           setSortKey={setSortKey}
           setSortReverse={setSortReverse}
@@ -256,7 +268,7 @@ export function FilterPage() {
         />
       </div>
 
-      <FilterPreviewTable sortedStructures={sortedStructures} groups={groups} t={t} />
+      <FilterPreviewTable sortedStructures={sortedStructures} groups={groups} showGeometry={needsGeometry} t={t} />
     </div>
   );
 }

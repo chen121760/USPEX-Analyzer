@@ -5,7 +5,7 @@
  * selected from tables or ECharts charts.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUIStore } from '@/store/useUIStore';
 import { useProjectStore } from '@/store/useProjectStore';
@@ -166,7 +166,7 @@ export function StructureViewerModal() {
       </div>
 
       {/* Main content: viewer + toolbar */}
-      <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative', zIndex: 1 }}>
+      <div className="structure-view-body" style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative', zIndex: 1 }}>
         {/* Viewer */}
         <div style={{ flex: 1, minWidth: 0, minHeight: 0, position: 'relative', zIndex: 0, overflow: 'hidden', isolation: 'isolate' }}>
           <JSmolViewer
@@ -181,7 +181,7 @@ export function StructureViewerModal() {
         </div>
 
         {/* Toolbar sidebar */}
-        <div style={{
+        <div className="structure-view-toolbar" style={{
           width: 280,
           borderLeft: '1px solid var(--color-border, #e5e7eb)',
           padding: 12,
@@ -423,55 +423,34 @@ function ModalShell({ children, onClose, title }: {
   onClose: () => void;
   title: React.ReactNode;
 }) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const pressedOutside = useRef(false);
+  const titleId = useId();
+  const { t } = useTranslation();
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, []);
+
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 1000,
-        background: 'rgba(0,0,0,0.5)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '90vw', maxWidth: 1100,
-          height: '80vh',
-          background: 'var(--color-surface, #fff)',
-          borderRadius: 12,
-          boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-          display: 'flex', flexDirection: 'column',
-          overflow: 'hidden',
-          position: 'relative',
-          isolation: 'isolate',
-        }}
-      >
-        {/* Title bar */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '10px 16px',
-          borderBottom: '1px solid var(--color-border, #e5e7eb)',
-          fontWeight: 600, fontSize: 15,
-          position: 'relative',
-          zIndex: 4,
-          flexShrink: 0,
-          background: 'var(--color-surface, #fff)',
-        }}>
-          <span>{title}</span>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              padding: 4, borderRadius: 4, display: 'flex',
-              color: 'var(--color-text, #333)',
-            }}
-          >
-            <X size={18} />
+    <dialog ref={dialogRef} className="structure-dialog" aria-labelledby={titleId} onClose={event => { if (!event.currentTarget.open) onClose(); }}
+      onPointerDown={event => { pressedOutside.current = event.target === event.currentTarget; }}
+      onClick={event => {
+        if (pressedOutside.current && event.target === event.currentTarget) event.currentTarget.close();
+      }}>
+      <div className="structure-dialog-content">
+        <div className="structure-dialog-header">
+          <h2 id={titleId}>{title}</h2>
+          <button type="button" className="btn btn-ghost" onClick={() => dialogRef.current?.close()}
+            aria-label={t('btn.close')} autoFocus>
+            <X size={19} />
           </button>
         </div>
         {children}
       </div>
-    </div>
+    </dialog>
   );
 }
 

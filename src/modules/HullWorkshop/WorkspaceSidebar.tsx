@@ -267,7 +267,7 @@ function RenameDialog({
             className="workshop-input"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && value.trim()) onConfirm(value.trim()); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.nativeEvent.keyCode !== 229 && value.trim()) onConfirm(value.trim()); }}
             autoFocus
           />
         </div>

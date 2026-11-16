@@ -15,7 +15,8 @@ export function FilterExportPanel({
   sortKey,
   sortReverse,
   previewName,
-  filteredCount,
+  exportCount,
+  missingGeometryCount,
   toggleNamePart,
   setSortKey,
   setSortReverse,
@@ -31,7 +32,8 @@ export function FilterExportPanel({
   sortKey: string;
   sortReverse: boolean;
   previewName: string;
-  filteredCount: number;
+  exportCount: number;
+  missingGeometryCount: number;
   toggleNamePart: (part: number) => void;
   setSortKey: (key: string) => void;
   setSortReverse: (reverse: boolean) => void;
@@ -49,6 +51,7 @@ export function FilterExportPanel({
               key={fmt}
               size="sm"
               variant={exportFormat === fmt ? 'primary' : 'outline'}
+              aria-pressed={exportFormat === fmt}
               onClick={() => setExportFormat(fmt)}
             >
               {t(`export.format${fmt.charAt(0).toUpperCase() + fmt.slice(1)}`)}
@@ -70,6 +73,7 @@ export function FilterExportPanel({
                 key={n}
                 size="sm"
                 variant={nameParts.includes(n) ? 'primary' : 'outline'}
+                aria-pressed={nameParts.includes(n)}
                 onClick={() => toggleNamePart(n)}
               >
                 [{n}] {label}
@@ -141,10 +145,13 @@ export function FilterExportPanel({
         </Button>
       </div>
 
-      <Button variant="primary" onClick={handleExport} disabled={filteredCount === 0}
-        style={{ width: '100%', padding: '10px 20px', fontSize: 14, opacity: filteredCount > 0 ? 1 : 0.4 }}>
+      {missingGeometryCount > 0 && (
+        <p className="export-warning" role="status">{t('export.missingGeometry', { count: missingGeometryCount })}</p>
+      )}
+      <Button variant="primary" onClick={handleExport} disabled={exportCount === 0}
+        style={{ width: '100%', padding: '10px 20px', fontSize: 14, opacity: exportCount > 0 ? 1 : 0.4 }}>
         <Download size={16} />
-        {t('export.exportCount', { count: filteredCount })}
+        {t('export.exportCount', { count: exportCount })}
       </Button>
     </Card>
   );

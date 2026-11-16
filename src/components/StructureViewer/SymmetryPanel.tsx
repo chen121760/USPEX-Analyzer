@@ -262,7 +262,7 @@ export function SymmetryPanel({ structure, isSlab = false }: SymmetryPanelProps)
               placeholder={SYMMETRY_CUSTOM_PLACEHOLDER}
               onChange={(event) => setCustomValue(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') void runCustom();
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) void runCustom();
               }}
               style={{
                 flex: 1,
