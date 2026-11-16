@@ -1237,6 +1237,11 @@ dialog::backdrop { overflow: hidden; overscroll-behavior: contain; }
 .page-heading { justify-content: space-between; }
 .hull-metric { font-size: 13px; }
 .hull-metric select { margin-inline-start: 5px; }
+.hull-metric-help {
+  flex-basis: 100%;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
 .metric-unit, .export-warning {
   padding: 4px 8px;
   border-radius: 6px;

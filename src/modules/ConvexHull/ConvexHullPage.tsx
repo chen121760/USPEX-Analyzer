@@ -135,8 +135,14 @@ export function ConvexHullPage() {
             </select>
           </label>
           <span className="metric-unit">{metricInfo.unit}</span>
-          {metric === 'fitness' && structures.some(s => !Number.isFinite(s.fitness)) &&
-            <span style={{ color: 'var(--color-text-secondary)' }}>{t('hull.missingFitnessDetail')}</span>}
+          <div className="hull-metric-help">
+            <p><strong>Fitness</strong> {t(systemInfo.fitnessSemantics !== 'uspex-original'
+              ? 'hull.legacyFitnessHelp'
+              : systemInfo.uspexSelection?.source === 'extended_convex_hull'
+                ? 'hull.retainedFitnessHelp'
+                : 'hull.rawFitnessHelp')}</p>
+            <p><strong>{t('hull.reconstructedDistance')}</strong> {t('hull.reconstructedDistanceHelp')}</p>
+          </div>
         </div>
       )}
       {systemInfo.fitnessSemantics !== 'uspex-original' &&
