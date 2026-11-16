@@ -126,27 +126,26 @@ export function ConvexHullPage() {
         <div className="hull-metric">
           <label>
             {t('hull.distanceSource')}{' '}
-            <select value={metric} onChange={event => {
+            <select value={metric} aria-describedby="hull-metric-help" onChange={event => {
               setMetricState({ projectId, value: event.target.value as HullDisplayMetric });
               setFitnessState({ projectId, value: null });
             }}>
-              <option value="fitness">{t(systemInfo.fitnessSemantics === 'uspex-original' ? 'hull.rawFitness' : 'hull.legacyFitness')}</option>
+              <option value="fitness">{t(systemInfo.fitnessSemantics === 'uspex-original' ? 'hull.rawFitness' : 'col.fitness')}</option>
               <option value="reconstructed">{t('hull.reconstructedDistance')}</option>
             </select>
           </label>
           <span className="metric-unit">{metricInfo.unit}</span>
-          <div className="hull-metric-help">
-            <p><strong>Fitness</strong> {t(systemInfo.fitnessSemantics !== 'uspex-original'
-              ? 'hull.legacyFitnessHelp'
-              : systemInfo.uspexSelection?.source === 'extended_convex_hull'
-                ? 'hull.retainedFitnessHelp'
-                : 'hull.rawFitnessHelp')}</p>
-            <p><strong>{t('hull.reconstructedDistance')}</strong> {t('hull.reconstructedDistanceHelp')}</p>
-          </div>
+          <span id="hull-metric-help" className="hull-metric-help">
+            {metric === 'reconstructed'
+              ? t('hull.reconstructedDistanceHelp')
+              : t(systemInfo.fitnessSemantics !== 'uspex-original'
+                ? 'hull.savedFitnessHelp'
+                : systemInfo.uspexSelection?.source === 'extended_convex_hull'
+                  ? 'hull.retainedFitnessHelp'
+                  : 'hull.rawFitnessHelp')}
+          </span>
         </div>
       )}
-      {systemInfo.fitnessSemantics !== 'uspex-original' &&
-        <div style={{ marginBottom: 12, fontSize: 13, color: 'var(--color-warning)' }} role="status">{t('hull.legacyFitnessDetail')}</div>}
       <HullMetricContext.Provider value={metricInfo}>
       {compositionMode === 'fixed' ? (
         <EnergyRankingChart structures={structures} systemInfo={systemInfo} />
