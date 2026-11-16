@@ -1,16 +1,15 @@
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useLayoutStore } from '@/store/useLayoutStore';
 import { useProjectStore } from '@/store/useProjectStore';
-import { X } from 'lucide-react';
+import { BookOpen, X } from 'lucide-react';
 
-const ACCENT      = '#68b88e';
-const ACCENT_DARK = '#4a9a72';
-const TEXT        = '#0f2d1e';
-const TEXT_MUTED  = '#2d5c3f';
-const CARD_BG     = 'rgba(255,255,255,0.30)';
-const CARD_BORDER = 'rgba(255,255,255,0.55)';
-const SECTION_BG  = 'rgba(0,0,0,0.08)';
+const ACCENT = 'var(--color-bg-secondary)';
+const ACCENT_DARK = 'var(--color-border)';
+const TEXT = 'var(--color-text)';
+const TEXT_MUTED = 'var(--color-text-secondary)';
+const CARD_BG = 'var(--color-surface)';
+const CARD_BORDER = 'var(--color-border)';
+const SECTION_BG = 'var(--color-bg-tertiary)';
 
 // ── Data types ──────────────────────────────────────────────
 interface FullHint {
@@ -123,7 +122,6 @@ function Card({ children, style }: { children: React.ReactNode; style?: React.CS
       fontSize: 12.5,
       lineHeight: 1.65,
       color: TEXT,
-      backdropFilter: 'blur(4px)',
       ...style,
     }}>
       {children}
@@ -132,17 +130,15 @@ function Card({ children, style }: { children: React.ReactNode; style?: React.CS
 }
 
 // ── Main drawer ──────────────────────────────────────────────
-export function HintDrawer() {
-  const hintPanelOpen  = useLayoutStore((s) => s.hintPanelOpen);
-  const setHintPanelOpen = useLayoutStore((s) => s.setHintPanelOpen);
+export function HintDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useTranslation();
   const hint = usePageHint();
 
-  if (!hintPanelOpen || !hint) return null;
+  if (!open || !hint) return null;
 
   return (
     <>
-      <div style={{ position: 'fixed', top: 'var(--header-height)', right: 0, bottom: 0, width: 300, zIndex: 50,
+      <div style={{ position: 'fixed', top: 'var(--header-height)', right: 0, bottom: 0, width: 'min(300px, 100vw)', zIndex: 50,
         background: ACCENT, boxShadow: '-4px 0 24px rgba(0,0,0,0.13)',
         display: 'flex', flexDirection: 'column',
         animation: 'slideInRight 0.22s cubic-bezier(0.16,1,0.3,1)',
@@ -152,10 +148,10 @@ export function HintDrawer() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '13px 16px 11px', borderBottom: `1px solid ${ACCENT_DARK}`, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <span style={{ fontSize: 16 }}>💡</span>
+            <BookOpen size={16} aria-hidden="true" style={{ color: 'var(--color-primary)' }} />
             <span style={{ fontSize: 13.5, fontWeight: 700, color: TEXT }}>{hint.title}</span>
           </div>
-          <button onClick={() => setHintPanelOpen(false)}
+          <button type="button" aria-label={t('btn.close')} onClick={onClose}
             style={{ background: 'transparent', border: 'none', cursor: 'pointer',
               color: TEXT_MUTED, padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center' }}
             onMouseEnter={(e) => (e.currentTarget.style.color = TEXT)}

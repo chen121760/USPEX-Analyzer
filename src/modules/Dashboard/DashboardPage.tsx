@@ -200,7 +200,7 @@ export function DashboardPage() {
 
       {/* ── Calculation Parameters + Data Completeness ── */}
       {!collapsed && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 1fr) 1.6fr', gap: 16, marginBottom: 20 }}>
+        <div className="dashboard-details">
           {/* Calculation Parameters */}
           <div className="card">
             <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--color-text-secondary)' }}>
@@ -274,7 +274,7 @@ export function DashboardPage() {
 
       {/* Charts (collapsible) */}
       {!collapsed && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 16 }}>
           {/* Origin distribution */}
           <div className="card">
             <h3 style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: 'var(--color-text-secondary)' }}>

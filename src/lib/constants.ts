@@ -62,8 +62,8 @@ export const ORIGIN_COLORS: Record<string, string> = {
   Unknown: '#9ca3af',
 };
 
-/** System-first sans-serif stack shared by the app shell, SVG logo, and charts. */
-export const UI_FONT_FAMILY = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", sans-serif';
+/** Latin and CJK serif stack shared by the app shell, SVG logo, and charts. */
+export const UI_FONT_FAMILY = '"Times New Roman", "Songti SC", SimSun, "Noto Serif CJK SC", serif';
 
 /** Shared chart font matching the app UI. */
 export const CHART_FONT = {

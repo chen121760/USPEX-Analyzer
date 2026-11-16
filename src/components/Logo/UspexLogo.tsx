@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useId, type CSSProperties } from 'react';
 import logoUrl from '@/assets/uspex_analyzer_transparent.svg';
 import { UI_FONT_FAMILY } from '@/lib/constants';
 
@@ -8,6 +8,7 @@ interface UspexLogoProps {
 }
 
 export function UspexLogo({ className, style }: UspexLogoProps) {
+  const clipId = useId();
   return (
     <svg
       className={className}
@@ -18,7 +19,7 @@ export function UspexLogo({ className, style }: UspexLogoProps) {
       xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
-        <clipPath id="uspex-logo-mark-clip">
+        <clipPath id={clipId}>
           <rect x="0" y="0" width="840" height="670" />
         </clipPath>
       </defs>
@@ -27,7 +28,7 @@ export function UspexLogo({ className, style }: UspexLogoProps) {
         width="840"
         height="840"
         preserveAspectRatio="xMidYMid meet"
-        clipPath="url(#uspex-logo-mark-clip)"
+        clipPath={`url(#${clipId})`}
       />
       <text
         x="46"

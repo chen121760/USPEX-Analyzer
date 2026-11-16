@@ -65,68 +65,16 @@ export function ConvexHullPage() {
 
   return (
     <div className="fade-in">
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 16,
-        }}
-      >
+      <div className="page-heading">
         <h1 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>
           {pageTitle}
         </h1>
 
         {/* 2D/3D toggle for ternary varcomp — top right */}
         {isTernaryVarcomp && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>
-              {t('hull.view', 'View')}:
-            </span>
-            <button
-              onClick={() => setViewMode('2d')}
-              aria-pressed={viewMode === '2d'}
-              style={{
-                padding: '4px 14px',
-                fontSize: 12,
-                fontWeight: viewMode === '2d' ? 600 : 400,
-                border: '1px solid var(--color-border)',
-                borderRadius: 6,
-                background:
-                  viewMode === '2d'
-                    ? 'var(--color-accent)'
-                    : 'var(--color-bg-secondary)',
-                color:
-                  viewMode === '2d'
-                    ? '#fff'
-                    : 'var(--color-text-secondary)',
-                cursor: 'pointer',
-              }}
-            >
-              {t('hull.view2D', '2D Projection')}
-            </button>
-            <button
-              onClick={() => setViewMode('3d')}
-              aria-pressed={viewMode === '3d'}
-              style={{
-                padding: '4px 14px',
-                fontSize: 12,
-                fontWeight: viewMode === '3d' ? 600 : 400,
-                border: '1px solid var(--color-border)',
-                borderRadius: 6,
-                background:
-                  viewMode === '3d'
-                    ? 'var(--color-accent)'
-                    : 'var(--color-bg-secondary)',
-                color:
-                  viewMode === '3d'
-                    ? '#fff'
-                    : 'var(--color-text-secondary)',
-                cursor: 'pointer',
-              }}
-            >
-              {t('hull.view3D', '3D View')}
-            </button>
+          <div className="hull-view-switch" data-view={viewMode} role="group" aria-label={t('hull.view')}>
+            <button type="button" onClick={() => setViewMode('2d')} aria-pressed={viewMode === '2d'}>{t('hull.view2D')}</button>
+            <button type="button" onClick={() => setViewMode('3d')} aria-pressed={viewMode === '3d'}>{t('hull.view3D')}</button>
           </div>
         )}
       </div>
@@ -175,7 +123,7 @@ export function ConvexHullPage() {
         )}
 
       {compositionMode !== 'fixed' && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, fontSize: 13 }}>
+        <div className="hull-metric">
           <label>
             {t('hull.distanceSource')}{' '}
             <select value={metric} onChange={event => {
@@ -186,6 +134,7 @@ export function ConvexHullPage() {
               <option value="reconstructed">{t('hull.reconstructedDistance')}</option>
             </select>
           </label>
+          <span className="metric-unit">{metricInfo.unit}</span>
           {metric === 'fitness' && structures.some(s => !Number.isFinite(s.fitness)) &&
             <span style={{ color: 'var(--color-text-secondary)' }}>{t('hull.missingFitnessDetail')}</span>}
         </div>

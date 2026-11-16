@@ -1,9 +1,12 @@
 const en = {
   // ---- App ----
+  'app.guide': 'Page guide',
+  'app.contact': 'Contact author',
   'app.title': 'USPEX Analyzer',
   'app.subtitle': 'Crystal Structure Prediction Analysis Tool',
 
   // ---- Navigation ----
+  'nav.menu': 'Analysis navigation',
   'nav.upload': 'Upload',
   'nav.dashboard': 'Dashboard',
   'nav.table': 'Data Table',
@@ -18,6 +21,7 @@ const en = {
   'nav.hullWorkshop': 'Hull Workshop',
 
   // ---- Buttons ----
+  'btn.close': 'Close',
   'btn.upload': 'Upload Files',
   'btn.export': 'Export',
   'btn.save': 'Save Project',
@@ -73,11 +77,18 @@ const en = {
 
 
   // ---- Quick Pack Command ----
-  'quickpack.title': 'One-line packing command for HPC clusters',
-  'quickpack.instruction': 'Copy the command, run it in results directory on the cluster, then drag the .tar.gz here — no need to extract.',
-  'quickpack.copy': 'Copy',
+  'quickpack.title': 'Import from a cluster',
+  'quickpack.instruction': 'Run the command in your USPEX results directory, then drop the generated .tar.gz into the upload area.',
+  'quickpack.copy': 'Copy packing command',
+  'quickpack.copied': 'Command copied',
+  'quickpack.copyFailed': 'Automatic copy failed. Copy the command below.',
 
   // ---- Upload Page ----
+  'upload.deleteProject': 'Delete project {{name}}',
+  'upload.structureCount': '{{count}} structures',
+  'upload.requiredCount': 'Required files {{count}} / {{total}}',
+  'upload.dropHint': 'Or drop USPEX output files or an archive here',
+  'upload.chooseFiles': 'Choose files',
   'upload.title': 'Upload USPEX Output Files',
   'upload.dragHint': 'Drag files here, or click to select',
   'upload.supportedFiles': 'Supported: Parameters.txt, extended_convex_hull, Individuals, gatheredPOSCARS, origin, Pareto_ranking, MLProperties, convex_hull',
@@ -431,6 +442,8 @@ const en = {
   'compare.hint': 'Select 2–4 structures from the table to compare',
 
   // ---- Filter & Export ----
+  'filter.previewRemaining': '{{count}} more results',
+  'filter.previewLabel': 'Candidate structure preview',
   'filter.tagFilter': 'Filter by Tag',
   'filter.tagFilterHint': 'Click once to require (green), click again to exclude (red), click again to reset',
   'filter.clearTags': 'Clear Tags',
@@ -445,6 +458,7 @@ const en = {
   'filter.presets': 'Saved Presets',
   'filter.presetName': 'Preset Name',
 
+  'export.missingGeometry': '{{count}} matching structures without POSCAR will be skipped.',
   'export.title': 'Export',
   'export.format': 'Export Format',
   'export.formatZip': 'Individual VASP files (.zip)',

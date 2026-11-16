@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Copy, Check } from 'lucide-react';
 
@@ -8,62 +8,38 @@ const COMMAND = `missing=""; for f in Individuals gatheredPOSCARS; do [ -f "$f" 
 
 export function QuickPackCommand() {
   const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const timer = useRef<number | undefined>(undefined);
 
-  const handleCopy = useCallback(async () => {
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+
+  const handleCopy = async () => {
+    window.clearTimeout(timer.current);
     try {
       await navigator.clipboard.writeText(COMMAND);
+      setStatus('copied');
+      timer.current = window.setTimeout(() => setStatus('idle'), 2400);
     } catch {
-      const textarea = document.createElement('textarea');
-      textarea.value = COMMAND;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
+      setStatus('failed');
     }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, []);
+  };
 
   return (
-    <div
-      style={{
-        width: '100%',
-        maxWidth: 560,
-        border: '1px solid var(--color-border)',
-        borderRadius: 10,
-        background: 'var(--color-surface)',
-        padding: '10px 14px',
-        marginBottom: 12,
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
-        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>
-          {t('quickpack.title')}
-        </h3>
-        <button
-          className="btn btn-primary btn-sm"
-          onClick={handleCopy}
-          style={{ fontSize: 11, padding: '3px 8px', flexShrink: 0 }}
-        >
-          {copied ? (
-            <>
-              <Check size={12} />
-              Copied
-            </>
-          ) : (
-            <>
-              <Copy size={12} />
-              {t('quickpack.copy')}
-            </>
-          )}
-        </button>
-      </div>
-      <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
-        {t('quickpack.instruction')}
+    <section className="upload-pack" aria-labelledby="quickpack-title">
+      <h2 id="quickpack-title">{t('quickpack.title')}</h2>
+      <p id="quickpack-instruction">{t('quickpack.instruction')}</p>
+      <button className="btn btn-primary upload-copy" type="button" onClick={handleCopy}
+        aria-describedby="quickpack-instruction">
+        {status === 'copied' ? <Check size={19} aria-hidden="true" /> : <Copy size={19} aria-hidden="true" />}
+        {t('quickpack.copy')}
+      </button>
+      <p className="upload-copy-status" role="status">
+        {status !== 'idle' && t(status === 'copied' ? 'quickpack.copied' : 'quickpack.copyFailed')}
       </p>
-    </div>
+      {status === 'failed' && (
+        <textarea className="upload-copy-fallback" aria-label={t('quickpack.copy')} value={COMMAND}
+          rows={3} readOnly onFocus={event => event.currentTarget.select()} />
+      )}
+    </section>
   );
 }

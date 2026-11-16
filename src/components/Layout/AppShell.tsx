@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/store/useProjectStore';
@@ -19,10 +19,34 @@ const loadStructureViewerModal = () =>
 const StructureViewerModal = lazy(loadStructureViewerModal);
 
 export function AppShell() {
+  const { t } = useTranslation();
   const isDataLoaded = useProjectStore((s) => s.isDataLoaded);
-  const hintPanelOpen = useLayoutStore((s) => s.hintPanelOpen);
+  const desktopGuideOpen = useLayoutStore((s) => s.hintPanelOpen);
+  const setDesktopGuideOpen = useLayoutStore((s) => s.setHintPanelOpen);
+  const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 1120px)').matches);
+  const [narrowGuideOpen, setNarrowGuideOpen] = useState(false);
+  const hintPanelOpen = narrow ? narrowGuideOpen : desktopGuideOpen;
+  const setHintPanelOpen = narrow ? setNarrowGuideOpen : setDesktopGuideOpen;
   const viewerStructureId = useUIStore((s) => s.viewerStructureId);
   const closeViewer = useUIStore((s) => s.closeViewer);
+
+  const menuRef = useRef<HTMLDialogElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const wide = window.matchMedia('(width > 800px)');
+    const overlayGuide = window.matchMedia('(max-width: 1120px)');
+    const updateGuideLayout = () => setNarrow(overlayGuide.matches);
+    overlayGuide.addEventListener('change', updateGuideLayout);
+    const closeOnDesktop = () => {
+      if (wide.matches) menuRef.current?.close();
+    };
+    wide.addEventListener('change', closeOnDesktop);
+    return () => {
+      wide.removeEventListener('change', closeOnDesktop);
+      overlayGuide.removeEventListener('change', updateGuideLayout);
+    };
+  }, []);
 
   // Keep the moyo (spglib) symmetry analysis in sync with the loaded data.
   useSymmetryAutoAnalysis();
@@ -64,25 +88,22 @@ export function AppShell() {
   return (
     <div className="app-shell">
       <Sidebar />
-      <div
-        className="main-area"
-        style={{ marginRight: hintPanelOpen ? 300 : 0, transition: 'margin-right 0.22s cubic-bezier(0.16,1,0.3,1)' }}
-        onTransitionEnd={(event) => {
-          // 只处理右侧外边距动画结束，避免被子元素的 transition 冒泡触发
-          if (event.propertyName !== 'margin-right') return;
-
-          // 等浏览器完成一帧布局后再通知图表，尺寸结果更稳定
-          requestAnimationFrame(() => {
-            window.dispatchEvent(new Event('resize'));
-          });
-        }}
-      >
-        <Header />
-        <div className="content">
+      <dialog ref={menuRef} id="workspace-navigation" className="navigation-drawer"
+        aria-label={t('nav.menu')} onClose={() => setMenuOpen(false)}
+        onClick={event => { if (event.target === event.currentTarget) event.currentTarget.close(); }}>
+        <Sidebar onClose={() => menuRef.current?.close()} />
+      </dialog>
+      <div className={`main-area ${hintPanelOpen ? 'guide-open' : ''}`}>
+        <Header guideOpen={hintPanelOpen} onToggleGuide={() => setHintPanelOpen(!hintPanelOpen)}
+          menuOpen={menuOpen} onOpenMenu={() => {
+            menuRef.current?.showModal();
+            setMenuOpen(true);
+          }} />
+        <main className="content" tabIndex={-1}>
           <Outlet />
-        </div>
+        </main>
       </div>
-      <HintDrawer />
+      <HintDrawer open={hintPanelOpen} onClose={() => setHintPanelOpen(false)} />
       {viewerStructureId !== null && (
         <Suspense fallback={<StructureViewerFallback onClose={closeViewer} />}>
           <StructureViewerModal />

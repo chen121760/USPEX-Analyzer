@@ -817,10 +817,11 @@ export function ExplorerPage() {
           />
         )}
         {axisEditor && (
-          <div
+          <form
             role="dialog"
             aria-label={t('explorer.axisRenameTitle', { axis: axisEditor.axis.toUpperCase() })}
             style={axisEditorStyle}
+            onSubmit={event => { event.preventDefault(); saveAxisTitle(); }}
             onClick={(event) => event.stopPropagation()}
           >
             <label style={{ display: 'grid', gap: 6, fontSize: 12, fontWeight: 600 }}>
@@ -831,8 +832,7 @@ export function ExplorerPage() {
                 placeholder={axisEditor.defaultLabel}
                 onChange={(event) => setAxisTitleDraft(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') saveAxisTitle();
-                  if (event.key === 'Escape') setAxisEditor(null);
+                  if (event.key === 'Escape' && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) setAxisEditor(null);
                 }}
                 style={{ ...inputStyle, width: 240, fontSize: 13, padding: '7px 9px' }}
               />
@@ -840,9 +840,9 @@ export function ExplorerPage() {
             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
               <button type="button" className="btn btn-secondary" onClick={resetAxisTitle}>{t('explorer.axisResetDefault')}</button>
               <button type="button" className="btn btn-secondary" onClick={() => setAxisEditor(null)}>{t('btn.cancel')}</button>
-              <button type="button" className="btn btn-primary" onClick={saveAxisTitle}>{t('explorer.axisSave')}</button>
+              <button type="submit" className="btn btn-primary">{t('explorer.axisSave')}</button>
             </div>
-          </div>
+          </form>
         )}
       </div>
 

@@ -10,7 +10,6 @@ interface LayoutState {
   toggleDashboard: () => void;
 
   hintPanelOpen: boolean;
-  toggleHintPanel: () => void;
   setHintPanelOpen: (open: boolean) => void;
 }
 
@@ -24,7 +23,6 @@ export const useLayoutStore = create<LayoutState>()(
       toggleDashboard: () => set((state) => ({ dashboardCollapsed: !state.dashboardCollapsed })),
 
       hintPanelOpen: getLegacyUIValue('hintPanelOpen', true, isBoolean),
-      toggleHintPanel: () => set((state) => ({ hintPanelOpen: !state.hintPanelOpen })),
       setHintPanelOpen: (open) => set({ hintPanelOpen: open }),
     }),
     {

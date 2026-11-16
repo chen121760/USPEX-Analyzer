@@ -1,9 +1,12 @@
 const zh = {
   // ---- App ----
+  'app.guide': '页面指南',
+  'app.contact': '联系作者',
   'app.title': 'USPEX 分析器',
   'app.subtitle': '晶体结构预测分析工具',
 
   // ---- Navigation ----
+  'nav.menu': '分析导航',
   'nav.upload': '上传文件',
   'nav.dashboard': '统计面板',
   'nav.table': '数据表格',
@@ -18,6 +21,7 @@ const zh = {
   'nav.hullWorkshop': '凸包工作台',
 
   // ---- Buttons ----
+  'btn.close': '关闭',
   'btn.upload': '上传文件',
   'btn.export': '导出',
   'btn.save': '保存项目',
@@ -73,11 +77,18 @@ const zh = {
 
 
   // ---- Quick Pack Command ----
-  'quickpack.title': '在集群上一键打包所需文件',
-  'quickpack.instruction': '复制命令到集群 USPEX 结果目录运行，下载后拖入网页即可，无需解压。',
-  'quickpack.copy': '复制',
+  'quickpack.title': '从集群导入',
+  'quickpack.instruction': '在集群的 USPEX 结果目录运行命令，再将生成的 .tar.gz 拖入上传区。',
+  'quickpack.copy': '复制打包命令',
+  'quickpack.copied': '命令已复制',
+  'quickpack.copyFailed': '自动复制失败，可手动复制下方命令。',
 
   // ---- Upload Page ----
+  'upload.deleteProject': '删除项目 {{name}}',
+  'upload.structureCount': '{{count}} 个结构',
+  'upload.requiredCount': '必需文件 {{count}} / {{total}}',
+  'upload.dropHint': '或将 USPEX 输出和归档拖到此处',
+  'upload.chooseFiles': '选择文件',
   'upload.title': '上传 USPEX 输出文件',
   'upload.dragHint': '拖拽文件到此处，或点击选择',
   'upload.supportedFiles': '支持: Parameters.txt, extended_convex_hull, Individuals, gatheredPOSCARS, origin, Pareto_ranking, MLProperties, convex_hull',
@@ -431,6 +442,8 @@ const zh = {
   'compare.hint': '请从表格中选择 2–4 个结构进行对比',
 
   // ---- Filter & Export ----
+  'filter.previewRemaining': '另有 {{count}} 条结果',
+  'filter.previewLabel': '候选结构预览',
   'filter.tagFilter': '标签筛选',
   'filter.tagFilterHint': '单击变绿（必须含有），再次单击变红（必须排除），第三次单击恢复',
   'filter.clearTags': '清除标签',
@@ -445,6 +458,7 @@ const zh = {
   'filter.presets': '保存的预设',
   'filter.presetName': '预设名称',
 
+  'export.missingGeometry': '{{count}} 条命中缺少 POSCAR，将跳过。',
   'export.title': '导出',
   'export.format': '导出格式',
   'export.formatZip': '分散 VASP 文件 (.zip)',
